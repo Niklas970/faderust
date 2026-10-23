@@ -92,7 +92,6 @@ faderust/
 ├─ assets/logo.svg
 ├─ docs/PLAN.md
 ├─ .github/workflows/ci.yml   # cargo fmt, clippy, test (windows-latest)
-├─ CLAUDE.md
 ├─ LICENSE
 └─ README.md
 ```
