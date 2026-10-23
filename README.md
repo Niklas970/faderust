@@ -25,4 +25,4 @@ Virtuelle Geräte kommen von [VB-Cable](https://vb-audio.com/Cable/) (separat in
 
 ## Lizenz
 
-Wahlweise unter [MIT](LICENSE-MIT) oder [Apache-2.0](LICENSE-APACHE).
+[MIT](LICENSE)

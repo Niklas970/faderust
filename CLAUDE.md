@@ -5,7 +5,7 @@ Windows-Audio-Mixer in Rust (Ersatz für Voicemeeter Potato). Volle Planung: `do
 ## Regeln für die Arbeit
 
 - Antworte auf Deutsch, kurz und knapp. Code, Kommentare und Commit-Messages dürfen Englisch sein.
-- Lizenz: `MIT OR Apache-2.0`. Neue Abhängigkeiten müssen dazu passen (`cargo-deny`).
+- Lizenz: MIT. Neue Abhängigkeiten nur mit freizügigen Lizenzen (Prüfung per `cargo deny check`, Liste in `deny.toml`).
 - Kein eigener Kernel-Treiber. Virtuelle Geräte über VB-Cable, nicht mitliefern.
 - Im Audio-Thread: keine Speicherzuweisung, keine Sperren, kein Logging über Mutex. Kommunikation über `rtrb` oder Atomics.
 - Plattform: Windows 10/11, WASAPI. Audio-Code hinter einem Trait kapseln, damit später ein PipeWire-Backend möglich bleibt.
