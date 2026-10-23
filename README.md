@@ -21,6 +21,8 @@ cargo build
 cargo test
 ```
 
+Prototyp E0 (Mikrofon auf Bluetooth, Latenz und Drift messen): siehe [`docs/E0.md`](docs/E0.md).
+
 Virtuelle Geräte kommen von [VB-Cable](https://vb-audio.com/Cable/) (separat installieren, eigene Lizenz).
 
 ## Lizenz

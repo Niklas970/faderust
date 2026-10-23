@@ -18,7 +18,7 @@ Windows-Audio-Mixer in Rust (Ersatz für Voicemeeter Potato). Volle Planung: `do
 
 ## Stand
 
-Repo und Cargo-Workspace stehen. Nächster Schritt: Etappe E0 (siehe `docs/PLAN.md`): Mikrofon auf Bluetooth-Ausgang leiten, Latenz und Drift messen.
+E0-Prototyp liegt in `crates/engine/examples/e0_passthrough.rs` (Anleitung `docs/E0.md`). Offen: 30-Minuten-Messung auf Niklas' Rechner, Ergebnisse in `docs/E0.md` eintragen. Danach E1.
 
 ## Design
 
