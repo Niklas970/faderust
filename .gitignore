@@ -1,0 +1,22 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Tauri / frontend (E3)
+node_modules/
+dist/
+crates/app/gen/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local config and secrets
+.env
+*.local.toml
+
+# Local tool state
+.claude/

@@ -1,0 +1,11 @@
+[package]
+name = "faderust"
+description = "Audio mixer for Windows with one mix per output"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+faderust-engine = { path = "../engine" }
