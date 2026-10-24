@@ -106,7 +106,6 @@
 <div class="strip" class:offline={!connected}>
   <div class="label" title={label}>{label}</div>
   <div class="body">
-    <Meter db={connected && !muted ? levelDb + Math.max(local, OFF) : OFF} thin />
     <div
       class="track"
       class:dragging
@@ -131,139 +130,154 @@
         {/each}
         <span class="tick" style:bottom="0%">−∞</span>
       </div>
-      <div class="rail">
-        <div class="signal" class:muted style:height={`${pos * 100}%`}></div>
+      <div class="slot">
+        <div class="fill" class:muted style:height={`${pos * 100}%`}></div>
       </div>
-      <div class="cap" style:bottom={`${pos * 100}%`}></div>
+      <div class="cap" class:off={local <= OFF} style:bottom={`${pos * 100}%`}>{text}</div>
     </div>
+    <Meter db={connected && !muted ? levelDb + Math.max(local, OFF) : OFF} thin />
   </div>
-  <div class="db" class:off={local <= OFF}>{text}</div>
-  <button class="mute" class:on={muted} aria-pressed={muted} onclick={() => onMute(!muted)}>M</button>
+  <button class="mute" class:on={muted} aria-pressed={muted} aria-label={`${label} stumm`} onclick={() => onMute(!muted)}
+    >Mute</button
+  >
 </div>
 
 <style>
   .strip {
     display: grid;
-    grid-template-rows: auto 1fr auto auto;
+    grid-template-rows: auto 1fr auto;
     justify-items: center;
     gap: 8px;
-    width: 84px;
+    width: 78px;
     min-height: 0;
   }
   .offline {
     opacity: 0.45;
   }
   .label {
-    max-width: 100%;
+    width: 100%;
+    padding: 3px 4px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12px;
+    text-align: center;
+    font-size: 11px;
     font-weight: 600;
-    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text);
+    background: var(--panel-2);
+    border-radius: var(--radius-sm);
   }
   .body {
     display: flex;
-    gap: 6px;
+    gap: 4px;
     height: 100%;
     min-height: 160px;
     padding: 11px 0;
   }
   .track {
     position: relative;
-    width: 64px;
+    width: 58px;
     height: 100%;
     cursor: ns-resize;
     touch-action: none;
-    border-radius: 6px;
   }
   .track:focus-visible {
-    outline-offset: 4px;
+    outline-offset: 12px;
   }
   .scale {
     position: absolute;
-    inset: 0 44px 0 0;
+    inset: 0 42px 0 0;
   }
   .tick {
     position: absolute;
     right: 0;
     transform: translateY(50%);
+    font-family: var(--mono);
     font-size: 9px;
     line-height: 1;
     color: var(--muted);
-    opacity: 0.7;
-    font-variant-numeric: tabular-nums;
+  }
+  .tick::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: -20px;
+    width: 4px;
+    height: 1px;
+    background: var(--border);
   }
   .tick.zero {
     color: var(--text);
-    opacity: 1;
   }
-  .rail {
+  .tick.zero::after {
+    background: var(--muted);
+  }
+  .slot {
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 37px;
-    width: 6px;
-    border-radius: 3px;
-    background: var(--panel-2);
-    box-shadow: inset 0 0 0 1px var(--border);
-    overflow: hidden;
+    left: 35px;
+    width: 4px;
+    background: var(--well);
+    box-shadow: 0 0 0 1px var(--border);
   }
-  .signal {
+  .fill {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(to top, color-mix(in srgb, var(--teal) 35%, transparent), var(--teal));
+    background: var(--copper);
   }
-  .signal.muted {
+  .fill.muted {
     background: var(--border);
   }
+  /* Flat cap with the gain printed on it. */
   .cap {
     position: absolute;
-    left: 23px;
-    width: 34px;
-    height: 22px;
+    left: 18px;
+    width: 38px;
+    height: 20px;
     transform: translateY(50%);
-    border-radius: 5px;
-    background: linear-gradient(to bottom, var(--copper-light), var(--copper) 55%, color-mix(in srgb, var(--copper) 75%, black));
-    box-shadow:
-      0 2px 6px rgb(0 0 0 / 0.35),
-      inset 0 1px 0 rgb(255 255 255 / 0.25);
+    display: grid;
+    place-items: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    line-height: 1;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid #5a6068;
+    border-top-color: #737a83;
+    border-radius: 2px;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
     pointer-events: none;
     transition: bottom 40ms linear;
   }
+  .cap.off {
+    color: var(--muted);
+  }
+  .track:focus-visible .cap,
   .dragging .cap {
+    border-color: var(--copper);
+    color: var(--copper-light);
     transition: none;
   }
-  .cap::after {
-    content: "";
-    position: absolute;
-    left: 7px;
-    right: 7px;
-    top: 50%;
-    height: 2px;
-    margin-top: -1px;
-    border-radius: 1px;
-    background: rgb(0 0 0 / 0.35);
-  }
-  .db {
-    font-variant-numeric: tabular-nums;
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .db.off {
-    color: var(--muted);
-  }
   .mute {
-    width: 44px;
-    height: 26px;
-    border-radius: 6px;
+    width: 52px;
+    height: 22px;
+    padding: 0;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     background: var(--panel-2);
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     color: var(--muted);
+  }
+  .mute:hover {
+    color: var(--text);
   }
   .mute.on {
     background: var(--danger);

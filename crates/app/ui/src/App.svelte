@@ -198,8 +198,8 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    height: 48px;
-    padding-left: 14px;
+    height: 40px;
+    padding-left: 12px;
     background: var(--panel);
     border-bottom: 1px solid var(--border);
     user-select: none;
@@ -210,44 +210,42 @@
     gap: 8px;
   }
   .brand img {
-    border-radius: 5px;
+    border-radius: 3px;
   }
   .name {
-    font-size: 15px;
-    font-weight: 650;
-    letter-spacing: 0.01em;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
   .version {
-    padding: 1px 7px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
+    font-family: var(--mono);
     font-size: 11px;
     color: var(--muted);
-    font-variant-numeric: tabular-nums;
   }
   .nav {
     display: flex;
-    gap: 2px;
-    padding: 3px;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    align-self: stretch;
   }
   .nav button {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 5px 11px;
+    padding: 0 12px;
     border: 0;
-    border-radius: 7px;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
     background: none;
     color: var(--muted);
-    font-weight: 600;
+    font-size: 13px;
   }
-  .nav button:hover,
-  .nav button.active {
-    background: var(--panel);
+  .nav button:hover {
     color: var(--text);
+    background: var(--panel-2);
+  }
+  .nav button.active {
+    color: var(--text);
+    border-bottom-color: var(--copper);
   }
   .nav svg {
     width: 14px;
@@ -303,10 +301,13 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 3px 10px;
+    padding: 2px 8px;
     border: 1px solid var(--border);
-    border-radius: 999px;
-    font-size: 12px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
     white-space: nowrap;
   }
   .chip {
@@ -322,9 +323,9 @@
     color: var(--copper);
   }
   .chip .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
+    width: 6px;
+    height: 6px;
+    border-radius: 1px;
     background: var(--teal);
   }
   .chip.off {
@@ -335,7 +336,7 @@
   }
   button {
     padding: 6px 14px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     background: var(--panel-2);
   }
@@ -347,8 +348,8 @@
   main {
     flex: 1;
     display: flex;
-    gap: 16px;
-    padding: 16px;
+    gap: 10px;
+    padding: 10px;
     overflow: auto;
     min-height: 0;
     align-items: stretch;
@@ -364,7 +365,7 @@
     margin: 12px 16px 0;
     padding: 8px 12px;
     border: 1px solid var(--danger);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     color: var(--danger);
   }
 </style>

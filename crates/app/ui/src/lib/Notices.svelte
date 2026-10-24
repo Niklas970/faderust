@@ -49,7 +49,7 @@
     background: var(--panel);
     border: 1px solid var(--border);
     border-left: 4px solid var(--teal);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     box-shadow: 0 6px 18px rgb(0 0 0 / 0.3);
     line-height: 1.4;
   }
