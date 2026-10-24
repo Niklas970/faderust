@@ -1,5 +1,7 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.3.2: Faderust sucht beim Start nach Updates. Gibt es eine neue Version, erscheint oben „Update auf …“. Ein Klick lädt sie, prüft die Signatur und installiert sie. Diese Version muss noch einmal von Hand installiert werden.
+
 Neu in 0.3.1:
 
 - Eingänge werden bei kurzen Aussetzern nicht mehr ständig neu verbunden
