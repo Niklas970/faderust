@@ -1,5 +1,7 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.3.1: Eingänge werden bei kurzen Aussetzern nicht mehr ständig neu verbunden.
+
 Neu in 0.3:
 
 - Effekte pro Eingang: Low-Cut, Drei-Band-EQ und Gate (Klick auf den Eingang oben)
