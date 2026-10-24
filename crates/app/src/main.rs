@@ -1,5 +1,211 @@
-//! Faderust app. Placeholder until the Tauri UI lands (milestone E3).
+//! Faderust desktop app: Tauri window and tray around the audio engine.
+
+// No console window in release builds on Windows.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod audio;
+mod config;
+
+use std::path::PathBuf;
+use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex};
+
+use faderust_engine::backend::cpal::CpalBackend;
+use faderust_engine::backend::AudioBackend;
+use serde::Serialize;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Manager, State, WindowEvent};
+
+use audio::Command;
+use config::{Config, InputEntry, OutputEntry};
+
+struct AppState {
+    config: Arc<Mutex<Config>>,
+    path: PathBuf,
+    audio: Mutex<Sender<Command>>,
+}
+
+#[derive(Serialize)]
+struct Device {
+    id: String,
+    name: String,
+}
+
+#[derive(Serialize)]
+struct Devices {
+    inputs: Vec<Device>,
+    outputs: Vec<Device>,
+}
+
+fn devices(
+    list: Result<Vec<faderust_engine::backend::DeviceInfo>, impl ToString>,
+) -> Result<Vec<Device>, String> {
+    Ok(list
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|d| Device {
+            id: d.id,
+            name: d.name,
+        })
+        .collect())
+}
+
+// Async so it runs on a worker thread: the main thread's COM apartment
+// belongs to the webview, WASAPI wants its own.
+#[tauri::command]
+async fn get_devices() -> Result<Devices, String> {
+    let backend = CpalBackend::new();
+    Ok(Devices {
+        inputs: devices(backend.input_devices())?,
+        outputs: devices(backend.output_devices())?,
+    })
+}
+
+#[tauri::command]
+fn get_config(state: State<AppState>) -> Config {
+    state.config.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn save_config(config: Config, state: State<AppState>) -> Result<(), String> {
+    let config = config.normalized();
+    config
+        .save(&state.path)
+        .map_err(|e| format!("Konfiguration nicht gespeichert: {e}"))?;
+    *state.config.lock().unwrap() = config;
+    send(&state, Command::Reconfigure)
+}
+
+#[tauri::command]
+fn set_gain(input: usize, output: usize, db: f32, state: State<AppState>) -> Result<(), String> {
+    send(&state, Command::SetGain(input, output, db))
+}
+
+#[tauri::command]
+fn set_muted(
+    input: usize,
+    output: usize,
+    muted: bool,
+    state: State<AppState>,
+) -> Result<(), String> {
+    send(&state, Command::SetMuted(input, output, muted))
+}
+
+fn send(state: &AppState, cmd: Command) -> Result<(), String> {
+    state
+        .audio
+        .lock()
+        .unwrap()
+        .send(cmd)
+        .map_err(|_| "Audio-Engine läuft nicht".to_string())
+}
+
+/// First start: the system default devices, one mix.
+fn initial_config() -> Config {
+    let backend = CpalBackend::new();
+    Config {
+        inputs: backend
+            .default_input()
+            .map(|d| InputEntry {
+                label: "Mikrofon".into(),
+                device: d.name,
+            })
+            .into_iter()
+            .collect(),
+        outputs: backend
+            .default_output()
+            .map(|d| OutputEntry {
+                label: "Ausgang".into(),
+                device: d.name,
+                buffer_ms: 40,
+            })
+            .into_iter()
+            .collect(),
+        gains: vec![],
+    }
+    .normalized()
+}
+
+/// Queries devices off the main thread (see [`get_devices`]).
+fn first_start() -> Config {
+    std::thread::spawn(initial_config)
+        .join()
+        .unwrap_or_default()
+}
+
+fn show_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
 
 fn main() {
-    println!("Faderust {}", faderust_engine::VERSION);
+    tauri::Builder::default()
+        .setup(|app| {
+            let path = app.path().app_config_dir()?.join("config.toml");
+            let config = match Config::load(&path) {
+                Ok(Some(c)) => c,
+                Ok(None) => first_start(),
+                Err(e) => {
+                    // Keep the broken file for the user, start fresh.
+                    eprintln!("{}: {e}", path.display());
+                    let _ = std::fs::rename(&path, path.with_extension("toml.broken"));
+                    first_start()
+                }
+            };
+            let config = Arc::new(Mutex::new(config));
+            let audio = audio::spawn(app.handle().clone(), Arc::clone(&config), path.clone());
+            app.manage(AppState {
+                config,
+                path,
+                audio: Mutex::new(audio),
+            });
+
+            let show = MenuItem::with_id(app, "show", "Anzeigen", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Beenden", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &quit])?;
+            let mut tray = TrayIconBuilder::with_id("main")
+                .tooltip("Faderust")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => show_main(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        show_main(tray.app_handle());
+                    }
+                });
+            if let Some(icon) = app.default_window_icon() {
+                tray = tray.icon(icon.clone());
+            }
+            tray.build(app)?;
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Closing the window keeps the mixer running in the tray.
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
+        .invoke_handler(tauri::generate_handler![
+            get_devices,
+            get_config,
+            save_config,
+            set_gain,
+            set_muted
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running Faderust");
 }

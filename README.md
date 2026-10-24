@@ -35,6 +35,24 @@ cargo run --release -p faderust-engine --example mixer -- \
 
 Virtuelle Geräte kommen von [VB-Cable](https://vb-audio.com/Cable/) (separat installieren, eigene Lizenz).
 
+## App (Oberfläche)
+
+Voraussetzungen: Rust, Node.js 22, WebView2 (bei Windows 10/11 dabei).
+
+```sh
+cd crates/app/ui
+npm ci
+npm run build              # baut die Oberfläche nach crates/app/ui/dist
+cd ../../..
+cargo run --release -p faderust
+```
+
+Zum Entwickeln mit Live-Neuladen: in `crates/app/ui` `npm run dev` starten und parallel `cargo run -p faderust` (Debug-Builds laden die Oberfläche von `localhost:5173`). `npm run dev` allein zeigt die Oberfläche im Browser mit simulierten Geräten.
+
+Installer bauen: `cd crates/app && npx --prefix ui tauri build` (nach `npm run build`).
+
+Die Einstellungen (Geräte, Pegel) liegen in `%APPDATA%\io.github.niklas970.faderust\config.toml`. Das Fenster schließen lässt den Mixer im Tray weiterlaufen; beenden über das Tray-Menü.
+
 ## Lizenz
 
 [MIT](LICENSE)
