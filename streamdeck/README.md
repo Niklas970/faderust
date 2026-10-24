@@ -1,0 +1,55 @@
+# Faderust für Stream Deck
+
+Steuert Faderust vom Elgato Stream Deck. Braucht Stream Deck 7.1 oder neuer (Windows) und ein laufendes Faderust ab 0.4.
+
+## Aktionen
+
+| Aktion | Stream Deck+ (Drehregler) | Taste |
+|---|---|---|
+| **Fader** | Drehen ändert den Pegel (1 dB pro Raste), Drücken oder Tippen schaltet stumm. Der Streifen zeigt Name, Pegel und Faderstellung. | Ein Schritt pro Druck (3 dB, negativ für leiser), Titel zeigt den Pegel |
+| **Stumm** | – | Eingang auf einem oder allen Ausgängen stumm; Taste zeigt den Zustand |
+| **Preset laden** | – | Lädt ein Preset aus Faderust; leuchtet, solange die Fader dazu passen |
+| **Standardgerät** | – | Macht ein Gerät zum Windows-Standard (oder nur für Anrufe); leuchtet, solange es das ist |
+
+Eingänge, Ausgänge, Presets und Geräte wählt man im Einstellungsfenster der Aktion aus Listen, die Faderust liefert. Läuft Faderust nicht, zeigt die Taste ein Warnzeichen.
+
+## Installieren
+
+`com.niklas970.faderust.streamDeckPlugin` aus den [Releases](https://github.com/Niklas970/faderust/releases) doppelklicken.
+
+## Entwickeln
+
+```sh
+cd streamdeck
+npm ci
+npm run build    # nach com.niklas970.faderust.sdPlugin/bin
+npm test         # Plugin zwischen simuliertem Stream Deck und Faderust
+npm run pack     # dist/com.niklas970.faderust.streamDeckPlugin
+```
+
+Zum Ausprobieren ohne Paket: `npx streamdeck link com.niklas970.faderust.sdPlugin`, dann `npm run watch` und nach Änderungen `npx streamdeck restart com.niklas970.faderust`.
+
+Die Icons entstehen aus `icons/*.svg` mit `node scripts/icons.cjs` (braucht Playwright).
+
+## Schnittstelle
+
+Faderust lauscht auf `ws://127.0.0.1:47811` (nur lokal) und spricht JSON. Verbindungen mit `Origin`-Header (also aus dem Browser) lehnt es ab.
+
+Faderust schickt bei jeder Änderung:
+
+- `{"type":"state","protocol":1,"inputs":[…],"outputs":[…],"gains":[[{"db":0,"muted":false}]],"presets":[…],"activePreset":null}`
+- `{"type":"devices","supported":true,"playback":[…],"recording":[…]}` (Windows-Geräte mit `id`, `name`, `isDefault`, `isDefaultCommunications`)
+- `{"type":"error","message":"…"}` bei einer ungültigen Anfrage
+
+Anfragen:
+
+| `type` | Felder |
+|---|---|
+| `setGain` | `input`, `output`, `db` |
+| `addGain` | `input`, `output`, `delta` (dB) |
+| `setMuted` | `input`, `output`, `muted` |
+| `toggleMuted` | `input`, `output` |
+| `loadPreset` | `name` |
+| `setDefaultDevice` | `id`, `communications` |
+
+`input` und `output` zählen ab 0 in der Reihenfolge der Faderust-Oberfläche.

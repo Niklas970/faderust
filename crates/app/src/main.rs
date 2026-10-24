@@ -5,6 +5,7 @@
 
 mod audio;
 mod config;
+mod remote;
 
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
@@ -159,7 +160,7 @@ async fn set_app_volume(
         .map_err(|e| e.to_string())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct Endpoint {
     id: String,
@@ -170,7 +171,7 @@ struct Endpoint {
     muted: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 struct WindowsAudio {
     supported: bool,
     playback: Vec<Endpoint>,
@@ -190,6 +191,10 @@ fn system_audio() -> Option<Box<dyn SystemAudio>> {
 /// The Windows default devices and device volumes.
 #[tauri::command]
 async fn get_windows_audio() -> Result<WindowsAudio, String> {
+    windows_audio()
+}
+
+fn windows_audio() -> Result<WindowsAudio, String> {
     let Some(sys) = system_audio() else {
         return Ok(WindowsAudio {
             supported: false,
@@ -222,13 +227,17 @@ async fn get_windows_audio() -> Result<WindowsAudio, String> {
 /// Makes a device the Windows default, for everything or only for calls.
 #[tauri::command]
 async fn set_default_device(id: String, communications: bool) -> Result<(), String> {
+    set_default(&id, communications)
+}
+
+fn set_default(id: &str, communications: bool) -> Result<(), String> {
     let sys = system_audio().ok_or("Nur unter Windows verfügbar")?;
     let role = if communications {
         Role::Communications
     } else {
         Role::Default
     };
-    sys.set_default(&id, role).map_err(|e| e.to_string())
+    sys.set_default(id, role).map_err(|e| e.to_string())
 }
 
 /// Sets a device's Windows volume (0…1) and/or mute.
@@ -320,10 +329,14 @@ fn save_preset(name: String, state: State<AppState>) -> Result<(), String> {
 
 #[tauri::command]
 fn load_preset(name: String, state: State<AppState>) -> Result<(), String> {
-    if !edit_presets(&state, |c| c.load_preset(&name))? {
+    apply_preset(&state, &name)
+}
+
+fn apply_preset(state: &AppState, name: &str) -> Result<(), String> {
+    if !edit_presets(state, |c| c.load_preset(name))? {
         return Err(format!("Preset „{name}“ gibt es nicht"));
     }
-    send(&state, Command::ApplyGains)
+    send(state, Command::ApplyGains)
 }
 
 #[tauri::command]
@@ -419,6 +432,7 @@ fn main() {
                 path,
                 audio: Mutex::new(audio),
             });
+            remote::spawn(app.handle().clone());
 
             let show = MenuItem::with_id(app, "show", "Anzeigen", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Beenden", true, None::<&str>)?;

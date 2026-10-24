@@ -13,6 +13,7 @@ Jeder Ausgang bekommt seine eigene Mischung, Geräte (vor allem Bluetooth) komme
 |---|---|
 | `crates/engine` | Audio-Kern: WASAPI, Ringpuffer, Drift-Ausgleich, Mix-Matrix |
 | `crates/app` | Oberfläche (später Tauri 2 mit Svelte) |
+| `streamdeck` | Stream-Deck-Plugin |
 
 ## Bauen
 
@@ -68,6 +69,10 @@ Ein Programm (Spotify, Discord, Browser …) bekommt einen eigenen Fader, wenn e
 3. Im selben Dialog das Programm auf **CABLE Input** stellen.
 
 Windows merkt sich das Gerät pro Programm, auch nach einem Neustart. Mehrere Programme getrennt brauchen mehrere Kabel (VB-Cable A+B). Faderust setzt die Zuordnung über dieselbe nicht dokumentierte Windows-Schnittstelle wie die Einstellungen-App („Lautstärkemixer“), dort lässt sie sich auch von Hand ändern.
+
+## Stream Deck
+
+Das Plugin in [`streamdeck/`](streamdeck/README.md) steuert Faderust vom Elgato Stream Deck: Fader per Drehregler (Stream Deck+) oder Taste, Stummschalten, Presets laden und Windows-Standardgerät wechseln. Installieren: `com.niklas970.faderust.streamDeckPlugin` aus den [Releases](https://github.com/Niklas970/faderust/releases) doppelklicken. Braucht Stream Deck 7.1 oder neuer.
 
 ## Lizenz
 

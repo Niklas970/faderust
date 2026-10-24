@@ -1,8 +1,8 @@
 name: Release
 
-# Builds the Windows installer (NSIS setup). Runs on a version tag (v*), by hand from the
-# Actions tab, or as a dry run (setup as workflow artifact, no release) on
-# pull requests that touch the packaging.
+# Builds the Windows installer (NSIS setup) and the Stream Deck plugin. Runs
+# on a version tag (v*), by hand from the Actions tab, or as a dry run (setup
+# as workflow artifact, no release) on pull requests that touch the packaging.
 on:
   push:
     tags: ["v*"]
@@ -40,7 +40,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: crates/app/ui/package-lock.json
+          cache-dependency-path: |
+            crates/app/ui/package-lock.json
+            streamdeck/package-lock.json
       - run: npm ci
         working-directory: crates/app/ui
       - run: npm run build
@@ -54,6 +56,9 @@ jobs:
           name: faderust-setup
           path: target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
+      # Stream Deck runs the plugin on its own Node 24; building works here.
+      - run: npm ci && npm run build && npm run pack
+        working-directory: streamdeck
       - name: Create release
         if: github.event_name != 'pull_request'
         env:
@@ -62,6 +67,7 @@ jobs:
           TITLE: ${{ inputs.title || github.ref_name }}
         run: |
           gh release create "$TAG" target/release/bundle/nsis/*-setup.exe \
+            streamdeck/dist/*.streamDeckPlugin \
             --title "$TITLE" \
             --notes-file .github/release-notes.md \
             --target "$GITHUB_SHA" \
