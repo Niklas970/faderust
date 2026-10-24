@@ -46,9 +46,21 @@ jobs:
       - run: npm run build
         working-directory: crates/app/ui
       # The Tauri CLI downloads NSIS itself. The installer follows the
-      # Windows display language (English or German).
-      - run: ui/node_modules/.bin/tauri build --bundles nsis
+      # Windows display language (English or German). With the signing key
+      # it also writes the setup's signature for the in-app updater; without
+      # it (forks) the build skips that.
+      - name: Build setup
         working-directory: crates/app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: |
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            ui/node_modules/.bin/tauri build --bundles nsis
+          else
+            ui/node_modules/.bin/tauri build --bundles nsis \
+              --config '{"bundle":{"createUpdaterArtifacts":false}}'
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: faderust-setup
@@ -61,8 +73,20 @@ jobs:
           TAG: ${{ inputs.tag || github.ref_name }}
           TITLE: ${{ inputs.title || github.ref_name }}
         run: |
-          gh release create "$TAG" target/release/bundle/nsis/*-setup.exe \
+          cd target/release/bundle/nsis
+          setup=$(ls *-setup.exe)
+          [ -f "$setup.sig" ] || { echo "Signing key missing: no updater signature"; exit 1; }
+          # Manifest the in-app updater reads from the latest release.
+          jq -n \
+            --arg version "$(jq -r .version "$GITHUB_WORKSPACE/crates/app/tauri.conf.json")" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg sig "$(cat "$setup.sig")" \
+            --arg url "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$setup" \
+            '{version: $version, pub_date: $date, notes: "", platforms: {"windows-x86_64": {signature: $sig, url: $url}}}' \
+            > latest.json
+          # Not a prerelease: the updater only sees the latest full release.
+          gh release create "$TAG" "$setup" "$setup.sig" latest.json \
             --title "$TITLE" \
-            --notes-file .github/release-notes.md \
+            --notes-file "$GITHUB_WORKSPACE/.github/release-notes.md" \
             --target "$GITHUB_SHA" \
-            --prerelease
+            --latest
