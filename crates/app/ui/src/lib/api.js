@@ -1,7 +1,8 @@
 // Bridge to the Rust side. Outside Tauri (plain `npm run dev` in a browser)
 // a small simulation stands in, so the UI can be worked on without devices.
 
-const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+const inTauri =
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 async function tauri() {
   const [core, event] = await Promise.all([
@@ -43,6 +44,30 @@ export async function getApps() {
 export async function setAppOutput(pids, device) {
   if (!inTauri) return mock.setAppOutput(pids, device);
   return (await tauri()).invoke("set_app_output", { pids, device });
+}
+
+/** Program volume in Windows (0…1) and/or mute; `null` leaves a value as it is. */
+export async function setAppVolume(pids, volume, muted) {
+  if (!inTauri) return mock.setAppVolume(pids, volume, muted);
+  return (await tauri()).invoke("set_app_volume", { pids, volume, muted });
+}
+
+/** Windows playback and recording devices with defaults and volume. */
+export async function getWindowsAudio() {
+  if (!inTauri) return structuredClone(mock.windows);
+  return (await tauri()).invoke("get_windows_audio");
+}
+
+/** Makes a device the Windows default; `communications` only for calls. */
+export async function setDefaultDevice(id, communications) {
+  if (!inTauri) return mock.setDefault(id, communications);
+  return (await tauri()).invoke("set_default_device", { id, communications });
+}
+
+/** Device volume in Windows (0…1) and/or mute; `null` leaves a value as it is. */
+export async function setDeviceVolume(id, volume, muted) {
+  if (!inTauri) return mock.setDeviceVolume(id, volume, muted);
+  return (await tauri()).invoke("set_device_volume", { id, volume, muted });
 }
 
 /** VB-Audio's virtual cables, by name ("CABLE Input", "CABLE-A Output", …). */
@@ -102,7 +127,10 @@ export async function loadPreset(name) {
 }
 
 export async function deletePreset(name) {
-  if (!inTauri) return void (mock.config.presets = mock.config.presets.filter((p) => p.name !== name));
+  if (!inTauri)
+    return void (mock.config.presets = mock.config.presets.filter(
+      (p) => p.name !== name,
+    ));
   return (await tauri()).invoke("delete_preset", { name });
 }
 
@@ -121,12 +149,26 @@ export async function onState(cb) {
 
 /** Effects that change nothing; mirrors `FxSettings::default()`. */
 export function defaultFx() {
-  return { lowCutHz: 0, lowDb: 0, midDb: 0, highDb: 0, gate: false, gateDb: -45 };
+  return {
+    lowCutHz: 0,
+    lowDb: 0,
+    midDb: 0,
+    highDb: 0,
+    gate: false,
+    gateDb: -45,
+  };
 }
 
 /** True if any effect is switched on. */
 export function fxActive(fx) {
-  return !!fx && (fx.lowCutHz > 0 || fx.lowDb !== 0 || fx.midDb !== 0 || fx.highDb !== 0 || fx.gate);
+  return (
+    !!fx &&
+    (fx.lowCutHz > 0 ||
+      fx.lowDb !== 0 ||
+      fx.midDb !== 0 ||
+      fx.highDb !== 0 ||
+      fx.gate)
+  );
 }
 
 const mock = {
@@ -144,7 +186,18 @@ const mock = {
   },
   config: {
     inputs: [
-      { label: "Mikro", device: "Mikrofon", fx: { lowCutHz: 80, lowDb: 0, midDb: 2, highDb: 0, gate: true, gateDb: -45 } },
+      {
+        label: "Mikro",
+        device: "Mikrofon",
+        fx: {
+          lowCutHz: 80,
+          lowDb: 0,
+          midDb: 2,
+          highDb: 0,
+          gate: true,
+          gateDb: -45,
+        },
+      },
       { label: "PC", device: "CABLE Output", fx: defaultFx() },
       { label: "PS5", device: "Line In", fx: defaultFx() },
     ],
@@ -161,14 +214,104 @@ const mock = {
     supported: true,
     devices: [
       { id: "ps5out", name: "Lautsprecher (USB Sound Card)", cable: false },
-      { id: "cable", name: "CABLE Input (VB-Audio Virtual Cable)", cable: true },
+      {
+        id: "cable",
+        name: "CABLE Input (VB-Audio Virtual Cable)",
+        cable: true,
+      },
       { id: "buds", name: "Kopfhörer (Galaxy Buds2 Pro)", cable: false },
     ],
     apps: [
-      { name: "Discord", exe: "Discord.exe", pids: [4120, 4188], device: null },
-      { name: "firefox", exe: "firefox.exe", pids: [9932], device: "cable" },
-      { name: "Spotify", exe: "Spotify.exe", pids: [7311], device: "cable" },
+      {
+        name: "Discord",
+        exe: "Discord.exe",
+        pids: [4120, 4188],
+        device: null,
+        volume: 0.8,
+        muted: false,
+      },
+      {
+        name: "firefox",
+        exe: "firefox.exe",
+        pids: [9932],
+        device: "cable",
+        volume: 1,
+        muted: false,
+      },
+      {
+        name: "Spotify",
+        exe: "Spotify.exe",
+        pids: [7311],
+        device: "cable",
+        volume: 0.45,
+        muted: true,
+      },
     ],
+  },
+  windows: {
+    supported: true,
+    playback: [
+      {
+        id: "ps5out",
+        name: "Lautsprecher (USB Sound Card)",
+        isDefault: false,
+        isDefaultCommunications: false,
+        volume: 1,
+        muted: false,
+      },
+      {
+        id: "cable",
+        name: "CABLE Input (VB-Audio Virtual Cable)",
+        isDefault: true,
+        isDefaultCommunications: false,
+        volume: 1,
+        muted: false,
+      },
+      {
+        id: "buds",
+        name: "Kopfhörer (Galaxy Buds2 Pro)",
+        isDefault: false,
+        isDefaultCommunications: true,
+        volume: 0.6,
+        muted: false,
+      },
+    ],
+    recording: [
+      {
+        id: "mic",
+        name: "Mikrofon (USB Audio Device)",
+        isDefault: true,
+        isDefaultCommunications: true,
+        volume: 0.75,
+        muted: false,
+      },
+      {
+        id: "cableout",
+        name: "CABLE Output (VB-Audio Virtual Cable)",
+        isDefault: false,
+        isDefaultCommunications: false,
+        volume: 1,
+        muted: false,
+      },
+    ],
+  },
+  setAppVolume(pids, volume, muted) {
+    const app = this.apps.apps.find((a) => a.pids[0] === pids[0]);
+    if (app && volume != null) app.volume = volume;
+    if (app && muted != null) app.muted = muted;
+  },
+  setDefault(id, communications) {
+    const w = this.windows;
+    const list = w.playback.some((d) => d.id === id) ? w.playback : w.recording;
+    const key = communications ? "isDefaultCommunications" : "isDefault";
+    for (const d of list) d[key] = d.id === id;
+  },
+  setDeviceVolume(id, volume, muted) {
+    const d = [...this.windows.playback, ...this.windows.recording].find(
+      (d) => d.id === id,
+    );
+    if (d && volume != null) d.volume = volume;
+    if (d && muted != null) d.muted = muted;
   },
   setAppOutput(pids, device) {
     const app = this.apps.apps.find((a) => a.pids[0] === pids[0]);
@@ -189,7 +332,11 @@ const mock = {
   },
   subscribeNotices(cb) {
     const id = setTimeout(
-      () => cb({ level: "warn", text: "„Box“ getrennt. Faderust verbindet neu, sobald das Gerät wieder da ist." }),
+      () =>
+        cb({
+          level: "warn",
+          text: "„Box“ getrennt. Faderust verbindet neu, sobald das Gerät wieder da ist.",
+        }),
       1500,
     );
     return () => clearTimeout(id);
@@ -202,7 +349,9 @@ const mock = {
   resize() {
     const { inputs, outputs } = this.config;
     this.gains = inputs.map((_, i) =>
-      outputs.map((_, o) => this.gains[i]?.[o] ?? { db: i === o ? 0 : -12, muted: false }),
+      outputs.map(
+        (_, o) => this.gains[i]?.[o] ?? { db: i === o ? 0 : -12, muted: false },
+      ),
     );
   },
   setGain(i, o, db) {
@@ -216,7 +365,8 @@ const mock = {
     let t = 0;
     const id = setInterval(() => {
       t += 0.05;
-      const wave = (k) => -30 + 18 * Math.sin(t * (1.3 + k) + k) + 6 * Math.random();
+      const wave = (k) =>
+        -30 + 18 * Math.sin(t * (1.3 + k) + k) + 6 * Math.random();
       const { inputs, outputs } = this.config;
       const inLevels = inputs.map((_, i) => wave(i));
       cb({
@@ -231,10 +381,20 @@ const mock = {
           // The second Bluetooth device drops out now and then.
           connected: !(o === 2 && Math.sin(t / 4) > 0.6),
           deviceName: this.devices.outputs[o % 3].name,
-          levelDb: Math.max(...inLevels.map((l, i) => (this.gains[i][o].muted ? -120 : l + this.gains[i][o].db))),
+          levelDb: Math.max(
+            ...inLevels.map((l, i) =>
+              this.gains[i][o].muted ? -120 : l + this.gains[i][o].db,
+            ),
+          ),
         })),
         gains: structuredClone(this.gains),
-        lanes: inputs.map(() => outputs.map((_, o) => ({ fillMs: o ? 80 : 30, correctionPpm: -40, underruns: 0 }))),
+        lanes: inputs.map(() =>
+          outputs.map((_, o) => ({
+            fillMs: o ? 80 : 30,
+            correctionPpm: -40,
+            underruns: 0,
+          })),
+        ),
       });
     }, 50);
     return () => clearInterval(id);

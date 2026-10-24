@@ -3,6 +3,7 @@
   import OutputColumn from "./lib/OutputColumn.svelte";
   import Settings from "./lib/Settings.svelte";
   import Apps from "./lib/Apps.svelte";
+  import WindowsAudio from "./lib/WindowsAudio.svelte";
   import FxDialog from "./lib/FxDialog.svelte";
   import Presets from "./lib/Presets.svelte";
   import Notices from "./lib/Notices.svelte";
@@ -21,6 +22,7 @@
   let config = $state(null);
   let settingsOpen = $state(false);
   let appsOpen = $state(false);
+  let windowsOpen = $state(false);
   let presetsOpen = $state(false);
   // Index of the input whose effects are open.
   let fxOpen = $state(null);
@@ -110,6 +112,10 @@
           /><rect x="9" y="9" width="5" height="5" rx="1" /></svg
         >Programme
       </button>
+      <button onclick={() => (windowsOpen = true)} class:active={windowsOpen}>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l4-3v10l-4-3H2z" /><path d="M11.5 5.5a3.5 3.5 0 0 1 0 5M13.5 3.5a6.3 6.3 0 0 1 0 9" /></svg
+        >Windows
+      </button>
       <button onclick={openSettings} class:active={settingsOpen}>
         <svg viewBox="0 0 16 16" aria-hidden="true"
           ><path d="M4 2v12M8 2v12M12 2v12" /><rect x="2.5" y="8" width="3" height="2.5" rx=".6" /><rect
@@ -172,6 +178,10 @@
 
 {#if appsOpen && config}
   <Apps inputs={config.inputs} onAddInput={addCableInput} onClose={() => (appsOpen = false)} />
+{/if}
+
+{#if windowsOpen}
+  <WindowsAudio onClose={() => (windowsOpen = false)} />
 {/if}
 
 {#if settingsOpen && config}

@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
-use faderust_engine::apps::AppRouter;
+use faderust_engine::apps::{AppRouter, Flow, Role, SystemAudio};
 use faderust_engine::backend::cpal::CpalBackend;
 use faderust_engine::backend::AudioBackend;
 use serde::Serialize;
@@ -80,6 +80,8 @@ struct App {
     exe: String,
     pids: Vec<u32>,
     device: Option<String>,
+    volume: f32,
+    muted: bool,
 }
 
 #[derive(Serialize)]
@@ -128,6 +130,8 @@ async fn get_apps() -> Result<Apps, String> {
                 exe: a.exe,
                 pids: a.pids,
                 device: a.device,
+                volume: a.volume,
+                muted: a.muted,
             })
             .collect(),
     })
@@ -139,6 +143,103 @@ async fn set_app_output(pids: Vec<u32>, device: Option<String>) -> Result<(), St
     let router = router().ok_or("Nur unter Windows verfügbar")?;
     router
         .set_output(&pids, device.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+/// Sets a program's Windows volume (0…1) and/or mute.
+#[tauri::command]
+async fn set_app_volume(
+    pids: Vec<u32>,
+    volume: Option<f32>,
+    muted: Option<bool>,
+) -> Result<(), String> {
+    let router = router().ok_or("Nur unter Windows verfügbar")?;
+    router
+        .set_app_volume(&pids, volume.map(|v| v.clamp(0.0, 1.0)), muted)
+        .map_err(|e| e.to_string())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Endpoint {
+    id: String,
+    name: String,
+    is_default: bool,
+    is_default_communications: bool,
+    volume: f32,
+    muted: bool,
+}
+
+#[derive(Serialize)]
+struct WindowsAudio {
+    supported: bool,
+    playback: Vec<Endpoint>,
+    recording: Vec<Endpoint>,
+}
+
+#[cfg(windows)]
+fn system_audio() -> Option<Box<dyn SystemAudio>> {
+    Some(Box::new(faderust_engine::apps::wasapi::WasapiRouter::new()))
+}
+
+#[cfg(not(windows))]
+fn system_audio() -> Option<Box<dyn SystemAudio>> {
+    None
+}
+
+/// The Windows default devices and device volumes.
+#[tauri::command]
+async fn get_windows_audio() -> Result<WindowsAudio, String> {
+    let Some(sys) = system_audio() else {
+        return Ok(WindowsAudio {
+            supported: false,
+            playback: vec![],
+            recording: vec![],
+        });
+    };
+    let mut out = WindowsAudio {
+        supported: true,
+        playback: vec![],
+        recording: vec![],
+    };
+    for e in sys.endpoints().map_err(|e| e.to_string())? {
+        let list = match e.flow {
+            Flow::Playback => &mut out.playback,
+            Flow::Recording => &mut out.recording,
+        };
+        list.push(Endpoint {
+            id: e.id,
+            name: e.name,
+            is_default: e.is_default,
+            is_default_communications: e.is_default_communications,
+            volume: e.volume,
+            muted: e.muted,
+        });
+    }
+    Ok(out)
+}
+
+/// Makes a device the Windows default, for everything or only for calls.
+#[tauri::command]
+async fn set_default_device(id: String, communications: bool) -> Result<(), String> {
+    let sys = system_audio().ok_or("Nur unter Windows verfügbar")?;
+    let role = if communications {
+        Role::Communications
+    } else {
+        Role::Default
+    };
+    sys.set_default(&id, role).map_err(|e| e.to_string())
+}
+
+/// Sets a device's Windows volume (0…1) and/or mute.
+#[tauri::command]
+async fn set_device_volume(
+    id: String,
+    volume: Option<f32>,
+    muted: Option<bool>,
+) -> Result<(), String> {
+    let sys = system_audio().ok_or("Nur unter Windows verfügbar")?;
+    sys.set_endpoint_volume(&id, volume.map(|v| v.clamp(0.0, 1.0)), muted)
         .map_err(|e| e.to_string())
 }
 
@@ -364,6 +465,10 @@ fn main() {
             get_devices,
             get_apps,
             set_app_output,
+            set_app_volume,
+            get_windows_audio,
+            set_default_device,
+            set_device_volume,
             get_autostart,
             set_autostart,
             get_config,
