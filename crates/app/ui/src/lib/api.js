@@ -34,6 +34,17 @@ export function isCable(name) {
   return n.includes("vb-audio") || n.startsWith("cable");
 }
 
+/** Whether Faderust starts with Windows (into the tray). */
+export async function getAutostart() {
+  if (!inTauri) return mock.autostart;
+  return (await tauri()).invoke("get_autostart");
+}
+
+export async function setAutostart(enabled) {
+  if (!inTauri) return void (mock.autostart = enabled);
+  return (await tauri()).invoke("set_autostart", { enabled });
+}
+
 export async function getConfig() {
   if (!inTauri) {
     mock.resize();
@@ -90,6 +101,7 @@ const mock = {
     ],
   },
   gains: [],
+  autostart: false,
   apps: {
     supported: true,
     devices: [

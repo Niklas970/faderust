@@ -1,6 +1,6 @@
 <script>
   import { untrack } from "svelte";
-  import { getDevices } from "./api.js";
+  import { getAutostart, getDevices, setAutostart } from "./api.js";
 
   /** Device setup: which inputs and outputs, their names and buffers. */
   let { config, onSave, onClose } = $props();
@@ -9,6 +9,20 @@
   let draft = $state(untrack(() => ({ gains: [], ...$state.snapshot(config) })));
   let devices = $state({ inputs: [], outputs: [] });
   getDevices().then((d) => (devices = d));
+
+  // Applies right away, independent of Save.
+  let autostart = $state(null);
+  let autostartError = $state("");
+  getAutostart().then((a) => (autostart = a), (e) => (autostartError = String(e)));
+  async function toggleAutostart(enabled) {
+    try {
+      await setAutostart(enabled);
+      autostart = enabled;
+      autostartError = "";
+    } catch (e) {
+      autostartError = String(e);
+    }
+  }
 
   // The configured pattern may match a device that is unplugged right now:
   // keep it selectable.
@@ -94,6 +108,18 @@
     + Ausgang
   </button>
 
+  <h3>Start</h3>
+  <label class="check">
+    <input
+      type="checkbox"
+      checked={autostart ?? false}
+      disabled={autostart === null}
+      onchange={(e) => toggleAutostart(e.currentTarget.checked)}
+    />
+    Mit Windows starten (im Tray, ohne Fenster)
+  </label>
+  {#if autostartError}<p class="error">{autostartError}</p>{/if}
+
   <footer>
     <button onclick={onClose}>Abbrechen</button>
     <button class="primary" onclick={() => onSave($state.snapshot(draft))}>Speichern</button>
@@ -175,6 +201,14 @@
   }
   .add {
     border-style: dashed;
+  }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .error {
+    color: var(--danger);
   }
   footer {
     display: flex;

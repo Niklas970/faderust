@@ -17,9 +17,13 @@ use serde::Serialize;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, State, WindowEvent};
+use tauri_plugin_autostart::ManagerExt;
 
 use audio::Command;
 use config::{Config, InputEntry, OutputEntry};
+
+/// Passed by the Windows autostart entry: start in the tray, no window.
+const MINIMIZED_ARG: &str = "--minimized";
 
 struct AppState {
     config: Arc<Mutex<Config>>,
@@ -139,6 +143,22 @@ async fn set_app_output(pids: Vec<u32>, device: Option<String>) -> Result<(), St
 }
 
 #[tauri::command]
+fn get_autostart(app: AppHandle) -> Result<bool, String> {
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_autostart(enabled: bool, app: AppHandle) -> Result<(), String> {
+    let autostart = app.autolaunch();
+    if enabled {
+        autostart.enable()
+    } else {
+        autostart.disable()
+    }
+    .map_err(|e| format!("Autostart nicht geändert: {e}"))
+}
+
+#[tauri::command]
 fn get_config(state: State<AppState>) -> Config {
     state.config.lock().unwrap().clone()
 }
@@ -220,6 +240,17 @@ fn show_main(app: &AppHandle) {
 
 fn main() {
     tauri::Builder::default()
+        // Starting Faderust again (e.g. from the Start menu while it runs in
+        // the tray) shows the running window instead of opening the devices
+        // a second time.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            show_main(app)
+        }))
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .arg(MINIMIZED_ARG)
+                .build(),
+        )
         .setup(|app| {
             let path = app.path().app_config_dir()?.join("config.toml");
             let config = match Config::load(&path) {
@@ -266,6 +297,12 @@ fn main() {
                 tray = tray.icon(icon.clone());
             }
             tray.build(app)?;
+
+            // The window starts hidden (tauri.conf.json) so autostart does
+            // not flash it.
+            if !std::env::args().any(|a| a == MINIMIZED_ARG) {
+                show_main(app.handle());
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -279,6 +316,8 @@ fn main() {
             get_devices,
             get_apps,
             set_app_output,
+            get_autostart,
+            set_autostart,
             get_config,
             save_config,
             set_gain,
