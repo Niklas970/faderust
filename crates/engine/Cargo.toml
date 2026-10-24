@@ -7,9 +7,22 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-[dependencies]
+[features]
+default = ["cpal"]
+# Device backend built on cpal (WASAPI on Windows). Without it the engine core
+# still builds and tests on any platform.
+cpal = ["dep:cpal"]
 
-[dev-dependencies]
-# E0 prototype only (examples/e0_passthrough.rs); the engine itself will talk to WASAPI directly.
-cpal = "0.18"
+[dependencies]
+audioadapter-buffers = "5.1"
+cpal = { version = "0.18", optional = true }
 rtrb = "0.4"
+rubato = { version = "5.0", default-features = false }
+
+[[example]]
+name = "e0_passthrough"
+required-features = ["cpal"]
+
+[[example]]
+name = "mixer"
+required-features = ["cpal"]

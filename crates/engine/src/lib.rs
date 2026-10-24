@@ -1,17 +1,25 @@
 //! Faderust audio engine.
 //!
-//! Will contain the WASAPI backend (behind a trait, so a PipeWire backend stays
-//! possible), lock-free ring buffers, drift compensation and the mix matrix.
+//! Every input device feeds one lock-free ring buffer per output device
+//! ([`lane`]). Each output callback pulls from its lanes through an adaptive
+//! resampler that keeps the buffer fill at a target ([`drift`]), applies the
+//! [`matrix`] gains and sums. Device access sits behind [`backend::AudioBackend`]
+//! so a PipeWire backend can be added later.
+
+pub mod backend;
+pub mod drift;
+pub mod engine;
+pub mod lane;
+pub mod matrix;
+pub mod meter;
+pub mod node;
+
+pub use engine::{Engine, EngineConfig, EngineError, InputConfig, OutputConfig};
+pub use matrix::MixMatrix;
+pub use meter::PeakMeter;
 
 /// Crate version, exposed for the app's about screen and logs.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn version_is_set() {
-        assert!(!VERSION.is_empty());
-    }
-}
+/// The internal bus is stereo: mono inputs are duplicated, extra channels dropped.
+pub const BUS_CHANNELS: usize = 2;
