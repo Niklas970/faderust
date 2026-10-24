@@ -4,6 +4,7 @@ Neu in 0.4.1:
 
 - Ausgänge geben sich jetzt immer automatisch frei: nach 5 Sekunden Stille, ohne Einstellung. Die Auswahl „Frei nach …“ unter **Geräte** entfällt
 - Kommt wieder Ton, öffnet Faderust den Ausgang sofort (Prüfung alle 50 ms statt jede Sekunde). Bei Bluetooth braucht die Verbindung selbst noch einen kurzen Moment
+- Ein Klick auf die Versionsnummer oben links sucht sofort nach Updates
 
 Neu in 0.4.0:
 

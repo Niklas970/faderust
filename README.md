@@ -33,7 +33,7 @@
 
 1. Unter [Releases](https://github.com/Niklas970/faderust/releases/latest) die Datei `Faderust_*_x64-setup.exe` laden und starten. Das Setup braucht keine Admin-Rechte und spricht Deutsch oder Englisch, je nach Windows-Sprache.
 2. Das Setup ist nicht signiert, deshalb warnt Windows SmartScreen. Klicke auf „Weitere Informationen“ und dann auf „Trotzdem ausführen“.
-3. Faderust aus dem Startmenü öffnen. Neue Versionen meldet die App selbst oben in der Titelleiste („Update auf …“).
+3. Faderust aus dem Startmenü öffnen. Neue Versionen meldet die App selbst oben in der Titelleiste („Update auf …“), ein Klick auf die Versionsnummer sucht sofort danach.
 
 Voraussetzung ist Windows 10 oder 11. WebView2 ist dort meist schon da, sonst lädt das Setup es nach.
 
