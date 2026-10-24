@@ -832,7 +832,7 @@ dependencies = [
 
 [[package]]
 name = "faderust"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "faderust-engine",
  "serde",
@@ -844,7 +844,7 @@ dependencies = [
 
 [[package]]
 name = "faderust-engine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "audioadapter-buffers",
  "cpal",
