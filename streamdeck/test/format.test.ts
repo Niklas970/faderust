@@ -17,6 +17,6 @@ test("fader travel follows the app's taper", () => {
   assert.equal(faderPercent(-60), 0);
   assert.equal(faderPercent(-42), 15);
   assert.equal(faderPercent(-24), 25);
-  assert.equal(faderPercent(6), 100);
   assert.equal(faderPercent(12), 100);
+  assert.equal(faderPercent(20), 100);
 });

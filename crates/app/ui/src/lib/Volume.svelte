@@ -93,7 +93,7 @@
     place-items: center;
     padding: 0;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: var(--panel-2);
   }
   .mute svg {
@@ -118,30 +118,34 @@
     margin: 0;
     appearance: none;
     border-radius: 2px;
-    background: linear-gradient(to right, var(--teal) var(--pct), var(--border) var(--pct));
+    background: linear-gradient(to right, var(--accent) var(--pct), var(--well) var(--pct));
+    box-shadow: 0 0 0 1px var(--border);
     cursor: pointer;
   }
   .muted input {
-    background: linear-gradient(to right, var(--muted) var(--pct), var(--border) var(--pct));
+    background: linear-gradient(to right, var(--muted) var(--pct), var(--well) var(--pct));
   }
   input::-webkit-slider-thumb {
     appearance: none;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--copper);
-    border: 2px solid var(--bg);
+    width: 10px;
+    height: 18px;
+    border-radius: 2px;
+    background: var(--panel-2);
+    border: 1px solid #5a6068;
+    border-top-color: #737a83;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
   }
   input::-moz-range-thumb {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--copper);
-    border: 2px solid var(--bg);
+    width: 8px;
+    height: 16px;
+    border-radius: 2px;
+    background: var(--panel-2);
+    border: 1px solid #5a6068;
   }
   .pct {
     flex: none;
     width: 28px;
+    font-family: var(--mono);
     text-align: right;
     font-variant-numeric: tabular-nums;
     color: var(--muted);

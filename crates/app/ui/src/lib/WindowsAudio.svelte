@@ -143,7 +143,7 @@
     font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--copper);
+    color: var(--accent);
   }
   .defaults {
     display: grid;
@@ -163,7 +163,7 @@
     min-width: 0;
     padding: 6px 8px;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: var(--panel-2);
     color: var(--text);
   }
@@ -187,11 +187,11 @@
   em {
     margin-left: 6px;
     padding: 1px 6px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     font-style: normal;
     font-size: 11px;
-    color: var(--teal);
-    border: 1px solid var(--teal);
+    color: var(--signal);
+    border: 1px solid var(--signal);
   }
   .note {
     color: var(--muted);
@@ -205,7 +205,7 @@
   }
   button {
     padding: 6px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     background: var(--panel-2);
     white-space: nowrap;

@@ -136,6 +136,6 @@ export function faderPercent(db: number): number {
   let p: number;
   if (db <= -60) p = 0;
   else if (db < -24) p = 0.05 + ((db + 60) / 36) * 0.2;
-  else p = 0.25 + ((Math.min(db, 6) + 24) / 30) * 0.75;
+  else p = 0.25 + ((Math.min(db, 12) + 24) / 36) * 0.75;
   return Math.round(p * 100);
 }

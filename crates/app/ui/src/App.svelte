@@ -4,10 +4,14 @@
   import Settings from "./lib/Settings.svelte";
   import Apps from "./lib/Apps.svelte";
   import WindowsAudio from "./lib/WindowsAudio.svelte";
+  import ProgramColumn from "./lib/ProgramColumn.svelte";
   import FxDialog from "./lib/FxDialog.svelte";
   import Presets from "./lib/Presets.svelte";
   import Notices from "./lib/Notices.svelte";
+  import Theme from "./lib/Theme.svelte";
   import {
+    checkUpdate,
+    installUpdate,
     fxActive,
     getConfig,
     getVersion,
@@ -24,11 +28,30 @@
   let appsOpen = $state(false);
   let windowsOpen = $state(false);
   let presetsOpen = $state(false);
+  let themeOpen = $state(false);
   // Index of the input whose effects are open.
   let fxOpen = $state(null);
   let error = $state("");
   let version = $state("");
   getVersion().then((v) => (version = v));
+
+  // Look for a new release shortly after start; offline or rate-limited is fine.
+  let update = $state(null);
+  let updating = $state(null); // download progress 0…1 while installing
+  onMount(() => {
+    const id = setTimeout(() => checkUpdate().then((u) => (update = u), () => {}), 3000);
+    return () => clearTimeout(id);
+  });
+
+  async function runUpdate() {
+    updating = 0;
+    try {
+      await installUpdate((p) => (updating = p));
+    } catch (e) {
+      error = `Update fehlgeschlagen: ${e}`;
+      updating = null;
+    }
+  }
 
   onMount(() => {
     let unlisten;
@@ -81,6 +104,11 @@
       <img src="/logo.svg" alt="" width="22" height="22" data-tauri-drag-region />
       <span class="name" data-tauri-drag-region>Faderust</span>
       {#if version}<span class="version" data-tauri-drag-region>v{version}</span>{/if}
+      {#if update}
+        <button class="update" onclick={runUpdate} disabled={updating !== null} title="Herunterladen und installieren">
+          {updating === null ? `Update auf ${update.version}` : `Lädt … ${Math.round(updating * 100)} %`}
+        </button>
+      {/if}
     </div>
 
     <div class="inputs" data-tauri-drag-region>
@@ -127,6 +155,15 @@
           /><rect x="10.5" y="10" width="3" height="2.5" rx=".6" /></svg
         >Geräte
       </button>
+      <button onclick={() => (themeOpen = true)} class:active={themeOpen} title="Farben und Darstellung">
+        <svg viewBox="0 0 16 16" aria-hidden="true"
+          ><path d="M8 2a6 6 0 1 0 0 12c1 0 1.5-.6 1.5-1.3 0-.9-.8-1.2-.8-2 0-.7.6-1.2 1.4-1.2H12a2 2 0 0 0 2-2C14 4.4 11.3 2 8 2z" /><circle
+            cx="5"
+            cy="7"
+            r=".9"
+          /><circle cx="8" cy="5" r=".9" /><circle cx="11" cy="6.5" r=".9" /></svg
+        >Design
+      </button>
     </nav>
 
     <div class="window">
@@ -157,6 +194,7 @@
           onMute={setMuted}
         />
       {/each}
+      <ProgramColumn onRouting={openApps} />
     </main>
   {:else if state}
     <div class="empty">
@@ -180,6 +218,10 @@
   <Apps inputs={config.inputs} onAddInput={addCableInput} onClose={() => (appsOpen = false)} />
 {/if}
 
+{#if themeOpen}
+  <Theme onClose={() => (themeOpen = false)} />
+{/if}
+
 {#if windowsOpen}
   <WindowsAudio onClose={() => (windowsOpen = false)} />
 {/if}
@@ -199,7 +241,7 @@
     align-items: center;
     gap: 12px;
     height: 48px;
-    padding-left: 14px;
+    padding-left: 12px;
     background: var(--panel);
     border-bottom: 1px solid var(--border);
     user-select: none;
@@ -210,56 +252,72 @@
     gap: 8px;
   }
   .brand img {
-    border-radius: 5px;
+    border-radius: 3px;
   }
   .name {
-    font-size: 15px;
-    font-weight: 650;
-    letter-spacing: 0.01em;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
   .version {
-    padding: 1px 7px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
+    font-family: var(--mono);
     font-size: 11px;
     color: var(--muted);
-    font-variant-numeric: tabular-nums;
+  }
+  .update {
+    height: 26px;
+    margin-left: 6px;
+    padding: 0 10px;
+    border: 1px solid var(--signal);
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--signal);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .update:hover:not(:disabled) {
+    background: var(--signal);
+    color: var(--bg);
+  }
+  .update:disabled {
+    cursor: progress;
   }
   .nav {
     display: flex;
-    gap: 2px;
-    padding: 3px;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    gap: 6px;
   }
   .nav button {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 5px 11px;
-    border: 0;
-    border-radius: 7px;
-    background: none;
-    color: var(--muted);
+    gap: 7px;
+    height: 32px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--panel-2);
+    color: var(--text);
+    font-size: 13px;
     font-weight: 600;
   }
-  .nav button:hover,
+  .nav button:hover {
+    border-color: var(--accent);
+  }
   .nav button.active {
-    background: var(--panel);
-    color: var(--text);
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
   }
   .nav svg {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     fill: none;
-    stroke: currentColor;
-    stroke-width: 1.5;
+    stroke: var(--accent);
+    stroke-width: 1.7;
     stroke-linejoin: round;
   }
-  .nav button.active svg,
-  .nav button:hover svg {
-    stroke: var(--copper);
+  .nav button.active svg {
+    stroke: currentColor;
   }
   .window {
     display: flex;
@@ -303,10 +361,13 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 3px 10px;
+    padding: 2px 8px;
     border: 1px solid var(--border);
-    border-radius: 999px;
-    font-size: 12px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
     white-space: nowrap;
   }
   .chip {
@@ -314,18 +375,18 @@
     cursor: pointer;
   }
   .chip:hover {
-    border-color: var(--copper);
+    border-color: var(--accent);
   }
   .chip .fx {
     font-size: 10px;
     font-weight: 700;
-    color: var(--copper);
+    color: var(--accent);
   }
   .chip .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--teal);
+    width: 6px;
+    height: 6px;
+    border-radius: 1px;
+    background: var(--signal);
   }
   .chip.off {
     color: var(--muted);
@@ -335,20 +396,20 @@
   }
   button {
     padding: 6px 14px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     background: var(--panel-2);
   }
   .primary {
-    background: var(--copper);
-    border-color: var(--copper);
+    background: var(--accent);
+    border-color: var(--accent);
     color: #fff;
   }
   main {
     flex: 1;
     display: flex;
-    gap: 16px;
-    padding: 16px;
+    gap: 10px;
+    padding: 10px;
     overflow: auto;
     min-height: 0;
     align-items: stretch;
@@ -364,7 +425,7 @@
     margin: 12px 16px 0;
     padding: 8px 12px;
     border: 1px solid var(--danger);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     color: var(--danger);
   }
 </style>

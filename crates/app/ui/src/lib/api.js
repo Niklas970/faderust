@@ -29,6 +29,41 @@ export async function windowAction(action) {
   if (action === "close") return w.close();
 }
 
+let pendingUpdate = null;
+
+/** A newer release, as `{ version }`, or null. Checked against GitHub. */
+export async function checkUpdate() {
+  if (!inTauri)
+    return location.search.includes("update") ? { version: "0.4.0" } : null;
+  const { check } = await import("@tauri-apps/plugin-updater");
+  pendingUpdate = await check();
+  return pendingUpdate && { version: pendingUpdate.version };
+}
+
+/**
+ * Downloads the update found by `checkUpdate`, verifies its signature and
+ * starts the setup, which closes Faderust and opens it again afterwards.
+ * `onProgress` gets 0…1 while downloading.
+ */
+export async function installUpdate(onProgress) {
+  if (!inTauri) {
+    for (let i = 1; i <= 10; i++) {
+      await new Promise((r) => setTimeout(r, 120));
+      onProgress(i / 10);
+    }
+    return;
+  }
+  let total = 0;
+  let done = 0;
+  await pendingUpdate.downloadAndInstall((e) => {
+    if (e.event === "Started") total = e.data.contentLength ?? 0;
+    if (e.event === "Progress") {
+      done += e.data.chunkLength;
+      if (total) onProgress(done / total);
+    }
+  });
+}
+
 export async function getDevices() {
   if (!inTauri) return mock.devices;
   return (await tauri()).invoke("get_devices");
@@ -50,6 +85,12 @@ export async function setAppOutput(pids, device) {
 export async function setAppVolume(pids, volume, muted) {
   if (!inTauri) return mock.setAppVolume(pids, volume, muted);
   return (await tauri()).invoke("set_app_volume", { pids, volume, muted });
+}
+
+/** Current peak per process, as `[{ pid, db }]`. */
+export async function getAppLevels() {
+  if (!inTauri) return mock.appLevels();
+  return (await tauri()).invoke("get_app_levels");
 }
 
 /** Windows playback and recording devices with defaults and volume. */
@@ -294,6 +335,19 @@ const mock = {
         muted: false,
       },
     ],
+  },
+  appLevels() {
+    const t = Date.now() / 1000;
+    return this.apps.apps.flatMap((a, k) =>
+      a.pids.map((pid) => ({
+        pid,
+        db: a.muted
+          ? -120
+          : -24 +
+            14 * Math.sin(t * (1.1 + k) + k) +
+            20 * Math.log10(a.volume || 1e-6),
+      })),
+    );
   },
   setAppVolume(pids, volume, muted) {
     const app = this.apps.apps.find((a) => a.pids[0] === pids[0]);

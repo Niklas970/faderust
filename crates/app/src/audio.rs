@@ -296,7 +296,7 @@ fn step_db(db: f32, delta: f32) -> f32 {
     if next < -60.0 {
         -120.0
     } else {
-        next.min(6.0)
+        next.min(12.0)
     }
 }
 
@@ -407,7 +407,7 @@ mod tests {
     #[test]
     fn steps_stay_in_fader_range() {
         assert_eq!(step_db(0.0, 1.0), 1.0);
-        assert_eq!(step_db(5.5, 1.0), 6.0);
+        assert_eq!(step_db(11.5, 1.0), 12.0);
         assert_eq!(step_db(-59.0, -2.0), -120.0);
         assert_eq!(step_db(-120.0, 1.0), -59.0);
         assert_eq!(step_db(-120.0, -1.0), -120.0);

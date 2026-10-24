@@ -142,7 +142,7 @@
   .segmented {
     display: inline-flex;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
   }
   .segmented button {
@@ -155,7 +155,7 @@
     border-left: 1px solid var(--border);
   }
   .segmented button.on {
-    background: var(--copper);
+    background: var(--accent);
     color: #fff;
   }
   .band {
@@ -176,7 +176,7 @@
     font-variant-numeric: tabular-nums;
   }
   input[type="range"] {
-    accent-color: var(--copper);
+    accent-color: var(--accent);
   }
   .check {
     display: flex;
@@ -194,7 +194,7 @@
   }
   .bar {
     height: 100%;
-    background: var(--teal);
+    background: var(--signal);
     transition: width 50ms linear;
   }
   .mark {
@@ -202,7 +202,7 @@
     top: 0;
     bottom: 0;
     width: 2px;
-    background: var(--copper);
+    background: var(--accent);
   }
   .hint {
     margin: 6px 0 0;
@@ -214,13 +214,13 @@
   }
   button {
     padding: 6px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     background: var(--panel-2);
   }
   .primary {
-    background: var(--copper);
-    border-color: var(--copper);
+    background: var(--accent);
+    border-color: var(--accent);
     color: #fff;
   }
   footer {

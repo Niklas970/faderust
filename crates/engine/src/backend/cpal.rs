@@ -1,7 +1,9 @@
 //! [`AudioBackend`] on top of cpal (WASAPI shared mode on Windows).
 
 use ::cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use ::cpal::{Device, FromSample, Host, Sample, SampleFormat, SizedSample, Stream, StreamConfig};
+use ::cpal::{
+    Device, ErrorKind, FromSample, Host, Sample, SampleFormat, SizedSample, Stream, StreamConfig,
+};
 
 use super::{
     AudioBackend, BackendError, DeviceInfo, ErrorCallback, InputCallback, OutputCallback,
@@ -145,6 +147,17 @@ impl AudioBackend for CpalBackend {
     }
 }
 
+/// Whether a stream error means the stream is gone. Glitches (WASAPI reports
+/// one for every capture discontinuity), a refused real-time boost and an
+/// automatic reroute leave the stream running; reconnecting for them only
+/// causes the next glitch.
+fn is_fatal(kind: ErrorKind) -> bool {
+    !matches!(
+        kind,
+        ErrorKind::Xrun | ErrorKind::RealtimeDenied | ErrorKind::DeviceChanged
+    )
+}
+
 fn build_input<T>(
     device: &Device,
     format: StreamFormat,
@@ -171,7 +184,11 @@ where
                     data(buf);
                 }
             },
-            move |_| error(),
+            move |e: ::cpal::Error| {
+                if is_fatal(e.kind()) {
+                    error();
+                }
+            },
             None,
         )
         .map_err(err)
@@ -200,8 +217,27 @@ where
                     }
                 }
             },
-            move |_| error(),
+            move |e: ::cpal::Error| {
+                if is_fatal(e.kind()) {
+                    error();
+                }
+            },
             None,
         )
         .map_err(err)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn glitches_are_not_fatal() {
+        assert!(!is_fatal(ErrorKind::Xrun));
+        assert!(!is_fatal(ErrorKind::RealtimeDenied));
+        assert!(!is_fatal(ErrorKind::DeviceChanged));
+        assert!(is_fatal(ErrorKind::DeviceNotAvailable));
+        assert!(is_fatal(ErrorKind::StreamInvalidated));
+        assert!(is_fatal(ErrorKind::BackendError));
+    }
 }

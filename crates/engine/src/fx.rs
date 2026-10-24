@@ -242,16 +242,18 @@ impl Gate {
             gain: 0.0,
             open: false,
             hold_left: 0,
-            env_release: (-1.0 / (0.01 * rate)).exp(),
+            // Slow enough envelope, hold and fade that word endings and
+            // soft consonants are not cut off.
+            env_release: (-1.0 / (0.05 * rate)).exp(),
             attack_step: 1.0 / (0.002 * rate),
-            release_step: 1.0 / (0.080 * rate),
-            hold: (0.15 * rate) as u32,
+            release_step: 1.0 / (0.200 * rate),
+            hold: (0.25 * rate) as u32,
         }
     }
 
     #[inline]
     fn gain(&mut self, peak: f32, open_at: f32, close_at: f32) -> f32 {
-        // Instant attack, 10 ms release.
+        // Instant attack, 50 ms release.
         self.envelope = peak.max(self.envelope * self.env_release);
         if self.envelope >= open_at {
             self.open = true;
@@ -443,15 +445,16 @@ mod tests {
             ..Default::default()
         };
         let mut buf = sine(440.0, 0.25, 4800);
-        buf.extend(sine(440.0, 0.001, 48_000));
+        buf.extend(sine(440.0, 0.001, 60_000));
         let out = run(s, buf);
         let at = |ms: usize| {
             let i = (4800 + ms * 48) * 2;
             out[i..i + 960].iter().fold(0.0f32, |m, v| m.max(v.abs()))
         };
-        // Still open during the hold time, closed well after it.
+        // Still open while a word fades out, closed well after it.
         assert!(at(50) > 0.0009);
-        assert!(at(500) < 1e-6);
+        assert!(at(350) > 0.0009);
+        assert!(at(900) < 1e-6);
     }
 
     #[test]

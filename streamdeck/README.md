@@ -1,6 +1,6 @@
 # Faderust für Stream Deck
 
-Steuert Faderust vom Elgato Stream Deck. Braucht Stream Deck 7.1 oder neuer (Windows) und ein laufendes Faderust ab 0.4.
+Steuert Faderust vom Elgato Stream Deck. Braucht Stream Deck 7.1 oder neuer (Windows) und ein laufendes Faderust ab 0.3.5.
 
 ## Aktionen
 

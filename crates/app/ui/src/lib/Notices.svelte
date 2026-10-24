@@ -48,13 +48,13 @@
     padding: 10px 12px;
     background: var(--panel);
     border: 1px solid var(--border);
-    border-left: 4px solid var(--teal);
-    border-radius: 8px;
+    border-left: 4px solid var(--signal);
+    border-radius: var(--radius-sm);
     box-shadow: 0 6px 18px rgb(0 0 0 / 0.3);
     line-height: 1.4;
   }
   .notice.warn {
-    border-left-color: var(--copper);
+    border-left-color: var(--accent);
   }
   .notice.error {
     border-left-color: var(--danger);
