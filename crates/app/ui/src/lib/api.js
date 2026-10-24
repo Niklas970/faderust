@@ -117,6 +117,29 @@ export function isCable(name) {
   return n.includes("vb-audio") || n.startsWith("cable");
 }
 
+/**
+ * The two ends of one virtual cable ("CABLE Input …" plays into
+ * "CABLE Output …"), like the engine's `feeds_back`.
+ */
+export function feedsBack(output, input) {
+  const o = output.toLowerCase();
+  return (
+    o.includes("input") && o.replace("input", "output") === input.toLowerCase()
+  );
+}
+
+/** The recording end of the cable that `output` plays into. */
+export function cableCounterpart(output) {
+  return output.replace(/input/i, (m) => (m[0] === "I" ? "Output" : "output"));
+}
+
+/** Opens VB-Audio's VB-Cable download page in the browser. */
+export async function openCablePage() {
+  if (!inTauri)
+    return void window.open("https://vb-audio.com/Cable/", "_blank");
+  return (await tauri()).invoke("open_cable_page");
+}
+
 /** Whether Faderust starts with Windows (into the tray). */
 export async function getAutostart() {
   if (!inTauri) return mock.autostart;
@@ -218,11 +241,14 @@ const mock = {
       { id: "mic", name: "Mikrofon (USB Audio Device)" },
       { id: "cable", name: "CABLE Output (VB-Audio Virtual Cable)" },
       { id: "ps5", name: "Line In (USB Sound Card)" },
+      { id: "cablea", name: "CABLE-A Output (VB-Audio Cable A)" },
     ],
     outputs: [
       { id: "ps5out", name: "Lautsprecher (USB Sound Card)" },
       { id: "buds", name: "Kopfhörer (Galaxy Buds2 Pro)" },
       { id: "jbl", name: "Lautsprecher (JBL Flip 6)" },
+      { id: "cablein", name: "CABLE Input (VB-Audio Virtual Cable)" },
+      { id: "cableain", name: "CABLE-A Input (VB-Audio Cable A)" },
     ],
   },
   config: {
@@ -271,6 +297,11 @@ const mock = {
         cable: true,
       },
       { id: "buds", name: "Kopfhörer (Galaxy Buds2 Pro)", cable: false },
+      {
+        id: "cablea",
+        name: "CABLE-A Input (VB-Audio Cable A)",
+        cable: true,
+      },
     ],
     apps: [
       {
@@ -339,6 +370,14 @@ const mock = {
       {
         id: "cableout",
         name: "CABLE Output (VB-Audio Virtual Cable)",
+        isDefault: false,
+        isDefaultCommunications: false,
+        volume: 1,
+        muted: false,
+      },
+      {
+        id: "cableaout",
+        name: "CABLE-A Output (VB-Audio Cable A)",
         isDefault: false,
         isDefaultCommunications: false,
         volume: 1,
@@ -445,7 +484,10 @@ const mock = {
           // The second Bluetooth device is released now and then.
           connected: !(o === 2 && Math.sin(t / 4) > 0.6),
           released: o === 2 && Math.sin(t / 4) > 0.6,
-          deviceName: this.devices.outputs[o % 3].name,
+          deviceName: (
+            this.devices.outputs.find((d) => d.name.includes(c.device)) ??
+            this.devices.outputs[o % 3]
+          ).name,
           levelDb: Math.max(
             ...inLevels.map((l, i) =>
               this.gains[i][o].muted ? -120 : l + this.gains[i][o].db,
@@ -453,11 +495,17 @@ const mock = {
           ),
         })),
         gains: structuredClone(this.gains),
-        lanes: inputs.map(() =>
-          outputs.map((_, o) => ({
+        lanes: inputs.map((input) =>
+          outputs.map((output, o) => ({
             fillMs: o ? 80 : 30,
             correctionPpm: -40,
             underruns: 0,
+            // The mock has patterns, not device names.
+            looped:
+              cableCounterpart(output.device)
+                .toLowerCase()
+                .includes(input.device.toLowerCase()) &&
+              /input/i.test(output.device),
           })),
         ),
       });

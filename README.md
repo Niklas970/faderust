@@ -47,13 +47,19 @@ Voraussetzung ist Windows 10 oder 11. WebView2 ist dort meist schon da, sonst l�
 
 Unter **Programme** nimmt **+ Eingang** ein Programm direkt auf (Windows-Prozess-Loopback, ab Windows 10 Version 2004). Das Programm bekommt dann in jeder Ausgangsspalte einen Fader und eigene Effekte wie EQ und Gate, ganz ohne ein Kabel pro Programm. Es erscheint, sobald das Programm Ton abspielt, und verbindet sich nach einem Neustart des Programms von selbst neu.
 
-Das Programm spielt weiter auch auf seinem eigenen Gerät. Damit du es nicht doppelt hörst, stell es im selben Dialog auf ein Gerät, das du nicht direkt hörst, zum Beispiel ein VB-Cable, das kein Eingang ist.
+Das Programm spielt weiter auch auf seinem eigenen Gerät. Damit du es nicht doppelt hörst, stellt Faderust es dabei auf ein freies virtuelles Kabel, das du nicht hörst (falls eins da ist). Hörst du ein Programm doppelt, zeigt der Dialog das und bietet die Lösung mit einem Klick.
+
+### Mikrofon für Discord, Teams & Co.
+
+Unter **Geräte** legt **+ Programm-Mikro** einen Ausgang auf einem freien virtuellen Kabel an. Dort ist nur das Mikrofon an, mit seinen Effekten. Im Programm wählst du dann die andere Seite des Kabels als Mikrofon (z. B. „CABLE Output“). Faderust kann sie auch gleich als Windows-Mikrofon für Anrufe setzen.
+
+Spielt ein Ausgang auf das Kabel, von dem ein Eingang kommt, wäre das eine Rückkopplung. Faderust schaltet diese Verbindung stumm und zeigt „Schleife“ am Fader.
 
 ### Programme über ein virtuelles Kabel
 
 Damit ein Programm (Spotify, Discord, Browser …) in der Mischung landet, spielt es auf ein virtuelles Kabel, und Faderust nimmt die andere Seite des Kabels als Eingang:
 
-1. [VB-Cable](https://vb-audio.com/Cable/) installieren (kostenlos, wird nicht mitgeliefert) und Windows neu starten.
+1. [VB-Cable](https://vb-audio.com/Cable/) installieren (kostenlos, wird nicht mitgeliefert, „Virtuelles Kabel einrichten“ in Faderust öffnet die Seite) und Windows neu starten.
 2. In Faderust unter **Programme** bei „CABLE Output … ist noch kein Eingang“ auf **Als Eingang anlegen** klicken.
 3. Im selben Dialog das Programm auf **CABLE Input** stellen.
 

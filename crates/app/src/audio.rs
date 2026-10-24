@@ -77,6 +77,8 @@ struct UiLane {
     fill_ms: f32,
     correction_ppm: i32,
     underruns: u64,
+    /// Silenced because the output feeds back into the input.
+    looped: bool,
 }
 
 /// Starts the audio thread. `config` is shared with the UI commands; the
@@ -461,6 +463,7 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
                         fill_ms: s.fill_frames.load(Relaxed) as f32 * 1000.0 / rate as f32,
                         correction_ppm: s.correction_ppm.load(Relaxed),
                         underruns: s.underruns.load(Relaxed),
+                        looped: e.is_loop(i, o),
                     }
                 })
                 .collect()

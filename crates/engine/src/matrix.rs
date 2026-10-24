@@ -11,6 +11,8 @@ pub struct MixMatrix {
     /// Linear gain as `f32` bits, row-major by input.
     gains: Box<[AtomicU32]>,
     muted: Box<[AtomicBool]>,
+    /// Pairs the engine keeps silent whatever the fader says (feedback loops).
+    blocked: Box<[AtomicBool]>,
 }
 
 impl MixMatrix {
@@ -22,6 +24,7 @@ impl MixMatrix {
             outputs,
             gains: (0..n).map(|_| AtomicU32::new(1.0f32.to_bits())).collect(),
             muted: (0..n).map(|_| AtomicBool::new(false)).collect(),
+            blocked: (0..n).map(|_| AtomicBool::new(false)).collect(),
         }
     }
 
@@ -73,9 +76,17 @@ impl MixMatrix {
         self.muted[self.index(input, output)].load(Relaxed)
     }
 
-    /// Gain the audio thread applies: 0 when muted. Real-time safe.
+    pub fn set_blocked(&self, input: usize, output: usize, blocked: bool) {
+        self.blocked[self.index(input, output)].store(blocked, Relaxed);
+    }
+
+    pub fn is_blocked(&self, input: usize, output: usize) -> bool {
+        self.blocked[self.index(input, output)].load(Relaxed)
+    }
+
+    /// Gain the audio thread applies: 0 when muted or blocked. Real-time safe.
     pub fn effective_gain(&self, input: usize, output: usize) -> f32 {
-        if self.is_muted(input, output) {
+        if self.is_muted(input, output) || self.is_blocked(input, output) {
             0.0
         } else {
             self.gain(input, output)
@@ -108,6 +119,16 @@ mod tests {
         assert_eq!(m.gain(1, 0), 1.0, "mute keeps the fader position");
         m.set_muted(1, 0, false);
         assert_eq!(m.effective_gain(1, 0), 1.0);
+    }
+
+    #[test]
+    fn blocked_pair_is_silent_but_keeps_its_fader() {
+        let m = MixMatrix::new(1, 1);
+        m.set_blocked(0, 0, true);
+        assert_eq!(m.effective_gain(0, 0), 0.0);
+        assert_eq!(m.gain(0, 0), 1.0);
+        m.set_blocked(0, 0, false);
+        assert_eq!(m.effective_gain(0, 0), 1.0);
     }
 
     #[test]

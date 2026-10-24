@@ -16,6 +16,9 @@
     connected = true,
     note = "",
     noteOn = false,
+    // Silenced by Faderust (a feedback loop): shown, but plays nothing.
+    blocked = false,
+    noteTitle = "",
     onChange,
     onMute,
   } = $props();
@@ -148,13 +151,13 @@
   });
 
   const meterDb = $derived(
-    levelDb == null || !connected || muted ? OFF : levelDb + (unit === "db" ? Math.max(local, OFF) : 0),
+    levelDb == null || !connected || muted || blocked ? OFF : levelDb + (unit === "db" ? Math.max(local, OFF) : 0),
   );
 </script>
 
-<div class="strip" class:offline={!connected}>
+<div class="strip" class:offline={!connected || blocked}>
   <div class="label" title={label}>{label}</div>
-  {#if note}<div class="note" class:on={noteOn}>{note}</div>{/if}
+  {#if note}<div class="note" class:on={noteOn} class:warn={blocked} title={noteTitle}>{note}</div>{/if}
   <div class="body">
     <div
       class="track"
@@ -196,6 +199,7 @@
 
 <style>
   .strip {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -228,6 +232,14 @@
   }
   .note.on {
     color: var(--signal);
+  }
+  /* Over the scale, so the fader stays level with its neighbours. */
+  .note.warn {
+    position: absolute;
+    top: 30px;
+    margin: 0;
+    color: var(--danger);
+    font-weight: 700;
   }
   .body {
     flex: 1;
