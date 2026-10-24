@@ -53,7 +53,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI5QzE3MDU4MTJFQjdDRjAKUldUd2ZPc1NXSERCdVpkbjlPZ2Y5TjNidUVicXEwZE9TQnV4bTdhaUZ2QW5NK2FUVU8vblRRbmYK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg2QkYyMEVDMUZBNjkzNkEKUldScWs2WWY3Q0MvaHBVK25RbzlRMXBaUXN0NTJPVTcvTW5YTWt4aWNtOFRhdU1vT0pCU0N0R20K",
       "endpoints": [
         "https://github.com/Niklas970/faderust/releases/latest/download/latest.json"
       ],
