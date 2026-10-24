@@ -1,5 +1,7 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.3.5: Faderust sucht auch im laufenden Betrieb nach Updates (alle 30 Minuten und wenn das Fenster wieder geöffnet wird), nicht nur beim Start.
+
 Neu in 0.3.4:
 
 - Fader gehen bis +12 dB
