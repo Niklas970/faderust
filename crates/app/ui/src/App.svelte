@@ -8,6 +8,7 @@
   import FxDialog from "./lib/FxDialog.svelte";
   import Presets from "./lib/Presets.svelte";
   import Notices from "./lib/Notices.svelte";
+  import Theme from "./lib/Theme.svelte";
   import {
     checkUpdate,
     installUpdate,
@@ -27,6 +28,7 @@
   let appsOpen = $state(false);
   let windowsOpen = $state(false);
   let presetsOpen = $state(false);
+  let themeOpen = $state(false);
   // Index of the input whose effects are open.
   let fxOpen = $state(null);
   let error = $state("");
@@ -153,6 +155,15 @@
           /><rect x="10.5" y="10" width="3" height="2.5" rx=".6" /></svg
         >Geräte
       </button>
+      <button onclick={() => (themeOpen = true)} class:active={themeOpen} title="Farben und Darstellung">
+        <svg viewBox="0 0 16 16" aria-hidden="true"
+          ><path d="M8 2a6 6 0 1 0 0 12c1 0 1.5-.6 1.5-1.3 0-.9-.8-1.2-.8-2 0-.7.6-1.2 1.4-1.2H12a2 2 0 0 0 2-2C14 4.4 11.3 2 8 2z" /><circle
+            cx="5"
+            cy="7"
+            r=".9"
+          /><circle cx="8" cy="5" r=".9" /><circle cx="11" cy="6.5" r=".9" /></svg
+        >Design
+      </button>
     </nav>
 
     <div class="window">
@@ -207,6 +218,10 @@
   <Apps inputs={config.inputs} onAddInput={addCableInput} onClose={() => (appsOpen = false)} />
 {/if}
 
+{#if themeOpen}
+  <Theme onClose={() => (themeOpen = false)} />
+{/if}
+
 {#if windowsOpen}
   <WindowsAudio onClose={() => (windowsOpen = false)} />
 {/if}
@@ -254,15 +269,15 @@
     height: 26px;
     margin-left: 6px;
     padding: 0 10px;
-    border: 1px solid var(--teal);
+    border: 1px solid var(--signal);
     border-radius: var(--radius-sm);
     background: none;
-    color: var(--teal);
+    color: var(--signal);
     font-size: 12px;
     font-weight: 700;
   }
   .update:hover:not(:disabled) {
-    background: var(--teal);
+    background: var(--signal);
     color: var(--bg);
   }
   .update:disabled {
@@ -286,18 +301,18 @@
     font-weight: 600;
   }
   .nav button:hover {
-    border-color: var(--copper);
+    border-color: var(--accent);
   }
   .nav button.active {
-    background: var(--copper);
-    border-color: var(--copper);
+    background: var(--accent);
+    border-color: var(--accent);
     color: #fff;
   }
   .nav svg {
     width: 16px;
     height: 16px;
     fill: none;
-    stroke: var(--copper);
+    stroke: var(--accent);
     stroke-width: 1.7;
     stroke-linejoin: round;
   }
@@ -360,18 +375,18 @@
     cursor: pointer;
   }
   .chip:hover {
-    border-color: var(--copper);
+    border-color: var(--accent);
   }
   .chip .fx {
     font-size: 10px;
     font-weight: 700;
-    color: var(--copper);
+    color: var(--accent);
   }
   .chip .dot {
     width: 6px;
     height: 6px;
     border-radius: 1px;
-    background: var(--teal);
+    background: var(--signal);
   }
   .chip.off {
     color: var(--muted);
@@ -386,8 +401,8 @@
     background: var(--panel-2);
   }
   .primary {
-    background: var(--copper);
-    border-color: var(--copper);
+    background: var(--accent);
+    border-color: var(--accent);
     color: #fff;
   }
   main {

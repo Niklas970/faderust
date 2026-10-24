@@ -226,7 +226,7 @@
     color: var(--muted);
   }
   .note.on {
-    color: var(--teal);
+    color: var(--signal);
   }
   .body {
     flex: 1;
@@ -294,7 +294,7 @@
       inset 0 2px 4px #000,
       0 0 0 1px #2c2f33;
   }
-  /* Glowing copper bar up to the cap; grey when muted. */
+  /* Glowing accent bar up to the cap; grey when muted. */
   .fill {
     position: absolute;
     left: 3px;
@@ -302,14 +302,14 @@
     bottom: 3px;
     max-height: calc(100% - 6px);
     border-radius: 2px;
-    background: var(--copper);
-    box-shadow: 0 0 8px rgb(217 131 79 / 0.6);
+    background: var(--accent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent);
   }
   .fill.muted {
     background: #555a61;
     box-shadow: none;
   }
-  /* Graphite cap with copper edges and a glowing index line; gain in a window. */
+  /* Graphite cap with accent edges and a glowing index line; gain in a window. */
   .cap {
     position: absolute;
     left: 29px;
@@ -322,8 +322,8 @@
       repeating-linear-gradient(90deg, rgb(255 255 255 / 0.035) 0 1px, transparent 1px 2px),
       linear-gradient(#55595f, #2f3338 45%, #23262a 55%, #33373c);
     border: 1px solid #0c0d0f;
-    border-left: 3px solid var(--copper);
-    border-right: 3px solid var(--copper);
+    border-left: 3px solid var(--accent);
+    border-right: 3px solid var(--accent);
     border-radius: 4px;
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 0.25),
@@ -339,8 +339,8 @@
     top: 50%;
     height: 2px;
     margin-top: -1px;
-    background: var(--copper-light);
-    box-shadow: 0 0 6px var(--copper);
+    background: var(--accent-light);
+    box-shadow: 0 0 6px var(--accent);
   }
   .cap.off {
     border-left-color: #555a61;
@@ -379,7 +379,7 @@
   }
   .track:focus-visible .value,
   .dragging .value {
-    color: var(--copper-light);
+    color: var(--accent-light);
   }
   .body :global(.meter.vertical) {
     width: 14px;
@@ -389,7 +389,7 @@
     font-family: var(--mono);
     font-size: 13px;
     font-weight: 700;
-    color: var(--copper-light);
+    color: var(--accent-light);
   }
   .readout.off {
     color: var(--muted);

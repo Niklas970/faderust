@@ -40,7 +40,7 @@
   .vertical .leds {
     background: linear-gradient(
       to top,
-      var(--teal) 0 80%,
+      var(--signal) 0 80%,
       var(--amber) 80% 95%,
       var(--danger) 95%
     );
@@ -50,7 +50,7 @@
   .meter:not(.vertical) .leds {
     background: linear-gradient(
       to right,
-      var(--teal) 0 80%,
+      var(--signal) 0 80%,
       var(--amber) 80% 95%,
       var(--danger) 95%
     );

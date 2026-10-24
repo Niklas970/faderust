@@ -155,7 +155,7 @@
     border-left: 1px solid var(--border);
   }
   .segmented button.on {
-    background: var(--copper);
+    background: var(--accent);
     color: #fff;
   }
   .band {
@@ -176,7 +176,7 @@
     font-variant-numeric: tabular-nums;
   }
   input[type="range"] {
-    accent-color: var(--copper);
+    accent-color: var(--accent);
   }
   .check {
     display: flex;
@@ -194,7 +194,7 @@
   }
   .bar {
     height: 100%;
-    background: var(--teal);
+    background: var(--signal);
     transition: width 50ms linear;
   }
   .mark {
@@ -202,7 +202,7 @@
     top: 0;
     bottom: 0;
     width: 2px;
-    background: var(--copper);
+    background: var(--accent);
   }
   .hint {
     margin: 6px 0 0;
@@ -219,8 +219,8 @@
     background: var(--panel-2);
   }
   .primary {
-    background: var(--copper);
-    border-color: var(--copper);
+    background: var(--accent);
+    border-color: var(--accent);
     color: #fff;
   }
   footer {

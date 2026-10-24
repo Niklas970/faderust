@@ -150,8 +150,8 @@
     font-family: var(--mono);
     font-size: 12px;
     font-weight: 700;
-    color: var(--teal);
-    border: 1px solid var(--teal);
+    color: var(--signal);
+    border: 1px solid var(--signal);
     border-radius: var(--radius-sm);
   }
   .titles {
@@ -176,7 +176,7 @@
     background: var(--panel-2);
   }
   .route:hover {
-    border-color: var(--copper);
+    border-color: var(--accent);
   }
   .faders {
     display: flex;

@@ -118,7 +118,7 @@
     margin: 0;
     appearance: none;
     border-radius: 2px;
-    background: linear-gradient(to right, var(--copper) var(--pct), var(--well) var(--pct));
+    background: linear-gradient(to right, var(--accent) var(--pct), var(--well) var(--pct));
     box-shadow: 0 0 0 1px var(--border);
     cursor: pointer;
   }
