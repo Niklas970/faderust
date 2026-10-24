@@ -243,9 +243,19 @@ const mock = {
       { label: "PS5", device: "Line In", fx: defaultFx() },
     ],
     outputs: [
-      { label: "PS5", device: "USB Sound Card", bufferMs: 30 },
-      { label: "Kopfhörer", device: "Galaxy Buds", bufferMs: 80 },
-      { label: "Box", device: "JBL", bufferMs: 80 },
+      {
+        label: "PS5",
+        device: "USB Sound Card",
+        bufferMs: 30,
+        releaseAfterS: 0,
+      },
+      {
+        label: "Kopfhörer",
+        device: "Galaxy Buds",
+        bufferMs: 80,
+        releaseAfterS: 0,
+      },
+      { label: "Box", device: "JBL", bufferMs: 80, releaseAfterS: 30 },
     ],
     presets: [{ name: "Zocken", gains: [] }],
   },
@@ -432,8 +442,9 @@ const mock = {
         })),
         outputs: outputs.map((c, o) => ({
           ...c,
-          // The second Bluetooth device drops out now and then.
+          // The second Bluetooth device is released now and then.
           connected: !(o === 2 && Math.sin(t / 4) > 0.6),
+          released: o === 2 && Math.sin(t / 4) > 0.6,
           deviceName: this.devices.outputs[o % 3].name,
           levelDb: Math.max(
             ...inLevels.map((l, i) =>

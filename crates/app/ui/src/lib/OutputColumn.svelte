@@ -10,16 +10,21 @@
   );
 </script>
 
-<section class="column" class:offline={!output.connected}>
+<section class="column" class:offline={!output.connected && !output.released}>
   <header>
     <span class="bus">A{index + 1}</span>
     <div class="titles">
       <h2>{output.label}</h2>
       <div class="device" title={output.deviceName ?? output.device}>
-        {output.connected ? output.deviceName : "Wartet auf Gerät …"}
+        {output.connected ? output.deviceName : output.released ? "Freigegeben, kommt mit Ton zurück" : "Wartet auf Gerät …"}
       </div>
     </div>
-    <span class="led" class:on={output.connected} title={output.connected ? "Verbunden" : "Nicht verbunden"}></span>
+    <span
+      class="led"
+      class:on={output.connected}
+      class:idle={output.released}
+      title={output.connected ? "Verbunden" : output.released ? "Freigegeben, weil nichts läuft" : "Nicht verbunden"}
+    ></span>
   </header>
 
   <div class="faders">
@@ -106,6 +111,9 @@
   }
   .led.on {
     background: var(--signal);
+    border-color: var(--signal);
+  }
+  .led.idle {
     border-color: var(--signal);
   }
   .faders {

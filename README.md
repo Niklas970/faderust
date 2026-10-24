@@ -39,7 +39,7 @@ Voraussetzung ist Windows 10 oder 11. WebView2 ist dort meist schon da, sonst l�
 ## Erste Schritte
 
 1. **Geräte** öffnen und die Eingänge (Mikrofon, Line-In, virtuelles Kabel) und Ausgänge (Kopfhörer, Lautsprecher …) anlegen. Mit den Pfeilen lässt sich die Reihenfolge ändern.
-2. Für Bluetooth-Ausgänge den Puffer höher stellen (80 ms oder mehr), für USB reichen meist 30 bis 60 ms. Zählt ein Ausgang immer wieder Aussetzer, den Puffer erhöhen.
+2. Für Bluetooth-Ausgänge den Puffer höher stellen (80 ms oder mehr), für USB reichen meist 30 bis 60 ms. Zählt ein Ausgang immer wieder Aussetzer, den Puffer erhöhen. Daneben lässt sich wählen, ob Faderust einen Ausgang nach einer Weile Stille freigibt, damit Bluetooth-Kopfhörer per Multipoint zu einem anderen Gerät wechseln können.
 3. Fader bedienen: ziehen, auf die Bahn klicken, Mausrad (mit Shift feiner), Doppelklick setzt auf 0 dB. Der Bereich geht von −∞ bis +12 dB.
 4. Ein Klick auf einen Eingang oben in der Leiste öffnet seine Effekte.
 

@@ -7,6 +7,7 @@
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crate::backend::{AudioBackend, BackendError, DeviceInfo, StreamFormat};
 use crate::fx::InputFx;
@@ -27,7 +28,14 @@ pub struct OutputConfig {
     pub device: String,
     /// Buffer each input keeps for this output. Bluetooth needs more than USB.
     pub buffer_ms: u32,
+    /// Close the device after this long without signal for it, and open it
+    /// again when signal returns. Lets Bluetooth headphones switch to
+    /// another device (multipoint) while Faderust has nothing to play.
+    pub release_after: Option<Duration>,
 }
+
+/// Below this peak (−60 dBFS) an input counts as silent.
+const SILENCE: f32 = 0.001;
 
 #[derive(Debug, Clone, Default)]
 pub struct EngineConfig {
@@ -87,6 +95,8 @@ pub enum EngineEvent {
         slot: usize,
         reason: LostReason,
     },
+    /// An output closed after silence; it opens again with signal.
+    Released { slot: usize },
     ConnectFailed {
         dir: Direction,
         slot: usize,
@@ -122,6 +132,7 @@ impl fmt::Display for EngineEvent {
                 };
                 write!(f, "{dir}{slot} lost ({why})")
             }
+            EngineEvent::Released { slot } => write!(f, "out{slot} released (silent)"),
             EngineEvent::ConnectFailed { dir, slot, error } => {
                 write!(f, "{dir}{slot} could not connect: {error}")
             }
@@ -173,6 +184,14 @@ pub struct Engine<B: AudioBackend> {
     lanes: Vec<Vec<Arc<LaneStats>>>,
     /// Effect settings per input, stable across reconnections.
     fx: Vec<Arc<InputFx>>,
+    idle: Vec<Idle>,
+}
+
+/// Silence tracking of one output, see [`OutputConfig::release_after`].
+#[derive(Debug, Default)]
+struct Idle {
+    quiet_since: Option<Instant>,
+    released: bool,
 }
 
 fn slot(pattern: &str) -> SlotState {
@@ -214,6 +233,7 @@ impl<B: AudioBackend> Engine<B> {
                 .map(|_| (0..n_out).map(|_| Arc::default()).collect())
                 .collect(),
             fx: (0..n_in).map(|_| Arc::default()).collect(),
+            idle: (0..n_out).map(|_| Idle::default()).collect(),
             config,
         })
     }
@@ -235,6 +255,11 @@ impl<B: AudioBackend> Engine<B> {
         &self.fx[input]
     }
 
+    /// Whether `output` is closed because nothing played for it.
+    pub fn is_released(&self, output: usize) -> bool {
+        self.idle[output].released
+    }
+
     /// Statistics of the lane from `input` to `output`.
     pub fn lane_stats(&self, input: usize, output: usize) -> &Arc<LaneStats> {
         &self.lanes[input][output]
@@ -243,6 +268,11 @@ impl<B: AudioBackend> Engine<B> {
     /// Removes lost devices and connects the ones that (re)appeared. Call it
     /// regularly, e.g. twice a second, and after device notifications.
     pub fn maintain(&mut self) -> Vec<EngineEvent> {
+        self.maintain_at(Instant::now())
+    }
+
+    /// [`maintain`](Self::maintain) with the current time given, for tests.
+    pub fn maintain_at(&mut self, now: Instant) -> Vec<EngineEvent> {
         let mut events = Vec::new();
         for live in self.live_in.iter_mut().flatten() {
             live.handle.collect_garbage();
@@ -276,10 +306,12 @@ impl<B: AudioBackend> Engine<B> {
             }
         }
 
+        self.release_silent(now, &mut events);
+
         // Outputs first, so a new input gets lanes to every output at once.
         if let Some(list) = &out_list {
             for o in 0..self.outputs.len() {
-                if self.live_out[o].is_none() {
+                if self.live_out[o].is_none() && !self.idle[o].released {
                     if let Some(device) = find_device(list, &self.outputs[o].pattern) {
                         events.push(self.connect_output(o, device));
                     }
@@ -296,6 +328,38 @@ impl<B: AudioBackend> Engine<B> {
             }
         }
         events
+    }
+
+    /// Closes outputs that had no signal for their `release_after` and marks
+    /// released ones with signal again for reconnection.
+    fn release_silent(&mut self, now: Instant, events: &mut Vec<EngineEvent>) {
+        let activity: Vec<f32> = self
+            .inputs
+            .iter()
+            .map(|s| s.meter.take_activity())
+            .collect();
+        for o in 0..self.outputs.len() {
+            let Some(after) = self.config.outputs[o].release_after else {
+                continue;
+            };
+            let signal = activity
+                .iter()
+                .enumerate()
+                .any(|(i, &peak)| peak > SILENCE && self.matrix.effective_gain(i, o) > 0.0);
+            let idle = &mut self.idle[o];
+            if signal {
+                idle.quiet_since = None;
+                idle.released = false;
+            } else if self.live_out[o].is_some() {
+                let since = *idle.quiet_since.get_or_insert(now);
+                if now.duration_since(since) >= after {
+                    idle.quiet_since = None;
+                    idle.released = true;
+                    self.disconnect_output(o);
+                    events.push(EngineEvent::Released { slot: o });
+                }
+            }
+        }
     }
 
     fn lost(
@@ -683,6 +747,7 @@ mod tests {
                 .map(|(d, ms)| OutputConfig {
                     device: d.to_string(),
                     buffer_ms: *ms,
+                    release_after: None,
                 })
                 .collect(),
         }
@@ -778,6 +843,46 @@ mod tests {
             engine.outputs()[1].device.as_ref().unwrap().1.sample_rate,
             16_000
         );
+    }
+
+    #[test]
+    fn silent_output_is_released_and_comes_back_with_signal() {
+        let b = FakeBackend::default();
+        b.plug_input("mic", 48_000, 1);
+        b.plug_input("game", 48_000, 2);
+        b.plug_output("usb", 48_000, 2);
+        b.plug_output("bt", 48_000, 2);
+        let mut cfg = config(&["mic", "game"], &[("usb", 20), ("bt", 80)]);
+        cfg.outputs[1].release_after = Some(Duration::from_secs(5));
+        let mut engine = Engine::new(b.clone(), cfg).unwrap();
+        // The mic goes only to usb, so bt hears nothing while the game is quiet.
+        engine.matrix.set_muted(0, 1, true);
+        let t0 = Instant::now();
+        let at = |s: u64| t0 + Duration::from_secs(s);
+        assert_eq!(connected(&engine.maintain_at(at(0))), 4);
+        let quiet_game = |n: &str| if n == "game" { 0.0 } else { level(n) };
+
+        b.pump(100, quiet_game);
+        assert!(engine.maintain_at(at(1)).is_empty());
+        b.pump(100, quiet_game);
+        assert_eq!(
+            engine.maintain_at(at(6)),
+            vec![EngineEvent::Released { slot: 1 }]
+        );
+        assert!(engine.is_released(1));
+        assert!(engine.outputs()[1].device.is_none());
+        let out = b.pump(100, quiet_game);
+        assert!(!out.contains_key("bt"));
+        assert_level(&out["usb"], 0.2, 1e-3);
+        assert!(engine.maintain_at(at(20)).is_empty());
+
+        // The game plays again: bt opens and hears it.
+        b.pump(100, level);
+        assert_eq!(connected(&engine.maintain_at(at(21))), 1);
+        assert!(!engine.is_released(1));
+        let out = b.pump(3000, level);
+        assert_level(&out["bt"], 0.4, 1e-2);
+        assert!(engine.maintain_at(at(30)).is_empty());
     }
 
     #[test]

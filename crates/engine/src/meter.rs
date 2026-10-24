@@ -11,6 +11,9 @@ use crate::BUS_CHANNELS;
 #[derive(Debug, Default)]
 pub struct PeakMeter {
     peak: [AtomicU32; BUS_CHANNELS],
+    /// Like `peak`, both channels in one, read by the engine instead of the
+    /// UI, so neither resets the other's value.
+    activity: AtomicU32,
 }
 
 impl PeakMeter {
@@ -30,8 +33,15 @@ impl PeakMeter {
             // NaN would compare above every finite value; ignore it.
             if peak > 0.0 && peak.is_finite() {
                 slot.fetch_max(peak.to_bits(), Relaxed);
+                self.activity.fetch_max(peak.to_bits(), Relaxed);
             }
         }
+    }
+
+    /// Returns the louder channel's peak since the last call and resets it.
+    /// Separate from [`take`](Self::take), which the UI calls.
+    pub fn take_activity(&self) -> f32 {
+        f32::from_bits(self.activity.swap(0, Relaxed))
     }
 
     /// Returns the peaks since the last call and resets them.
