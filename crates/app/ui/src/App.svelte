@@ -2,11 +2,13 @@
   import { onMount } from "svelte";
   import OutputColumn from "./lib/OutputColumn.svelte";
   import Settings from "./lib/Settings.svelte";
+  import Apps from "./lib/Apps.svelte";
   import { getConfig, onState, saveConfig, setGain, setMuted } from "./lib/api.js";
 
   let state = $state(null);
   let config = $state(null);
   let settingsOpen = $state(false);
+  let appsOpen = $state(false);
   let error = $state("");
 
   onMount(() => {
@@ -19,6 +21,25 @@
   async function openSettings() {
     config = await getConfig();
     settingsOpen = true;
+  }
+
+  async function openApps() {
+    config = await getConfig();
+    appsOpen = true;
+  }
+
+  // A virtual cable's capture side as a new input, 0 dB on every output.
+  async function addCableInput(device) {
+    const next = await getConfig();
+    next.inputs.push({ label: "PC", device });
+    next.gains.push(next.outputs.map(() => ({ db: 0, muted: false })));
+    try {
+      await saveConfig(next);
+      config = next;
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
   }
 
   async function save(next) {
@@ -44,6 +65,7 @@
         </span>
       {/each}
     </div>
+    <button onclick={openApps}>Programme</button>
     <button class="settings" onclick={openSettings}>Geräte</button>
   </header>
 
@@ -70,6 +92,10 @@
     </div>
   {/if}
 </div>
+
+{#if appsOpen && config}
+  <Apps inputs={config.inputs} onAddInput={addCableInput} onClose={() => (appsOpen = false)} />
+{/if}
 
 {#if settingsOpen && config}
   <Settings {config} onSave={save} onClose={() => (settingsOpen = false)} />

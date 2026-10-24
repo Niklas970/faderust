@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
+use faderust_engine::apps::AppRouter;
 use faderust_engine::backend::cpal::CpalBackend;
 use faderust_engine::backend::AudioBackend;
 use serde::Serialize;
@@ -60,6 +61,81 @@ async fn get_devices() -> Result<Devices, String> {
         inputs: devices(backend.input_devices())?,
         outputs: devices(backend.output_devices())?,
     })
+}
+
+#[derive(Serialize)]
+struct RenderDevice {
+    id: String,
+    name: String,
+    cable: bool,
+}
+
+#[derive(Serialize)]
+struct App {
+    name: String,
+    exe: String,
+    pids: Vec<u32>,
+    device: Option<String>,
+}
+
+#[derive(Serialize)]
+struct Apps {
+    supported: bool,
+    devices: Vec<RenderDevice>,
+    apps: Vec<App>,
+}
+
+#[cfg(windows)]
+fn router() -> Option<Box<dyn AppRouter>> {
+    Some(Box::new(faderust_engine::apps::wasapi::WasapiRouter::new()))
+}
+
+#[cfg(not(windows))]
+fn router() -> Option<Box<dyn AppRouter>> {
+    None
+}
+
+/// Programs playing audio and the playback devices they can be pointed at.
+#[tauri::command]
+async fn get_apps() -> Result<Apps, String> {
+    let Some(router) = router() else {
+        return Ok(Apps {
+            supported: false,
+            devices: vec![],
+            apps: vec![],
+        });
+    };
+    let devices = router.render_devices().map_err(|e| e.to_string())?;
+    let apps = router.apps().map_err(|e| e.to_string())?;
+    Ok(Apps {
+        supported: true,
+        devices: devices
+            .into_iter()
+            .map(|d| RenderDevice {
+                cable: d.is_virtual_cable(),
+                id: d.id,
+                name: d.name,
+            })
+            .collect(),
+        apps: apps
+            .into_iter()
+            .map(|a| App {
+                name: a.name,
+                exe: a.exe,
+                pids: a.pids,
+                device: a.device,
+            })
+            .collect(),
+    })
+}
+
+/// Points a program at a playback device, `None` for the system default.
+#[tauri::command]
+async fn set_app_output(pids: Vec<u32>, device: Option<String>) -> Result<(), String> {
+    let router = router().ok_or("Nur unter Windows verfügbar")?;
+    router
+        .set_output(&pids, device.as_deref())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -201,6 +277,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_devices,
+            get_apps,
+            set_app_output,
             get_config,
             save_config,
             set_gain,

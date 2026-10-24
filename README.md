@@ -53,6 +53,16 @@ Installer bauen: `cd crates/app && ui/node_modules/.bin/tauri build` (nach `npm 
 
 Die Einstellungen (Geräte, Pegel) liegen in `%APPDATA%\io.github.niklas970.faderust\config.toml`. Das Fenster schließen lässt den Mixer im Tray weiterlaufen; beenden über das Tray-Menü.
 
+## Programme auf eigene Fader
+
+Ein Programm (Spotify, Discord, Browser …) bekommt einen eigenen Fader, wenn es auf ein virtuelles Kabel spielt und Faderust die andere Seite des Kabels als Eingang aufnimmt:
+
+1. [VB-Cable](https://vb-audio.com/Cable/) installieren (kostenlos, wird nicht mitgeliefert) und neu starten.
+2. In Faderust unter **Programme** bei „CABLE Output … ist noch kein Eingang“ auf **Als Eingang anlegen** tippen.
+3. Im selben Dialog das Programm auf **CABLE Input** stellen.
+
+Windows merkt sich das Gerät pro Programm, auch nach einem Neustart. Mehrere Programme getrennt brauchen mehrere Kabel (VB-Cable A+B). Faderust setzt die Zuordnung über dieselbe nicht dokumentierte Windows-Schnittstelle wie die Einstellungen-App („Lautstärkemixer“), dort lässt sie sich auch von Hand ändern.
+
 ## Lizenz
 
 [MIT](LICENSE)

@@ -7,6 +7,7 @@
 //! playing ([`engine`]). Device access sits behind [`backend::AudioBackend`]
 //! so a PipeWire backend can be added later.
 
+pub mod apps;
 pub mod backend;
 pub mod drift;
 pub mod engine;
