@@ -36,6 +36,8 @@ pub struct OutputConfig {
 
 /// Below this peak (−60 dBFS) an input counts as silent.
 const SILENCE: f32 = 0.001;
+/// An input heard this recently still counts as playing.
+const SIGNAL_HOLD: Duration = Duration::from_millis(1500);
 
 #[derive(Debug, Clone, Default)]
 pub struct EngineConfig {
@@ -185,6 +187,8 @@ pub struct Engine<B: AudioBackend> {
     /// Effect settings per input, stable across reconnections.
     fx: Vec<Arc<InputFx>>,
     idle: Vec<Idle>,
+    /// When each input last played above [`SILENCE`].
+    heard: Vec<Option<Instant>>,
 }
 
 /// Silence tracking of one output, see [`OutputConfig::release_after`].
@@ -192,6 +196,8 @@ pub struct Engine<B: AudioBackend> {
 struct Idle {
     quiet_since: Option<Instant>,
     released: bool,
+    /// The device to reopen, kept from before the release.
+    device: Option<DeviceInfo>,
 }
 
 fn slot(pattern: &str) -> SlotState {
@@ -234,6 +240,7 @@ impl<B: AudioBackend> Engine<B> {
                 .collect(),
             fx: (0..n_in).map(|_| Arc::default()).collect(),
             idle: (0..n_out).map(|_| Idle::default()).collect(),
+            heard: vec![None; n_in],
             config,
         })
     }
@@ -350,36 +357,77 @@ impl<B: AudioBackend> Engine<B> {
         self.matrix.is_blocked(input, output)
     }
 
+    /// Notes which inputs play right now.
+    fn listen(&mut self, now: Instant) {
+        for (state, heard) in self.inputs.iter().zip(&mut self.heard) {
+            if state.meter.take_activity() > SILENCE {
+                *heard = Some(now);
+            }
+        }
+    }
+
+    /// Whether an input that plays reaches `output`.
+    fn has_signal(&self, output: usize, now: Instant) -> bool {
+        self.heard.iter().enumerate().any(|(i, heard)| {
+            heard.is_some_and(|t| now.duration_since(t) < SIGNAL_HOLD)
+                && self.matrix.effective_gain(i, output) > 0.0
+        })
+    }
+
     /// Closes outputs that had no signal for their `release_after` and marks
     /// released ones with signal again for reconnection.
     fn release_silent(&mut self, now: Instant, events: &mut Vec<EngineEvent>) {
-        let activity: Vec<f32> = self
-            .inputs
-            .iter()
-            .map(|s| s.meter.take_activity())
-            .collect();
+        self.listen(now);
         for o in 0..self.outputs.len() {
             let Some(after) = self.config.outputs[o].release_after else {
                 continue;
             };
-            let signal = activity
-                .iter()
-                .enumerate()
-                .any(|(i, &peak)| peak > SILENCE && self.matrix.effective_gain(i, o) > 0.0);
-            let idle = &mut self.idle[o];
-            if signal {
-                idle.quiet_since = None;
-                idle.released = false;
+            if self.has_signal(o, now) {
+                self.idle[o].quiet_since = None;
+                self.idle[o].released = false;
             } else if self.live_out[o].is_some() {
-                let since = *idle.quiet_since.get_or_insert(now);
+                let since = *self.idle[o].quiet_since.get_or_insert(now);
                 if now.duration_since(since) >= after {
-                    idle.quiet_since = None;
-                    idle.released = true;
+                    let device = self.outputs[o].device.as_ref().map(|(d, _)| d.clone());
+                    self.idle[o] = Idle {
+                        quiet_since: None,
+                        released: true,
+                        device,
+                    };
                     self.disconnect_output(o);
                     events.push(EngineEvent::Released { slot: o });
                 }
             }
         }
+    }
+
+    /// Reopens released outputs as soon as signal for them returns. Cheap
+    /// (no device listing): call it often, e.g. every 50 ms, so little of
+    /// the returning sound is lost.
+    pub fn wake(&mut self) -> Vec<EngineEvent> {
+        self.wake_at(Instant::now())
+    }
+
+    /// [`wake`](Self::wake) with the current time given, for tests.
+    pub fn wake_at(&mut self, now: Instant) -> Vec<EngineEvent> {
+        let mut events = Vec::new();
+        if !self.idle.iter().any(|i| i.released) {
+            return events;
+        }
+        self.listen(now);
+        for o in 0..self.outputs.len() {
+            if self.idle[o].released && self.has_signal(o, now) {
+                self.idle[o].released = false;
+                // Without a remembered device, maintain finds it.
+                if let Some(device) = self.idle[o].device.take() {
+                    events.push(self.connect_output(o, device));
+                }
+            }
+        }
+        if !events.is_empty() {
+            self.block_loops();
+        }
+        events
     }
 
     fn lost(
@@ -904,13 +952,28 @@ mod tests {
         assert_level(&out["usb"], 0.2, 1e-3);
         assert!(engine.maintain_at(at(20)).is_empty());
 
-        // The game plays again: bt opens and hears it.
+        // Still quiet: waking finds nothing to do.
+        b.pump(100, quiet_game);
+        assert!(engine.wake_at(at(21)).is_empty());
+
+        // The game plays again: bt opens at once and hears it.
         b.pump(100, level);
-        assert_eq!(connected(&engine.maintain_at(at(21))), 1);
+        assert_eq!(connected(&engine.wake_at(at(22))), 1);
         assert!(!engine.is_released(1));
         let out = b.pump(3000, level);
         assert_level(&out["bt"], 0.4, 1e-2);
-        assert!(engine.maintain_at(at(30)).is_empty());
+        assert!(engine.maintain_at(at(25)).is_empty());
+
+        // Quiet again, released again; maintain alone reopens it too.
+        b.pump(100, quiet_game);
+        engine.maintain_at(at(30));
+        b.pump(100, quiet_game);
+        assert_eq!(
+            engine.maintain_at(at(36)),
+            vec![EngineEvent::Released { slot: 1 }]
+        );
+        b.pump(100, level);
+        assert_eq!(connected(&engine.maintain_at(at(40))), 1);
     }
 
     #[test]

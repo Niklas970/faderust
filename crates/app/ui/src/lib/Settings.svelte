@@ -33,15 +33,6 @@
     }
   }
 
-  // Seconds of silence before an output is released; 0 keeps it open.
-  const RELEASE = [
-    [0, "Immer offen"],
-    [10, "Frei nach 10 s"],
-    [30, "Frei nach 30 s"],
-    [120, "Frei nach 2 min"],
-    [600, "Frei nach 10 min"],
-  ];
-
   // The configured pattern may match a device that is unplugged right now:
   // keep it selectable.
   function options(list, current) {
@@ -69,7 +60,7 @@
     for (const m of matrices()) if (m[i] && m[i + by]) swap(m, i, i + by);
   }
   function addOutput() {
-    draft.outputs.push({ label: `Ausgang ${draft.outputs.length + 1}`, device: devices.outputs[0].name, bufferMs: 60, releaseAfterS: 0 });
+    draft.outputs.push({ label: `Ausgang ${draft.outputs.length + 1}`, device: devices.outputs[0].name, bufferMs: 60 });
     for (const m of matrices()) for (const row of m) row.push({ db: 0, muted: false });
   }
   function removeOutput(o) {
@@ -104,7 +95,7 @@
   function addProgramMic() {
     // Read before the push: afterwards the cable is taken and `micCable` moves on.
     const cable = micCable.name;
-    draft.outputs.push({ label: "Programm-Mikro", device: cable, bufferMs: 30, releaseAfterS: 0 });
+    draft.outputs.push({ label: "Programm-Mikro", device: cable, bufferMs: 30 });
     // The first input (usually the microphone) at 0 dB, everything else muted.
     for (const m of matrices()) m.forEach((row, i) => row.push({ db: 0, muted: i !== 0 }));
     micDevice = cableCounterpart(cable);
@@ -184,14 +175,6 @@
         <input type="number" min="10" max="500" step="10" bind:value={output.bufferMs} />
         ms
       </label>
-      <select
-        class="release"
-        bind:value={output.releaseAfterS}
-        title="Gerät freigeben, wenn nichts darauf läuft, z. B. damit Bluetooth-Kopfhörer per Multipoint zum Handy wechseln können"
-        aria-label="Bei Stille freigeben"
-      >
-        {#each RELEASE as [s, text]}<option value={s}>{text}</option>{/each}
-      </select>
       <span class="order">
         <button class="icon" title="Nach links" aria-label="Nach links" disabled={o === 0} onclick={() => moveOutput(o, -1)}
           >←</button
@@ -319,10 +302,6 @@
   }
   .buffer input {
     width: 70px;
-  }
-  select.release {
-    flex: none;
-    width: 132px;
   }
   button {
     padding: 6px 12px;

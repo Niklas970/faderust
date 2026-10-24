@@ -20,6 +20,9 @@ use crate::log;
 
 const EMIT_EVERY: Duration = Duration::from_millis(50);
 const MAINTAIN_EVERY: Duration = Duration::from_secs(1);
+/// Every output closes after this much silence, so other devices can take
+/// over Bluetooth headphones (multipoint), and reopens with signal.
+const RELEASE_AFTER: Duration = Duration::from_secs(5);
 /// Fader moves are saved at most this often.
 const SAVE_EVERY: Duration = Duration::from_secs(2);
 
@@ -132,8 +135,7 @@ fn build(config: &Config, skip: Option<&str>) -> Option<Engine<CpalBackend>> {
             .map(|o| OutputConfig {
                 device: o.device.clone(),
                 buffer_ms: o.buffer_ms,
-                release_after: (o.release_after_s > 0)
-                    .then(|| Duration::from_secs(o.release_after_s.into())),
+                release_after: Some(RELEASE_AFTER),
             })
             .collect(),
     };
@@ -316,8 +318,13 @@ fn run(
         }
 
         if let Some(e) = &mut engine {
-            if last_maintain.is_none_or(|t| t.elapsed() >= MAINTAIN_EVERY) {
-                let events = e.maintain();
+            let mut events = e.wake();
+            let maintained = last_maintain.is_none_or(|t| t.elapsed() >= MAINTAIN_EVERY);
+            if maintained {
+                events.extend(e.maintain());
+                last_maintain = Some(Instant::now());
+            }
+            if !events.is_empty() {
                 let c = config.lock().unwrap_or_else(|e| e.into_inner());
                 for event in &events {
                     log::write(&event.to_string());
@@ -325,8 +332,9 @@ fn run(
                         let _ = app.emit("notice", n);
                     }
                 }
+            }
+            if maintained {
                 quiet = false;
-                last_maintain = Some(Instant::now());
             }
         }
 
