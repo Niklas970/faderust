@@ -281,7 +281,6 @@ mod tests {
                 label: "PS5".into(),
                 device: "PS5".into(),
                 buffer_ms: 60,
-                release_after_s: 0,
             }],
             gains: vec![],
             presets: vec![],

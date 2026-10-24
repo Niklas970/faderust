@@ -68,6 +68,24 @@
     };
   });
 
+  // A click on the version looks right away and says what it found.
+  let checkNote = $state("");
+  let noteTimer;
+  async function checkNow() {
+    if (updating !== null || checkNote === "Suche …") return;
+    checkNote = "Suche …";
+    lastCheck = Date.now();
+    try {
+      update = (await checkUpdate()) ?? null;
+      checkNote = update ? "" : "Aktuell";
+    } catch (e) {
+      checkNote = "Keine Verbindung";
+      error = `Update-Suche fehlgeschlagen: ${e}`;
+    }
+    clearTimeout(noteTimer);
+    if (checkNote) noteTimer = setTimeout(() => (checkNote = ""), 3000);
+  }
+
   async function runUpdate() {
     updating = 0;
     try {
@@ -128,7 +146,11 @@
     <div class="brand" data-tauri-drag-region>
       <img src="/logo.svg" alt="" width="22" height="22" data-tauri-drag-region />
       <span class="name" data-tauri-drag-region>Faderust</span>
-      {#if version}<span class="version" data-tauri-drag-region>v{version}</span>{/if}
+      {#if version}
+        <button class="version" onclick={checkNow} title="Nach Updates suchen">
+          v{version}{#if checkNote}<span class="check-note">· {checkNote}</span>{/if}
+        </button>
+      {/if}
       {#if update}
         <button class="update" onclick={runUpdate} disabled={updating !== null} title="Herunterladen und installieren">
           {updating === null ? `Update auf ${update.version}` : `Lädt … ${Math.round(updating * 100)} %`}
@@ -286,9 +308,22 @@
     text-transform: uppercase;
   }
   .version {
+    padding: 2px 6px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: none;
     font-family: var(--mono);
     font-size: 11px;
     color: var(--muted);
+    cursor: pointer;
+  }
+  .version:hover {
+    border-color: var(--border);
+    color: var(--text);
+  }
+  .check-note {
+    margin-left: 4px;
+    color: var(--signal);
   }
   .update {
     height: 26px;

@@ -21,6 +21,7 @@
 
 - **Eine Spalte pro Ausgang, ein Fader pro Eingang.** Mikrofon, PC-Ton und Konsole lassen sich für Kopfhörer, Lautsprecher und Stream getrennt mischen.
 - **Geräte kommen und gehen.** Bluetooth-Kopfhörer aus- und wieder einschalten, USB-Gerät abziehen: Faderust verbindet neu, ohne die anderen Geräte zu unterbrechen.
+- **Gibt Geräte frei, wenn nichts läuft.** Nach 5 Sekunden Stille schließt Faderust einen Ausgang, damit Bluetooth-Kopfhörer per Multipoint zum Handy wechseln können. Kommt wieder Ton, öffnet er sich sofort von selbst.
 - **Effekte pro Eingang:** Low-Cut, Drei-Band-EQ und Gate, zum Beispiel gegen Tastaturgeräusche am Mikro.
 - **Programme auf der Hauptseite:** Lautstärke, Stumm und Pegel für jedes Programm, das gerade Ton abspielt.
 - **Programme als Eingänge:** Faderust nimmt einzelne Programme direkt auf, jedes mit eigenem Fader und EQ. Alternativ geht es über [VB-Cable](https://vb-audio.com/Cable/).
@@ -32,14 +33,14 @@
 
 1. Unter [Releases](https://github.com/Niklas970/faderust/releases/latest) die Datei `Faderust_*_x64-setup.exe` laden und starten. Das Setup braucht keine Admin-Rechte und spricht Deutsch oder Englisch, je nach Windows-Sprache.
 2. Das Setup ist nicht signiert, deshalb warnt Windows SmartScreen. Klicke auf „Weitere Informationen“ und dann auf „Trotzdem ausführen“.
-3. Faderust aus dem Startmenü öffnen. Neue Versionen meldet die App selbst oben in der Titelleiste („Update auf …“).
+3. Faderust aus dem Startmenü öffnen. Neue Versionen meldet die App selbst oben in der Titelleiste („Update auf …“), ein Klick auf die Versionsnummer sucht sofort danach.
 
 Voraussetzung ist Windows 10 oder 11. WebView2 ist dort meist schon da, sonst lädt das Setup es nach.
 
 ## Erste Schritte
 
 1. **Geräte** öffnen und die Eingänge (Mikrofon, Line-In, virtuelles Kabel) und Ausgänge (Kopfhörer, Lautsprecher …) anlegen. Mit den Pfeilen lässt sich die Reihenfolge ändern.
-2. Für Bluetooth-Ausgänge den Puffer höher stellen (80 ms oder mehr), für USB reichen meist 30 bis 60 ms. Zählt ein Ausgang immer wieder Aussetzer, den Puffer erhöhen. Daneben lässt sich wählen, ob Faderust einen Ausgang nach einer Weile Stille freigibt, damit Bluetooth-Kopfhörer per Multipoint zu einem anderen Gerät wechseln können.
+2. Für Bluetooth-Ausgänge den Puffer höher stellen (80 ms oder mehr), für USB reichen meist 30 bis 60 ms. Zählt ein Ausgang immer wieder Aussetzer, den Puffer erhöhen.
 3. Fader bedienen: ziehen, auf die Bahn klicken, Mausrad (mit Shift feiner), Doppelklick setzt auf 0 dB. Der Bereich geht von −∞ bis +12 dB.
 4. Ein Klick auf einen Eingang oben in der Leiste öffnet seine Effekte.
 

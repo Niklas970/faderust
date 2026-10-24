@@ -427,7 +427,6 @@ fn initial_config() -> Config {
                 label: "Ausgang".into(),
                 device: d.name,
                 buffer_ms: 40,
-                release_after_s: 0,
             })
             .into_iter()
             .collect(),
