@@ -1,5 +1,11 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.3.7:
+
+- Absturz behoben, wenn ein Programm mit „+ Eingang“ aufgenommen wird
+- Stürzt Faderust beim Start einer Programm-Aufnahme trotzdem ab, lässt es dieses Programm beim nächsten Start aus und meldet das, statt erneut abzustürzen
+- Faderust schreibt ein Protokoll nach `%APPDATA%\io.github.niklas970.faderust\faderust.log`, das bei Fehlermeldungen hilft
+
 Neu in 0.3.6:
 
 - Programme als eigene Eingänge: Unter **Programme** nimmt „+ Eingang“ ein Programm direkt auf (ab Windows 10 Version 2004). Es bekommt in jeder Spalte einen Fader und eigene Effekte wie EQ und Gate, ohne ein Kabel pro Programm. Damit du es nicht doppelt hörst, stell das Programm auf ein Gerät, das du nicht direkt hörst (z. B. VB-Cable).

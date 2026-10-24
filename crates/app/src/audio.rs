@@ -16,6 +16,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use crate::config::{Config, Fx};
+use crate::log;
 
 const EMIT_EVERY: Duration = Duration::from_millis(50);
 const MAINTAIN_EVERY: Duration = Duration::from_secs(1);
@@ -79,20 +80,45 @@ struct UiLane {
 /// thread rebuilds the engine on [`Command::Reconfigure`].
 pub fn spawn(app: AppHandle, config: Arc<Mutex<Config>>, path: PathBuf) -> Sender<Command> {
     let (tx, rx) = mpsc::channel();
+    // A program recording that took Faderust down last time stays off until
+    // the next start, so the app comes up again.
+    #[cfg(windows)]
+    let skip = faderust_engine::apps::capture::crashed_last_time();
+    #[cfg(not(windows))]
+    let skip: Option<String> = None;
+    if let Some(exe) = &skip {
+        log::write(&format!(
+            "Programm-Aufnahme {exe} beim letzten Start abgestürzt, übersprungen"
+        ));
+    }
     thread::Builder::new()
         .name("faderust-engine".into())
-        .spawn(move || run(app, config, path, rx))
+        .spawn(move || run(app, config, path, rx, skip))
         .expect("spawn engine thread");
     tx
 }
 
-fn build(config: &Config) -> Option<Engine<CpalBackend>> {
+/// Whether `device` is the program input that crashed Faderust last time
+/// (`skip`, an exe name) and must stay off for this run.
+fn skipped(device: &str, skip: Option<&str>) -> bool {
+    skip.is_some_and(|exe| {
+        device
+            .strip_prefix("app:")
+            .is_some_and(|d| d.eq_ignore_ascii_case(exe))
+    })
+}
+
+fn build(config: &Config, skip: Option<&str>) -> Option<Engine<CpalBackend>> {
     let engine_config = EngineConfig {
         inputs: config
             .inputs
             .iter()
             .map(|i| InputConfig {
-                device: i.device.clone(),
+                device: if skipped(&i.device, skip) {
+                    format!("{}#aus", i.device)
+                } else {
+                    i.device.clone()
+                },
             })
             .collect(),
         outputs: config
@@ -179,8 +205,21 @@ impl Notices {
     }
 }
 
-fn run(app: AppHandle, config: Arc<Mutex<Config>>, path: PathBuf, rx: Receiver<Command>) {
-    let mut engine = build(&config.lock().unwrap());
+fn run(
+    app: AppHandle,
+    config: Arc<Mutex<Config>>,
+    path: PathBuf,
+    rx: Receiver<Command>,
+    skip: Option<String>,
+) {
+    let mut engine = build(
+        &config.lock().unwrap_or_else(|e| e.into_inner()),
+        skip.as_deref(),
+    );
+    // Told once the window had time to listen.
+    let mut skip_notice = skip
+        .as_ref()
+        .map(|exe| (Instant::now() + Duration::from_secs(3), exe.clone()));
     let mut last_maintain: Option<Instant> = None;
     let mut last_emit = Instant::now();
     let mut dirty_since: Option<Instant> = None;
@@ -198,18 +237,21 @@ fn run(app: AppHandle, config: Arc<Mutex<Config>>, path: PathBuf, rx: Receiver<C
                         Command::Reconfigure => {
                             // Drop the old engine first so devices are free.
                             drop(engine.take());
-                            engine = build(&config.lock().unwrap());
+                            engine = build(
+                                &config.lock().unwrap_or_else(|e| e.into_inner()),
+                                skip.as_deref(),
+                            );
                             last_maintain = None;
                             notices = Notices::default();
                             quiet = true;
                         }
                         Command::ApplyGains => {
                             if let Some(e) = &engine {
-                                apply_gains(e, &config.lock().unwrap());
+                                apply_gains(e, &config.lock().unwrap_or_else(|e| e.into_inner()));
                             }
                         }
                         Command::SetFx(i, fx) => {
-                            let mut c = config.lock().unwrap();
+                            let mut c = config.lock().unwrap_or_else(|e| e.into_inner());
                             if let Some(input) = c.inputs.get_mut(i) {
                                 let settings = faderust_engine::FxSettings::from(fx).sanitized();
                                 input.fx = settings.into();
@@ -262,9 +304,9 @@ fn run(app: AppHandle, config: Arc<Mutex<Config>>, path: PathBuf, rx: Receiver<C
         if let Some(e) = &mut engine {
             if last_maintain.is_none_or(|t| t.elapsed() >= MAINTAIN_EVERY) {
                 let events = e.maintain();
-                let c = config.lock().unwrap();
+                let c = config.lock().unwrap_or_else(|e| e.into_inner());
                 for event in &events {
-                    eprintln!("{event}");
+                    log::write(&event.to_string());
                     if let Some(n) = notices.notice(&c, event, quiet) {
                         let _ = app.emit("notice", n);
                     }
@@ -274,15 +316,33 @@ fn run(app: AppHandle, config: Arc<Mutex<Config>>, path: PathBuf, rx: Receiver<C
             }
         }
 
+        if let Some((at, exe)) = &skip_notice {
+            if Instant::now() >= *at {
+                let _ = app.emit(
+                    "notice",
+                    Notice {
+                        level: "error",
+                        text: format!(
+                            "Die Aufnahme von {exe} hat Faderust beim letzten Mal zum Absturz gebracht. Sie bleibt bis zum nächsten Start aus. Details stehen in faderust.log."
+                        ),
+                    },
+                );
+                skip_notice = None;
+            }
+        }
+
         if last_emit.elapsed() >= EMIT_EVERY {
-            let state = snapshot(&config.lock().unwrap(), engine.as_ref());
+            let state = snapshot(
+                &config.lock().unwrap_or_else(|e| e.into_inner()),
+                engine.as_ref(),
+            );
             let _ = app.emit("state", state);
             last_emit = Instant::now();
         }
 
         if dirty_since.is_some_and(|t| t.elapsed() >= SAVE_EVERY) {
-            if let Err(e) = config.lock().unwrap().save(&path) {
-                eprintln!("saving {}: {e}", path.display());
+            if let Err(e) = config.lock().unwrap_or_else(|e| e.into_inner()).save(&path) {
+                log::write(&format!("saving {}: {e}", path.display()));
             }
             dirty_since = None;
         }
@@ -307,7 +367,7 @@ fn gain_mut(
     o: usize,
     f: impl FnOnce(&mut crate::config::Gain),
 ) -> Option<crate::config::Gain> {
-    let mut c = config.lock().unwrap();
+    let mut c = config.lock().unwrap_or_else(|e| e.into_inner());
     let g = c.gains.get_mut(i)?.get_mut(o)?;
     f(g);
     g.db = if g.db.is_finite() {
@@ -402,7 +462,15 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
 
 #[cfg(test)]
 mod tests {
-    use super::step_db;
+    use super::{skipped, step_db};
+
+    #[test]
+    fn skips_only_the_crashed_program() {
+        assert!(skipped("app:spotify.exe", Some("Spotify.exe")));
+        assert!(!skipped("app:discord.exe", Some("spotify.exe")));
+        assert!(!skipped("spotify.exe", Some("spotify.exe")));
+        assert!(!skipped("app:spotify.exe", None));
+    }
 
     #[test]
     fn steps_stay_in_fader_range() {
