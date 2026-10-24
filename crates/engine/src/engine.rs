@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
 use std::sync::Arc;
 
 use crate::backend::{AudioBackend, BackendError, DeviceInfo, StreamFormat};
+use crate::fx::InputFx;
 use crate::lane::{lane, LaneSpec, LaneStats};
 use crate::matrix::MixMatrix;
 use crate::meter::PeakMeter;
@@ -170,6 +171,8 @@ pub struct Engine<B: AudioBackend> {
     live_out: Vec<Option<Live<B::Stream, OutputCommand>>>,
     /// `lanes[input][output]`, stable across reconnections.
     lanes: Vec<Vec<Arc<LaneStats>>>,
+    /// Effect settings per input, stable across reconnections.
+    fx: Vec<Arc<InputFx>>,
 }
 
 fn slot(pattern: &str) -> SlotState {
@@ -210,6 +213,7 @@ impl<B: AudioBackend> Engine<B> {
             lanes: (0..n_in)
                 .map(|_| (0..n_out).map(|_| Arc::default()).collect())
                 .collect(),
+            fx: (0..n_in).map(|_| Arc::default()).collect(),
             config,
         })
     }
@@ -224,6 +228,11 @@ impl<B: AudioBackend> Engine<B> {
 
     pub fn outputs(&self) -> &[SlotState] {
         &self.outputs
+    }
+
+    /// Effect settings of `input`; changes apply while it plays.
+    pub fn input_fx(&self, input: usize) -> &Arc<InputFx> {
+        &self.fx[input]
     }
 
     /// Statistics of the lane from `input` to `output`.
@@ -418,7 +427,12 @@ impl<B: AudioBackend> Engine<B> {
         }
 
         let state = &self.inputs[i];
-        let (mut node, handle) = InputNode::new(producers, Arc::clone(&state.meter));
+        let (mut node, handle) = InputNode::new(
+            producers,
+            Arc::clone(&state.meter),
+            Arc::clone(&self.fx[i]),
+            format.sample_rate,
+        );
         let (flag, on_error) = error_flag(state);
         let channels = format.channels as usize;
         let stream = match self.backend.open_input(

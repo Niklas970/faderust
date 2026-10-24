@@ -3,12 +3,18 @@
   import OutputColumn from "./lib/OutputColumn.svelte";
   import Settings from "./lib/Settings.svelte";
   import Apps from "./lib/Apps.svelte";
-  import { getConfig, onState, saveConfig, setGain, setMuted } from "./lib/api.js";
+  import FxDialog from "./lib/FxDialog.svelte";
+  import Presets from "./lib/Presets.svelte";
+  import Notices from "./lib/Notices.svelte";
+  import { fxActive, getConfig, onState, saveConfig, setGain, setMuted } from "./lib/api.js";
 
   let state = $state(null);
   let config = $state(null);
   let settingsOpen = $state(false);
   let appsOpen = $state(false);
+  let presetsOpen = $state(false);
+  // Index of the input whose effects are open.
+  let fxOpen = $state(null);
   let error = $state("");
 
   onMount(() => {
@@ -59,12 +65,19 @@
     <img src="/logo.svg" alt="" width="28" height="28" />
     <h1>Faderust</h1>
     <div class="inputs">
-      {#each state?.inputs ?? [] as input}
-        <span class="chip" class:off={!input.connected} title={input.deviceName ?? input.device}>
+      {#each state?.inputs ?? [] as input, i}
+        <button
+          class="chip"
+          class:off={!input.connected}
+          title={`${input.deviceName ?? input.device} · Effekte`}
+          onclick={() => (fxOpen = i)}
+        >
           <span class="dot"></span>{input.label}
-        </span>
+          {#if fxActive(input.fx)}<span class="fx">FX</span>{/if}
+        </button>
       {/each}
     </div>
+    <button onclick={() => (presetsOpen = true)}>Presets</button>
     <button onclick={openApps}>Programme</button>
     <button class="settings" onclick={openSettings}>Geräte</button>
   </header>
@@ -92,6 +105,16 @@
     </div>
   {/if}
 </div>
+
+{#if fxOpen !== null && state?.inputs[fxOpen]}
+  <FxDialog index={fxOpen} input={state.inputs[fxOpen]} onClose={() => (fxOpen = null)} />
+{/if}
+
+{#if presetsOpen}
+  <Presets onError={(e) => (error = e)} onClose={() => (presetsOpen = false)} />
+{/if}
+
+<Notices />
 
 {#if appsOpen && config}
   <Apps inputs={config.inputs} onAddInput={addCableInput} onClose={() => (appsOpen = false)} />
@@ -135,6 +158,18 @@
     border-radius: 999px;
     font-size: 12px;
     white-space: nowrap;
+  }
+  .chip {
+    background: none;
+    cursor: pointer;
+  }
+  .chip:hover {
+    border-color: var(--copper);
+  }
+  .chip .fx {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--copper);
   }
   .chip .dot {
     width: 7px;

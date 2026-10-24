@@ -9,11 +9,13 @@ use std::time::{Duration, Instant};
 
 use faderust_engine::backend::cpal::CpalBackend;
 use faderust_engine::meter::to_db;
-use faderust_engine::{Engine, EngineConfig, InputConfig, OutputConfig, SlotState};
+use faderust_engine::{
+    Direction, Engine, EngineConfig, EngineEvent, InputConfig, LostReason, OutputConfig, SlotState,
+};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
-use crate::config::Config;
+use crate::config::{Config, Fx};
 
 const EMIT_EVERY: Duration = Duration::from_millis(50);
 const MAINTAIN_EVERY: Duration = Duration::from_secs(1);
@@ -23,7 +25,18 @@ const SAVE_EVERY: Duration = Duration::from_secs(2);
 pub enum Command {
     SetGain(usize, usize, f32),
     SetMuted(usize, usize, bool),
+    SetFx(usize, Fx),
+    /// The gains in the config changed as a whole (preset loaded).
+    ApplyGains,
     Reconfigure,
+}
+
+/// A message for the user, sent as the `notice` event.
+#[derive(Serialize, Clone)]
+struct Notice {
+    /// "info", "warn" or "error".
+    level: &'static str,
+    text: String,
 }
 
 /// Snapshot sent to the UI as the `state` event.
@@ -46,6 +59,9 @@ struct UiDevice {
     level_db: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
     buffer_ms: Option<u32>,
+    /// Inputs only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fx: Option<Fx>,
 }
 
 #[derive(Serialize, Clone, Default)]
@@ -87,13 +103,77 @@ fn build(config: &Config) -> Option<Engine<CpalBackend>> {
     };
     // Needs at least one input and one output; the UI then offers setup.
     let engine = Engine::new(CpalBackend::new(), engine_config).ok()?;
+    apply_gains(&engine, config);
+    for (i, input) in config.inputs.iter().enumerate() {
+        engine.input_fx(i).set(input.fx.into());
+    }
+    Some(engine)
+}
+
+fn apply_gains(engine: &Engine<CpalBackend>, config: &Config) {
     for (i, row) in config.gains.iter().enumerate() {
         for (o, g) in row.iter().enumerate() {
             engine.matrix.set_gain_db(i, o, g.db);
             engine.matrix.set_muted(i, o, g.muted);
         }
     }
-    Some(engine)
+}
+
+/// Turns engine events into messages, without repeating the same failure
+/// every second while a device stays unavailable.
+#[derive(Default)]
+struct Notices {
+    /// Last failure text per (is_output, slot).
+    failing: std::collections::HashMap<(bool, usize), String>,
+}
+
+impl Notices {
+    /// `quiet` skips "connected" messages, for the start-up connections.
+    fn notice(&mut self, config: &Config, event: &EngineEvent, quiet: bool) -> Option<Notice> {
+        let label = |dir: &Direction, slot: usize| {
+            let label = match dir {
+                Direction::Input => config.inputs.get(slot).map(|e| &e.label),
+                Direction::Output => config.outputs.get(slot).map(|e| &e.label),
+            };
+            label.cloned().unwrap_or_default()
+        };
+        let key = |dir: &Direction, slot: usize| (*dir == Direction::Output, slot);
+        match event {
+            EngineEvent::Connected {
+                dir, slot, device, ..
+            } => {
+                let was_failing = self.failing.remove(&key(dir, *slot)).is_some();
+                (!quiet || was_failing).then(|| Notice {
+                    level: "info",
+                    text: format!("„{}“ verbunden: {}", label(dir, *slot), device.name),
+                })
+            }
+            EngineEvent::Lost { dir, slot, reason } => Some(Notice {
+                level: "warn",
+                text: match reason {
+                    LostReason::Removed => {
+                        format!("„{}“ getrennt. Faderust verbindet neu, sobald das Gerät wieder da ist.", label(dir, *slot))
+                    }
+                    LostReason::StreamError => {
+                        format!(
+                            "„{}“ meldet einen Fehler und wird neu verbunden.",
+                            label(dir, *slot)
+                        )
+                    }
+                },
+            }),
+            EngineEvent::ConnectFailed { dir, slot, error } => {
+                let previous = self.failing.insert(key(dir, *slot), error.clone());
+                (previous.as_ref() != Some(error)).then(|| Notice {
+                    level: "error",
+                    text: format!(
+                        "„{}“ lässt sich nicht öffnen: {error}. Nutzt ein anderes Programm das Gerät im Exklusivmodus?",
+                        label(dir, *slot)
+                    ),
+                })
+            }
+        }
+    }
 }
 
 fn run(app: AppHandle, config: Arc<Mutex<Config>>, path: PathBuf, rx: Receiver<Command>) {
@@ -101,6 +181,9 @@ fn run(app: AppHandle, config: Arc<Mutex<Config>>, path: PathBuf, rx: Receiver<C
     let mut last_maintain: Option<Instant> = None;
     let mut last_emit = Instant::now();
     let mut dirty_since: Option<Instant> = None;
+    let mut notices = Notices::default();
+    // The first connections after a (re)build are expected, not news.
+    let mut quiet = true;
 
     loop {
         match rx.recv_timeout(EMIT_EVERY) {
@@ -114,6 +197,24 @@ fn run(app: AppHandle, config: Arc<Mutex<Config>>, path: PathBuf, rx: Receiver<C
                             drop(engine.take());
                             engine = build(&config.lock().unwrap());
                             last_maintain = None;
+                            notices = Notices::default();
+                            quiet = true;
+                        }
+                        Command::ApplyGains => {
+                            if let Some(e) = &engine {
+                                apply_gains(e, &config.lock().unwrap());
+                            }
+                        }
+                        Command::SetFx(i, fx) => {
+                            let mut c = config.lock().unwrap();
+                            if let Some(input) = c.inputs.get_mut(i) {
+                                let settings = faderust_engine::FxSettings::from(fx).sanitized();
+                                input.fx = settings.into();
+                                if let Some(e) = &engine {
+                                    e.input_fx(i).set(settings);
+                                }
+                                dirty_since.get_or_insert_with(Instant::now);
+                            }
                         }
                         Command::SetGain(i, o, db) => {
                             if let Some(g) = gain_mut(&config, i, o, |g| g.db = db) {
@@ -140,9 +241,15 @@ fn run(app: AppHandle, config: Arc<Mutex<Config>>, path: PathBuf, rx: Receiver<C
 
         if let Some(e) = &mut engine {
             if last_maintain.is_none_or(|t| t.elapsed() >= MAINTAIN_EVERY) {
-                for event in e.maintain() {
+                let events = e.maintain();
+                let c = config.lock().unwrap();
+                for event in &events {
                     eprintln!("{event}");
+                    if let Some(n) = notices.notice(&c, event, quiet) {
+                        let _ = app.emit("notice", n);
+                    }
                 }
+                quiet = false;
                 last_maintain = Some(Instant::now());
             }
         }
@@ -201,6 +308,7 @@ fn device(
         device_name: connected.map(|(d, _)| d.name.clone()),
         level_db,
         buffer_ms,
+        fx: None,
     }
 }
 
@@ -209,8 +317,9 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
         .inputs
         .iter()
         .enumerate()
-        .map(|(i, c)| {
-            device(
+        .map(|(i, c)| UiDevice {
+            fx: Some(c.fx),
+            ..device(
                 &c.label,
                 &c.device,
                 engine.and_then(|e| e.inputs().get(i)),

@@ -53,6 +53,12 @@ Installer bauen: `cd crates/app && ui/node_modules/.bin/tauri build` (nach `npm 
 
 Die Einstellungen (Geräte, Pegel) liegen in `%APPDATA%\io.github.niklas970.faderust\config.toml`. Das Fenster schließen lässt den Mixer im Tray weiterlaufen; beenden über das Tray-Menü. Unter **Geräte → Start** lässt sich Faderust mit Windows starten (direkt in den Tray). Ein zweiter Start holt nur das laufende Fenster nach vorn.
 
+## Effekte, Presets, Meldungen
+
+- **Effekte pro Eingang:** Klick auf einen Eingang oben in der Leiste öffnet Low-Cut, einen Drei-Band-EQ (Bass, Präsenz, Höhen) und ein Gate. Änderungen wirken sofort; aktive Effekte zeigt ein „FX“ am Eingang.
+- **Presets:** Unter **Presets** die aktuellen Fader unter einem Namen speichern und später mit einem Klick laden.
+- **Meldungen:** Getrennte, wieder verbundene oder blockierte Geräte meldet Faderust unten rechts.
+
 ## Programme auf eigene Fader
 
 Ein Programm (Spotify, Discord, Browser …) bekommt einen eigenen Fader, wenn es auf ein virtuelles Kabel spielt und Faderust die andere Seite des Kabels als Eingang aufnimmt:

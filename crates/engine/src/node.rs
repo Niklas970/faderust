@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
+use crate::fx::{FxChain, InputFx};
 use crate::lane::{Lane, LaneStats};
 use crate::matrix::MixMatrix;
 use crate::meter::PeakMeter;
@@ -89,12 +90,17 @@ impl<C> Queues<C> {
     }
 }
 
-/// Input side: converts device frames to the stereo bus and fans them out to
-/// one ring buffer per output.
+/// Frames an input node converts and processes at once.
+const INPUT_BLOCK_FRAMES: usize = 64;
+
+/// Input side: converts device frames to the stereo bus, runs the input
+/// effects and fans the result out to one ring buffer per output.
 pub struct InputNode {
     /// Indexed by output slot.
     lanes: Vec<Option<LaneInput>>,
     meter: Arc<PeakMeter>,
+    fx: Arc<InputFx>,
+    chain: FxChain,
     queues: Queues<InputCommand>,
 }
 
@@ -103,12 +109,16 @@ impl InputNode {
     pub fn new(
         lanes: Vec<Option<LaneInput>>,
         meter: Arc<PeakMeter>,
+        fx: Arc<InputFx>,
+        sample_rate: u32,
     ) -> (Self, NodeHandle<InputCommand>) {
         let (queues, handle) = queues();
         (
             Self {
                 lanes,
                 meter,
+                fx,
+                chain: FxChain::new(sample_rate),
                 queues,
             },
             handle,
@@ -134,11 +144,10 @@ impl InputNode {
         if channels == 0 {
             return;
         }
-        let frames = data.len() / channels;
-        // Meter on the bus signal, in small blocks to stay allocation-free.
-        let mut block = [0.0f32; 64 * BUS_CHANNELS];
-        for chunk in data.chunks(64 * channels) {
-            let n = chunk.len() / channels;
+        let mut block = [0.0f32; INPUT_BLOCK_FRAMES * BUS_CHANNELS];
+        for chunk in data.chunks(INPUT_BLOCK_FRAMES * channels) {
+            let frames = chunk.len() / channels;
+            let block = &mut block[..frames * BUS_CHANNELS];
             for (frame, out) in chunk
                 .chunks_exact(channels)
                 .zip(block.chunks_exact_mut(BUS_CHANNELS))
@@ -147,30 +156,26 @@ impl InputNode {
                 out[0] = l;
                 out[1] = r;
             }
-            self.meter.update(&block[..n * BUS_CHANNELS]);
-        }
+            self.chain.process(&self.fx, block);
+            // Metered after the effects, so the gate shows.
+            self.meter.update(block);
 
-        for (producer, stats) in self.lanes.iter_mut().flatten() {
-            let writable = (producer.slots() / BUS_CHANNELS).min(frames);
-            if writable < frames {
-                stats
-                    .dropped_frames
-                    .fetch_add((frames - writable) as u64, Relaxed);
+            for (producer, stats) in self.lanes.iter_mut().flatten() {
+                let writable = (producer.slots() / BUS_CHANNELS).min(frames);
+                if writable < frames {
+                    stats
+                        .dropped_frames
+                        .fetch_add((frames - writable) as u64, Relaxed);
+                }
+                let Ok(mut out) = producer.write_chunk(writable * BUS_CHANNELS) else {
+                    continue;
+                };
+                let (a, b) = out.as_mut_slices();
+                let (first, rest) = block[..writable * BUS_CHANNELS].split_at(a.len());
+                a.copy_from_slice(first);
+                b.copy_from_slice(rest);
+                out.commit_all();
             }
-            let Ok(mut chunk) = producer.write_chunk(writable * BUS_CHANNELS) else {
-                continue;
-            };
-            let (a, b) = chunk.as_mut_slices();
-            let mut frames_in = data.chunks_exact(channels);
-            for slot in a
-                .chunks_exact_mut(BUS_CHANNELS)
-                .chain(b.chunks_exact_mut(BUS_CHANNELS))
-            {
-                let (l, r) = to_stereo(frames_in.next().expect("writable <= frames"));
-                slot[0] = l;
-                slot[1] = r;
-            }
-            chunk.commit_all();
         }
     }
 }
@@ -295,6 +300,8 @@ mod tests {
         let (input, _) = InputNode::new(
             vec![Some((producer, Arc::clone(&stats)))],
             Arc::new(PeakMeter::new()),
+            Arc::new(InputFx::new()),
+            in_rate,
         );
         let (output, _) = OutputNode::new(
             0,

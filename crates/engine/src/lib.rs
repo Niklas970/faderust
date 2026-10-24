@@ -11,6 +11,7 @@ pub mod apps;
 pub mod backend;
 pub mod drift;
 pub mod engine;
+pub mod fx;
 pub mod lane;
 pub mod matrix;
 pub mod meter;
@@ -20,6 +21,7 @@ pub use engine::{
     Direction, Engine, EngineConfig, EngineError, EngineEvent, InputConfig, LostReason,
     OutputConfig, SlotState,
 };
+pub use fx::{FxSettings, InputFx};
 pub use matrix::MixMatrix;
 pub use meter::PeakMeter;
 

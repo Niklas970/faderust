@@ -4,6 +4,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+use faderust_engine::FxSettings;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -12,6 +13,62 @@ pub struct InputEntry {
     pub label: String,
     /// Device id or part of its name.
     pub device: String,
+    #[serde(default)]
+    pub fx: Fx,
+}
+
+/// Input effects, see [`faderust_engine::FxSettings`].
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Fx {
+    /// High-pass corner in Hz, 0 = off.
+    pub low_cut_hz: f32,
+    pub low_db: f32,
+    pub mid_db: f32,
+    pub high_db: f32,
+    pub gate: bool,
+    pub gate_db: f32,
+}
+
+impl Default for Fx {
+    fn default() -> Self {
+        FxSettings::default().into()
+    }
+}
+
+impl From<FxSettings> for Fx {
+    fn from(s: FxSettings) -> Self {
+        Self {
+            low_cut_hz: s.low_cut_hz,
+            low_db: s.low_db,
+            mid_db: s.mid_db,
+            high_db: s.high_db,
+            gate: s.gate,
+            gate_db: s.gate_db,
+        }
+    }
+}
+
+impl From<Fx> for FxSettings {
+    fn from(f: Fx) -> Self {
+        Self {
+            low_cut_hz: f.low_cut_hz,
+            low_db: f.low_db,
+            mid_db: f.mid_db,
+            high_db: f.high_db,
+            gate: f.gate,
+            gate_db: f.gate_db,
+        }
+    }
+}
+
+/// A named set of fader positions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Preset {
+    pub name: String,
+    /// `gains[input][output]`, like [`Config::gains`].
+    pub gains: Vec<Vec<Gain>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -49,6 +106,22 @@ pub struct Config {
     /// `gains[input][output]`.
     #[serde(default)]
     pub gains: Vec<Vec<Gain>>,
+    #[serde(default)]
+    pub presets: Vec<Preset>,
+}
+
+/// Resizes `gains` to `inputs` × `outputs` (new pairs at 0 dB) and clamps.
+fn fit_gains(gains: &mut Vec<Vec<Gain>>, inputs: usize, outputs: usize) {
+    gains.resize_with(inputs, Vec::new);
+    for row in gains {
+        row.resize_with(outputs, Gain::default);
+        for g in row {
+            if !g.db.is_finite() {
+                g.db = -120.0;
+            }
+            g.db = g.db.clamp(-120.0, 12.0);
+        }
+    }
 }
 
 fn default_buffer_ms() -> u32 {
@@ -59,18 +132,15 @@ fn default_buffer_ms() -> u32 {
 pub const BUFFER_RANGE: std::ops::RangeInclusive<u32> = 10..=500;
 
 impl Config {
-    /// Sizes the gain matrix to the device lists and clamps values.
+    /// Sizes the gain matrices to the device lists and clamps values.
     pub fn normalized(mut self) -> Self {
-        let outputs = self.outputs.len();
-        self.gains.resize_with(self.inputs.len(), Vec::new);
-        for row in &mut self.gains {
-            row.resize_with(outputs, Gain::default);
-            for g in row {
-                if !g.db.is_finite() {
-                    g.db = -120.0;
-                }
-                g.db = g.db.clamp(-120.0, 12.0);
-            }
+        let (inputs, outputs) = (self.inputs.len(), self.outputs.len());
+        fit_gains(&mut self.gains, inputs, outputs);
+        for p in &mut self.presets {
+            fit_gains(&mut p.gains, inputs, outputs);
+        }
+        for i in &mut self.inputs {
+            i.fx = FxSettings::from(i.fx).sanitized().into();
         }
         for o in &mut self.outputs {
             o.buffer_ms = o
@@ -78,6 +148,31 @@ impl Config {
                 .clamp(*BUFFER_RANGE.start(), *BUFFER_RANGE.end());
         }
         self
+    }
+
+    /// Stores the current faders as preset `name`, replacing one of that name.
+    pub fn save_preset(&mut self, name: &str) {
+        let preset = Preset {
+            name: name.to_string(),
+            gains: self.gains.clone(),
+        };
+        match self.presets.iter_mut().find(|p| p.name == name) {
+            Some(p) => *p = preset,
+            None => self.presets.push(preset),
+        }
+    }
+
+    /// Sets the faders from preset `name`. False if there is none.
+    pub fn load_preset(&mut self, name: &str) -> bool {
+        let Some(p) = self.presets.iter().find(|p| p.name == name) else {
+            return false;
+        };
+        self.gains = p.gains.clone();
+        true
+    }
+
+    pub fn delete_preset(&mut self, name: &str) {
+        self.presets.retain(|p| p.name != name);
     }
 
     pub fn load(path: &Path) -> io::Result<Option<Self>> {
@@ -111,6 +206,7 @@ mod tests {
             inputs: vec![InputEntry {
                 label: "Mikro".into(),
                 device: "USB".into(),
+                fx: Fx::default(),
             }],
             outputs: vec![
                 OutputEntry {
@@ -125,6 +221,7 @@ mod tests {
                 },
             ],
             gains: vec![],
+            presets: vec![],
         }
         .normalized()
     }
@@ -151,6 +248,9 @@ mod tests {
             db: -6.5,
             muted: true,
         };
+        c.inputs[0].fx.gate = true;
+        c.inputs[0].fx.low_cut_hz = 80.0;
+        c.save_preset("Abend");
         c.save(&path).unwrap();
         assert_eq!(Config::load(&path).unwrap(), Some(c));
         fs::remove_dir_all(dir).unwrap();
@@ -168,9 +268,35 @@ mod tests {
     }
 
     #[test]
+    fn presets_save_load_and_follow_device_lists() {
+        let mut c = sample();
+        c.gains[0][1].db = -10.0;
+        c.save_preset("Zocken");
+        c.gains[0][1].db = 0.0;
+        c.save_preset("Zocken");
+        assert_eq!(c.presets.len(), 1);
+        c.gains[0][1].db = 3.0;
+        assert!(c.load_preset("Zocken"));
+        assert_eq!(c.gains[0][1].db, 0.0);
+        assert!(!c.load_preset("Nix"));
+
+        // A new output gets 0 dB in the preset too.
+        c.outputs.push(c.outputs[0].clone());
+        let mut c = c.normalized();
+        assert_eq!(c.presets[0].gains[0].len(), 3);
+        c.delete_preset("Zocken");
+        assert!(c.presets.is_empty());
+    }
+
+    #[test]
     fn fills_defaults() {
         let c: Config = toml::from_str("[[outputs]]\nlabel = \"A\"\ndevice = \"x\"\n").unwrap();
         assert_eq!(c.outputs[0].buffer_ms, 60);
         assert!(c.inputs.is_empty());
+        let c: Config =
+            toml::from_str("[[inputs]]\nlabel = \"A\"\ndevice = \"x\"\n[inputs.fx]\ngate = true\n")
+                .unwrap();
+        assert!(c.inputs[0].fx.gate);
+        assert_eq!(c.inputs[0].fx.gate_db, -45.0);
     }
 }

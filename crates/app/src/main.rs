@@ -20,7 +20,7 @@ use tauri::{AppHandle, Manager, State, WindowEvent};
 use tauri_plugin_autostart::ManagerExt;
 
 use audio::Command;
-use config::{Config, InputEntry, OutputEntry};
+use config::{Config, Fx, InputEntry, OutputEntry};
 
 /// Passed by the Windows autostart entry: start in the tray, no window.
 const MINIMIZED_ARG: &str = "--minimized";
@@ -188,6 +188,52 @@ fn set_muted(
     send(&state, Command::SetMuted(input, output, muted))
 }
 
+/// Changes an input's effects while it plays; saved with the next fader save.
+#[tauri::command]
+fn set_fx(input: usize, fx: Fx, state: State<AppState>) -> Result<(), String> {
+    send(&state, Command::SetFx(input, fx))
+}
+
+/// Edits the presets and writes the file right away.
+fn edit_presets(state: &AppState, f: impl FnOnce(&mut Config) -> bool) -> Result<bool, String> {
+    let mut config = state.config.lock().unwrap();
+    let changed = f(&mut config);
+    config
+        .save(&state.path)
+        .map_err(|e| format!("Konfiguration nicht gespeichert: {e}"))?;
+    Ok(changed)
+}
+
+#[tauri::command]
+fn save_preset(name: String, state: State<AppState>) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("Das Preset braucht einen Namen".into());
+    }
+    edit_presets(&state, |c| {
+        c.save_preset(name);
+        true
+    })
+    .map(drop)
+}
+
+#[tauri::command]
+fn load_preset(name: String, state: State<AppState>) -> Result<(), String> {
+    if !edit_presets(&state, |c| c.load_preset(&name))? {
+        return Err(format!("Preset „{name}“ gibt es nicht"));
+    }
+    send(&state, Command::ApplyGains)
+}
+
+#[tauri::command]
+fn delete_preset(name: String, state: State<AppState>) -> Result<(), String> {
+    edit_presets(&state, |c| {
+        c.delete_preset(&name);
+        true
+    })
+    .map(drop)
+}
+
 fn send(state: &AppState, cmd: Command) -> Result<(), String> {
     state
         .audio
@@ -206,6 +252,7 @@ fn initial_config() -> Config {
             .map(|d| InputEntry {
                 label: "Mikrofon".into(),
                 device: d.name,
+                fx: Default::default(),
             })
             .into_iter()
             .collect(),
@@ -219,6 +266,7 @@ fn initial_config() -> Config {
             .into_iter()
             .collect(),
         gains: vec![],
+        presets: vec![],
     }
     .normalized()
 }
@@ -321,7 +369,11 @@ fn main() {
             get_config,
             save_config,
             set_gain,
-            set_muted
+            set_muted,
+            set_fx,
+            save_preset,
+            load_preset,
+            delete_preset
         ])
         .run(tauri::generate_context!())
         .expect("error while running Faderust");

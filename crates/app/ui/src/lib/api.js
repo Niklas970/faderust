@@ -68,11 +68,48 @@ export async function setMuted(input, output, muted) {
   return (await tauri()).invoke("set_muted", { input, output, muted });
 }
 
+/** Changes an input's effects live. */
+export async function setFx(input, fx) {
+  if (!inTauri) return void (mock.config.inputs[input].fx = { ...fx });
+  return (await tauri()).invoke("set_fx", { input, fx });
+}
+
+export async function savePreset(name) {
+  if (!inTauri) return mock.savePreset(name);
+  return (await tauri()).invoke("save_preset", { name });
+}
+
+export async function loadPreset(name) {
+  if (!inTauri) return mock.loadPreset(name);
+  return (await tauri()).invoke("load_preset", { name });
+}
+
+export async function deletePreset(name) {
+  if (!inTauri) return void (mock.config.presets = mock.config.presets.filter((p) => p.name !== name));
+  return (await tauri()).invoke("delete_preset", { name });
+}
+
+/** Calls `cb({ level, text })` for device changes and errors. */
+export async function onNotice(cb) {
+  if (!inTauri) return mock.subscribeNotices(cb);
+  return (await tauri()).listen("notice", (e) => cb(e.payload));
+}
+
 /** Calls `cb(state)` about 20 times a second. Returns an unsubscribe function. */
 export async function onState(cb) {
   if (!inTauri) return mock.subscribe(cb);
   const unlisten = await (await tauri()).listen("state", (e) => cb(e.payload));
   return unlisten;
+}
+
+/** Effects that change nothing; mirrors `FxSettings::default()`. */
+export function defaultFx() {
+  return { lowCutHz: 0, lowDb: 0, midDb: 0, highDb: 0, gate: false, gateDb: -45 };
+}
+
+/** True if any effect is switched on. */
+export function fxActive(fx) {
+  return !!fx && (fx.lowCutHz > 0 || fx.lowDb !== 0 || fx.midDb !== 0 || fx.highDb !== 0 || fx.gate);
 }
 
 const mock = {
@@ -90,15 +127,16 @@ const mock = {
   },
   config: {
     inputs: [
-      { label: "Mikro", device: "Mikrofon" },
-      { label: "PC", device: "CABLE Output" },
-      { label: "PS5", device: "Line In" },
+      { label: "Mikro", device: "Mikrofon", fx: { lowCutHz: 80, lowDb: 0, midDb: 2, highDb: 0, gate: true, gateDb: -45 } },
+      { label: "PC", device: "CABLE Output", fx: defaultFx() },
+      { label: "PS5", device: "Line In", fx: defaultFx() },
     ],
     outputs: [
       { label: "PS5", device: "USB Sound Card", bufferMs: 30 },
       { label: "Kopfhörer", device: "Galaxy Buds", bufferMs: 80 },
       { label: "Box", device: "JBL", bufferMs: 80 },
     ],
+    presets: [{ name: "Zocken", gains: [] }],
   },
   gains: [],
   autostart: false,
@@ -118,6 +156,26 @@ const mock = {
   setAppOutput(pids, device) {
     const app = this.apps.apps.find((a) => a.pids[0] === pids[0]);
     if (app) app.device = device;
+  },
+  savePreset(name) {
+    this.resize();
+    const preset = { name, gains: structuredClone(this.gains) };
+    const i = this.config.presets.findIndex((p) => p.name === name);
+    if (i >= 0) this.config.presets[i] = preset;
+    else this.config.presets.push(preset);
+  },
+  loadPreset(name) {
+    const p = this.config.presets.find((p) => p.name === name);
+    if (!p) throw new Error(`Preset „${name}“ gibt es nicht`);
+    this.gains = structuredClone(p.gains);
+    this.resize();
+  },
+  subscribeNotices(cb) {
+    const id = setTimeout(
+      () => cb({ level: "warn", text: "„Box“ getrennt. Faderust verbindet neu, sobald das Gerät wieder da ist." }),
+      1500,
+    );
+    return () => clearTimeout(id);
   },
   setConfig(config) {
     this.config = structuredClone(config);
