@@ -19,7 +19,7 @@ Status: Planung abgeschlossen, Repo noch leer. Stand 2026-10-24.
 |---|---|
 | Name | **Faderust** (Rustmix war vergeben). Vor dem Anlegen auf GitHub und crates.io prüfen |
 | Repo | öffentlich, `Niklas970/faderust` (öffentliche Repos haben kostenlose Actions-Minuten). Vorher sicherstellen, dass keine Zugangsdaten im Verlauf stehen |
-| Lizenz | `MIT OR Apache-2.0` (Dateien `LICENSE-MIT`, `LICENSE-APACHE`). Alternative GPL-3.0, falls geschlossene Forks verhindert werden sollen. Keine Rechtsberatung. Abhängigkeiten mit `cargo-deny` prüfen |
+| Lizenz | MIT (Datei `LICENSE`). Keine Rechtsberatung. Abhängigkeiten mit `cargo-deny` prüfen (`deny.toml`) |
 | Logo | Drei Fader auf verschiedenen Höhen, Kupfer (Rust) mit türkisem Signalpunkt. Datei `assets/logo.svg` |
 | Treiber | Kein eigener Kernel-Treiber. Virtuelle Geräte über VB-Cable (nicht mitliefern, nur verlinken, eigene Lizenz) |
 
@@ -92,9 +92,7 @@ faderust/
 ├─ assets/logo.svg
 ├─ docs/PLAN.md
 ├─ .github/workflows/ci.yml   # cargo fmt, clippy, test (windows-latest)
-├─ CLAUDE.md
-├─ LICENSE-MIT
-├─ LICENSE-APACHE
+├─ LICENSE
 └─ README.md
 ```
 

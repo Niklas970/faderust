@@ -8,3 +8,8 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+
+[dev-dependencies]
+# E0 prototype only (examples/e0_passthrough.rs); the engine itself will talk to WASAPI directly.
+cpal = "0.18"
+rtrb = "0.4"
