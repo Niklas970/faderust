@@ -187,6 +187,7 @@
     </div>
     {#if levelDb != null}<Meter db={meterDb} />{/if}
   </div>
+  <div class="readout" class:off={isOff || muted}>{scale.format(local)} {unit === "pct" ? "%" : "dB"}</div>
   <button class="mute" class:on={muted} aria-pressed={muted} aria-label={`${label} stumm`} onclick={() => onMute(!muted)}
     >Mute</button
   >
@@ -285,85 +286,92 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 55px;
-    width: 6px;
-    background: var(--well);
-    border-radius: 3px;
+    left: 53px;
+    width: 10px;
+    background: #050505;
+    border-radius: 5px;
     box-shadow:
-      inset 0 1px 3px rgb(0 0 0 / 0.8),
-      0 0 0 1px var(--border);
-    overflow: hidden;
+      inset 0 2px 4px #000,
+      0 0 0 1px #2c2f33;
   }
+  /* Glowing copper bar up to the cap; grey when muted. */
   .fill {
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(to top, color-mix(in srgb, var(--copper) 55%, black), var(--copper));
+    left: 3px;
+    right: 3px;
+    bottom: 3px;
+    max-height: calc(100% - 6px);
+    border-radius: 2px;
+    background: var(--copper);
+    box-shadow: 0 0 8px rgb(217 131 79 / 0.6);
   }
   .fill.muted {
-    background: var(--border);
+    background: #555a61;
+    box-shadow: none;
   }
-  /* Hardware-style cap: shaded body, grip ridges, gain in a recessed window. */
+  /* Graphite cap with copper edges and a glowing index line; gain in a window. */
   .cap {
     position: absolute;
     left: 29px;
     width: 58px;
-    height: 38px;
+    height: 40px;
     transform: translateY(50%);
     display: grid;
     place-items: center;
-    background: linear-gradient(
-      to bottom,
-      #646b74 0%,
-      #464c53 18%,
-      #33383e 50%,
-      #2a2e33 82%,
-      #3a3f45 100%
-    );
-    border: 1px solid #121417;
+    background:
+      repeating-linear-gradient(90deg, rgb(255 255 255 / 0.035) 0 1px, transparent 1px 2px),
+      linear-gradient(#55595f, #2f3338 45%, #23262a 55%, #33373c);
+    border: 1px solid #0c0d0f;
+    border-left: 3px solid var(--copper);
+    border-right: 3px solid var(--copper);
     border-radius: 4px;
     box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.22),
-      inset 0 -1px 0 rgb(0 0 0 / 0.4),
-      0 3px 6px rgb(0 0 0 / 0.55);
+      inset 0 1px 0 rgb(255 255 255 / 0.25),
+      0 4px 8px rgb(0 0 0 / 0.6);
     pointer-events: none;
     transition: bottom 40ms linear;
   }
-  .cap::before,
   .cap::after {
     content: "";
     position: absolute;
-    left: 8px;
-    right: 8px;
+    left: -3px;
+    right: -3px;
+    top: 50%;
     height: 2px;
-    border-top: 1px solid rgb(0 0 0 / 0.45);
-    border-bottom: 1px solid rgb(255 255 255 / 0.12);
+    margin-top: -1px;
+    background: var(--copper-light);
+    box-shadow: 0 0 6px var(--copper);
   }
-  .cap::before {
-    top: 4px;
+  .cap.off {
+    border-left-color: #555a61;
+    border-right-color: #555a61;
   }
-  .cap::after {
-    bottom: 4px;
+  .cap.off::after {
+    background: #858b93;
+    box-shadow: none;
   }
   .value {
-    min-width: 42px;
-    padding: 2px 3px;
+    position: relative;
+    z-index: 1;
+    min-width: 44px;
+    padding: 3px 4px;
     text-align: center;
     font-family: var(--mono);
     font-size: 12px;
     font-weight: 700;
     line-height: 1;
-    color: #e9ecef;
-    background: #0d0e10;
+    color: #f1f3f5;
+    background: #0b0c0e;
     border-radius: 2px;
-    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.9);
+    box-shadow:
+      inset 0 1px 2px #000,
+      0 1px 0 rgb(255 255 255 / 0.15);
   }
   .cap.off .value {
     color: var(--muted);
   }
   .track:hover .cap {
-    border-color: #000;
+    filter: brightness(1.12);
   }
   .track:focus-visible .cap,
   .dragging .cap {
@@ -376,27 +384,60 @@
   .body :global(.meter.vertical) {
     width: 14px;
   }
+  .readout {
+    margin-top: -6px;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--copper-light);
+  }
+  .readout.off {
+    color: var(--muted);
+  }
+  /* Lit keycap: an LED strip on top glows red when muted. */
   .mute {
+    position: relative;
     width: 72px;
-    height: 28px;
-    padding: 0;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: linear-gradient(to bottom, var(--panel-2), var(--panel));
+    height: 32px;
+    padding: 6px 0 0;
+    border-radius: 4px;
+    border: 1px solid #101113;
+    background: linear-gradient(#3b3f45, #2a2d32 60%, #24272b);
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--muted);
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+    color: #aeb4bb;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.14),
+      0 2px 3px rgb(0 0 0 / 0.5);
+  }
+  .mute::before {
+    content: "";
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    width: 16px;
+    height: 3px;
+    margin-left: -8px;
+    border-radius: 2px;
+    background: #15171a;
+    box-shadow: inset 0 1px 1px #000;
   }
   .mute:hover {
     color: var(--text);
   }
+  .mute:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1);
+  }
   .mute.on {
-    background: var(--danger);
-    border-color: var(--danger);
     color: #fff;
-    box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.4);
+    background: linear-gradient(#e8665f, #c8423b 60%, #b03630);
+    border-color: #5a1a17;
+  }
+  .mute.on::before {
+    background: #ffd2cf;
+    box-shadow: 0 0 6px #ff6b62;
   }
 </style>
