@@ -33,22 +33,34 @@
       : [current, ...names];
   }
 
-  // Keep the gain matrix (gains[input][output]) in step with the lists.
+  // Keep the gain matrices (gains[input][output], also in every preset) in
+  // step with the lists.
+  const matrices = () => [draft.gains, ...(draft.presets ?? []).map((p) => p.gains)];
+  const swap = (list, a, b) => ([list[a], list[b]] = [list[b], list[a]]);
+
   function addInput() {
     draft.inputs.push({ label: `Eingang ${draft.inputs.length + 1}`, device: devices.inputs[0].name });
-    draft.gains.push(draft.outputs.map(() => ({ db: 0, muted: false })));
+    for (const m of matrices()) m.push(draft.outputs.map(() => ({ db: 0, muted: false })));
   }
   function removeInput(i) {
     draft.inputs.splice(i, 1);
-    draft.gains.splice(i, 1);
+    for (const m of matrices()) m.splice(i, 1);
+  }
+  function moveInput(i, by) {
+    swap(draft.inputs, i, i + by);
+    for (const m of matrices()) if (m[i] && m[i + by]) swap(m, i, i + by);
   }
   function addOutput() {
     draft.outputs.push({ label: `Ausgang ${draft.outputs.length + 1}`, device: devices.outputs[0].name, bufferMs: 60 });
-    for (const row of draft.gains) row.push({ db: 0, muted: false });
+    for (const m of matrices()) for (const row of m) row.push({ db: 0, muted: false });
   }
   function removeOutput(o) {
     draft.outputs.splice(o, 1);
-    for (const row of draft.gains) row.splice(o, 1);
+    for (const m of matrices()) for (const row of m) row.splice(o, 1);
+  }
+  function moveOutput(o, by) {
+    swap(draft.outputs, o, o + by);
+    for (const m of matrices()) for (const row of m) if (o + by < row.length) swap(row, o, o + by);
   }
 
   function selected(list, current) {
@@ -71,6 +83,18 @@
       >
         {#each options(devices.inputs, input.device) as name}<option>{name}</option>{/each}
       </select>
+      <span class="order">
+        <button class="icon" title="Nach oben" aria-label="Nach oben" disabled={i === 0} onclick={() => moveInput(i, -1)}
+          >↑</button
+        >
+        <button
+          class="icon"
+          title="Nach unten"
+          aria-label="Nach unten"
+          disabled={i === draft.inputs.length - 1}
+          onclick={() => moveInput(i, 1)}>↓</button
+        >
+      </span>
       <button class="icon" title="Entfernen" onclick={() => removeInput(i)}>✕</button>
     </div>
   {/each}
@@ -97,6 +121,18 @@
         <input type="number" min="10" max="500" step="10" bind:value={output.bufferMs} />
         ms
       </label>
+      <span class="order">
+        <button class="icon" title="Nach links" aria-label="Nach links" disabled={o === 0} onclick={() => moveOutput(o, -1)}
+          >←</button
+        >
+        <button
+          class="icon"
+          title="Nach rechts"
+          aria-label="Nach rechts"
+          disabled={o === draft.outputs.length - 1}
+          onclick={() => moveOutput(o, 1)}>→</button
+        >
+      </span>
       <button class="icon" title="Entfernen" onclick={() => removeOutput(o)}>✕</button>
     </div>
   {/each}
@@ -195,6 +231,13 @@
   button:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+  .order {
+    display: flex;
+    gap: 2px;
+  }
+  .order .icon {
+    padding: 6px 8px;
   }
   .icon {
     padding: 6px 10px;
