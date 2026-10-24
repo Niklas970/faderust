@@ -6,7 +6,16 @@
   import FxDialog from "./lib/FxDialog.svelte";
   import Presets from "./lib/Presets.svelte";
   import Notices from "./lib/Notices.svelte";
-  import { fxActive, getConfig, onState, saveConfig, setGain, setMuted } from "./lib/api.js";
+  import {
+    fxActive,
+    getConfig,
+    getVersion,
+    onState,
+    saveConfig,
+    setGain,
+    setMuted,
+    windowAction,
+  } from "./lib/api.js";
 
   let state = $state(null);
   let config = $state(null);
@@ -16,6 +25,8 @@
   // Index of the input whose effects are open.
   let fxOpen = $state(null);
   let error = $state("");
+  let version = $state("");
+  getVersion().then((v) => (version = v));
 
   onMount(() => {
     let unlisten;
@@ -61,10 +72,16 @@
 </script>
 
 <div class="app">
-  <header class="top">
-    <img src="/logo.svg" alt="" width="28" height="28" />
-    <h1>Faderust</h1>
-    <div class="inputs">
+  <!-- Own title bar (the window has no decorations): drag on empty space,
+       double-click to maximize. -->
+  <header class="titlebar" data-tauri-drag-region>
+    <div class="brand" data-tauri-drag-region>
+      <img src="/logo.svg" alt="" width="22" height="22" data-tauri-drag-region />
+      <span class="name" data-tauri-drag-region>Faderust</span>
+      {#if version}<span class="version" data-tauri-drag-region>v{version}</span>{/if}
+    </div>
+
+    <div class="inputs" data-tauri-drag-region>
       {#each state?.inputs ?? [] as input, i}
         <button
           class="chip"
@@ -77,9 +94,46 @@
         </button>
       {/each}
     </div>
-    <button onclick={() => (presetsOpen = true)}>Presets</button>
-    <button onclick={openApps}>Programme</button>
-    <button class="settings" onclick={openSettings}>Geräte</button>
+
+    <nav class="nav">
+      <button onclick={() => (presetsOpen = true)} class:active={presetsOpen}>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" /></svg>Presets
+      </button>
+      <button onclick={openApps} class:active={appsOpen}>
+        <svg viewBox="0 0 16 16" aria-hidden="true"
+          ><rect x="2" y="2" width="5" height="5" rx="1" /><rect x="9" y="2" width="5" height="5" rx="1" /><rect
+            x="2"
+            y="9"
+            width="5"
+            height="5"
+            rx="1"
+          /><rect x="9" y="9" width="5" height="5" rx="1" /></svg
+        >Programme
+      </button>
+      <button onclick={openSettings} class:active={settingsOpen}>
+        <svg viewBox="0 0 16 16" aria-hidden="true"
+          ><path d="M4 2v12M8 2v12M12 2v12" /><rect x="2.5" y="8" width="3" height="2.5" rx=".6" /><rect
+            x="6.5"
+            y="4"
+            width="3"
+            height="2.5"
+            rx=".6"
+          /><rect x="10.5" y="10" width="3" height="2.5" rx=".6" /></svg
+        >Geräte
+      </button>
+    </nav>
+
+    <div class="window">
+      <button title="Minimieren" aria-label="Minimieren" onclick={() => windowAction("minimize")}>
+        <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 5h8" /></svg>
+      </button>
+      <button title="Maximieren" aria-label="Maximieren" onclick={() => windowAction("maximize")}>
+        <svg viewBox="0 0 10 10" aria-hidden="true"><rect x="1" y="1" width="8" height="8" rx="1" /></svg>
+      </button>
+      <button class="close" title="In den Tray" aria-label="In den Tray" onclick={() => windowAction("close")}>
+        <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" /></svg>
+      </button>
+    </div>
   </header>
 
   {#if error}<div class="error">{error}</div>{/if}
@@ -126,28 +180,114 @@
 
 <style>
   .app {
-    display: grid;
-    grid-template-rows: auto auto 1fr;
+    display: flex;
+    flex-direction: column;
     height: 100vh;
   }
-  .top {
+  .titlebar {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
+    gap: 12px;
+    height: 48px;
+    padding-left: 14px;
+    background: var(--panel);
     border-bottom: 1px solid var(--border);
+    user-select: none;
   }
-  h1 {
-    margin: 0;
-    font-size: 16px;
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .brand img {
+    border-radius: 5px;
+  }
+  .name {
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+  }
+  .version {
+    padding: 1px 7px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .nav {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .nav button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px;
+    border: 0;
+    border-radius: 7px;
+    background: none;
+    color: var(--muted);
     font-weight: 600;
+  }
+  .nav button:hover,
+  .nav button.active {
+    background: var(--panel);
+    color: var(--text);
+  }
+  .nav svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+  .nav button.active svg,
+  .nav button:hover svg {
+    stroke: var(--copper);
+  }
+  .window {
+    display: flex;
+    align-self: stretch;
+  }
+  .window button {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: var(--muted);
+  }
+  .window button:hover {
+    background: var(--panel-2);
+    color: var(--text);
+  }
+  .window button.close:hover {
+    background: #c42b1c;
+    color: #fff;
+  }
+  .window svg {
+    width: 10px;
+    height: 10px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.1;
   }
   .inputs {
     display: flex;
+    align-self: stretch;
+    align-items: center;
     gap: 6px;
     flex: 1;
     overflow: hidden;
-    margin-left: 12px;
+    margin-left: 8px;
   }
   .chip {
     display: inline-flex;
@@ -195,6 +335,7 @@
     color: #fff;
   }
   main {
+    flex: 1;
     display: flex;
     gap: 16px;
     padding: 16px;
@@ -203,6 +344,7 @@
     align-items: stretch;
   }
   .empty {
+    flex: 1;
     display: grid;
     place-content: center;
     justify-items: center;

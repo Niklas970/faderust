@@ -11,6 +11,23 @@ async function tauri() {
   return { invoke: core.invoke, listen: event.listen };
 }
 
+/** App version, e.g. "0.2.0". */
+export async function getVersion() {
+  if (!inTauri) return __APP_VERSION__;
+  const { getVersion } = await import("@tauri-apps/api/app");
+  return getVersion();
+}
+
+/** Title bar buttons; closing only hides the window (it keeps running in the tray). */
+export async function windowAction(action) {
+  if (!inTauri) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  const w = getCurrentWindow();
+  if (action === "minimize") return w.minimize();
+  if (action === "maximize") return w.toggleMaximize();
+  if (action === "close") return w.close();
+}
+
 export async function getDevices() {
   if (!inTauri) return mock.devices;
   return (await tauri()).invoke("get_devices");
