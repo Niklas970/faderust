@@ -1168,7 +1168,7 @@ dependencies = [
 
 [[package]]
 name = "faderust"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "faderust-engine",
  "serde",
@@ -1184,13 +1184,14 @@ dependencies = [
 
 [[package]]
 name = "faderust-engine"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "audioadapter-buffers",
  "cpal",
  "rtrb",
  "rubato",
  "windows",
+ "windows-core",
 ]
 
 [[package]]

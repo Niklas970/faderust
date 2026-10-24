@@ -4,7 +4,7 @@
   import Fader from "./Fader.svelte";
 
   /** Windows volume of every program playing audio, one fader each. */
-  let { onRouting } = $props();
+  let { inputs = [], onRouting } = $props();
 
   let data = $state(null);
   let error = $state("");
@@ -36,6 +36,7 @@
 
   /** Where the program's sound ends up: through Faderust (a cable) or straight out. */
   function route(app) {
+    if (inputs.some((i) => i.device === `app:${app.exe.toLowerCase()}`)) return { text: "als Eingang", via: true };
     const device = data.devices.find((d) => d.id === app.device);
     if (device?.cable) return { text: "über Faderust", via: true };
     return { text: device ? "direkt" : "Windows-Standard", via: false };

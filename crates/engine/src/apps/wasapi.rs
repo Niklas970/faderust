@@ -219,10 +219,10 @@ impl SystemAudio for WasapiRouter {
 
 /// COM for the current thread, released again on drop. Callers create their
 /// COM objects after this guard so those are released first.
-struct Com(bool);
+pub(crate) struct Com(bool);
 
 impl Com {
-    fn init() -> Result<Self> {
+    pub(crate) fn init() -> Result<Self> {
         let hr = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
         if hr.is_ok() {
             Ok(Self(true))

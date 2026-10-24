@@ -13,6 +13,31 @@ use super::{
 /// Frames converted per step between device samples and `f32`.
 const CONVERT_FRAMES: usize = 1024;
 
+/// Ids of programs recorded as inputs: `app:` and the executable, e.g.
+/// `app:spotify.exe`. They are listed with the input devices while the
+/// program plays audio (Windows only).
+pub const PROGRAM_PREFIX: &str = "app:";
+
+/// A device stream, or on Windows a program recording.
+pub enum CpalStream {
+    Device(Stream),
+    #[cfg(windows)]
+    Program(crate::apps::capture::ProgramCapture),
+}
+
+#[cfg(windows)]
+fn program_inputs() -> Vec<DeviceInfo> {
+    // No programs is fine: older Windows, or nothing playing.
+    crate::apps::capture::programs()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|a| DeviceInfo {
+            id: format!("{PROGRAM_PREFIX}{}", a.exe.to_lowercase()),
+            name: format!("Programm: {}", a.name),
+        })
+        .collect()
+}
+
 pub struct CpalBackend {
     host: Host,
 }
@@ -62,15 +87,19 @@ fn config(format: StreamFormat) -> StreamConfig {
 }
 
 impl AudioBackend for CpalBackend {
-    type Stream = Stream;
+    type Stream = CpalStream;
 
     fn input_devices(&self) -> Result<Vec<DeviceInfo>, BackendError> {
-        Ok(self
+        #[allow(unused_mut)]
+        let mut list: Vec<DeviceInfo> = self
             .host
             .input_devices()
             .map_err(err)?
             .filter_map(|d| info(&d))
-            .collect())
+            .collect();
+        #[cfg(windows)]
+        list.extend(program_inputs());
+        Ok(list)
     }
 
     fn output_devices(&self) -> Result<Vec<DeviceInfo>, BackendError> {
@@ -91,6 +120,13 @@ impl AudioBackend for CpalBackend {
     }
 
     fn input_format(&self, id: &str) -> Result<StreamFormat, BackendError> {
+        #[cfg(windows)]
+        if id.starts_with(PROGRAM_PREFIX) {
+            return Ok(StreamFormat {
+                sample_rate: crate::apps::capture::SAMPLE_RATE,
+                channels: crate::apps::capture::CHANNELS,
+            });
+        }
         let c = self.device(id)?.default_input_config().map_err(err)?;
         Ok(StreamFormat {
             sample_rate: c.sample_rate(),
@@ -112,7 +148,13 @@ impl AudioBackend for CpalBackend {
         format: StreamFormat,
         data: InputCallback,
         error: ErrorCallback,
-    ) -> Result<Stream, BackendError> {
+    ) -> Result<CpalStream, BackendError> {
+        #[cfg(windows)]
+        if let Some(exe) = id.strip_prefix(PROGRAM_PREFIX) {
+            return crate::apps::capture::open(exe, data, error)
+                .map(CpalStream::Program)
+                .map_err(|e| BackendError(e.0));
+        }
         let device = self.device(id)?;
         let sample_format = device.default_input_config().map_err(err)?.sample_format();
         let stream = match sample_format {
@@ -123,7 +165,7 @@ impl AudioBackend for CpalBackend {
             other => return Err(BackendError(format!("unsupported sample format {other:?}"))),
         }?;
         stream.play().map_err(err)?;
-        Ok(stream)
+        Ok(CpalStream::Device(stream))
     }
 
     fn open_output(
@@ -132,7 +174,7 @@ impl AudioBackend for CpalBackend {
         format: StreamFormat,
         data: OutputCallback,
         error: ErrorCallback,
-    ) -> Result<Stream, BackendError> {
+    ) -> Result<CpalStream, BackendError> {
         let device = self.device(id)?;
         let sample_format = device.default_output_config().map_err(err)?.sample_format();
         let stream = match sample_format {
@@ -143,7 +185,7 @@ impl AudioBackend for CpalBackend {
             other => return Err(BackendError(format!("unsupported sample format {other:?}"))),
         }?;
         stream.play().map_err(err)?;
-        Ok(stream)
+        Ok(CpalStream::Device(stream))
     }
 }
 

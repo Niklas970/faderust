@@ -28,7 +28,7 @@
   // keep it selectable.
   function options(list, current) {
     const names = list.map((d) => d.name);
-    return names.some((n) => n.toLowerCase().includes(current.toLowerCase())) || !current
+    return list.some((d) => d.id === current) || names.some((n) => n.toLowerCase().includes(current.toLowerCase())) || !current
       ? names
       : [current, ...names];
   }
@@ -64,7 +64,11 @@
   }
 
   function selected(list, current) {
-    return list.find((d) => d.name.toLowerCase().includes(current.toLowerCase()))?.name ?? current;
+    return (
+      list.find((d) => d.id === current)?.name ??
+      list.find((d) => d.name.toLowerCase().includes(current.toLowerCase()))?.name ??
+      current
+    );
   }
 </script>
 

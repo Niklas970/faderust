@@ -96,9 +96,9 @@
   }
 
   // A virtual cable's capture side as a new input, 0 dB on every output.
-  async function addCableInput(device) {
+  async function addInput(device, label = "PC") {
     const next = await getConfig();
-    next.inputs.push({ label: "PC", device });
+    next.inputs.push({ label, device });
     next.gains.push(next.outputs.map(() => ({ db: 0, muted: false })));
     try {
       await saveConfig(next);
@@ -219,7 +219,7 @@
           onMute={setMuted}
         />
       {/each}
-      <ProgramColumn onRouting={openApps} />
+      <ProgramColumn inputs={config?.inputs ?? []} onRouting={openApps} />
     </main>
   {:else if state}
     <div class="empty">
@@ -240,7 +240,7 @@
 <Notices />
 
 {#if appsOpen && config}
-  <Apps inputs={config.inputs} onAddInput={addCableInput} onClose={() => (appsOpen = false)} />
+  <Apps inputs={config.inputs} onAddInput={addInput} onClose={() => (appsOpen = false)} />
 {/if}
 
 {#if themeOpen}
