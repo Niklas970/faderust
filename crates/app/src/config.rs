@@ -297,11 +297,11 @@ mod tests {
             toml::from_str("[[inputs]]\nlabel = \"A\"\ndevice = \"x\"\n[inputs.fx]\ngate = true\n")
                 .unwrap();
         assert!(c.inputs[0].fx.gate);
+        assert_eq!(c.inputs[0].fx.gate_db, -45.0);
         // 0.3.8 had a per-output setting; old files still load.
         let c: Config =
             toml::from_str("[[outputs]]\nlabel = \"A\"\ndevice = \"x\"\nreleaseAfterS = 30\n")
                 .unwrap();
         assert_eq!(c.outputs[0].device, "x");
-        assert_eq!(c.inputs[0].fx.gate_db, -45.0);
     }
 }
