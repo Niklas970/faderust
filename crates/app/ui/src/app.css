@@ -1,0 +1,60 @@
+:root {
+  color-scheme: dark;
+  --bg: #11171c;
+  --panel: #171e24;
+  --panel-2: #1d262e;
+  --border: #2b3641;
+  --text: #e6ecef;
+  --muted: #8a99a6;
+  --copper: #ec8d5b;
+  --copper-strong: #f3a273;
+  --teal: #4fd1c0;
+  --danger: #ef6b6b;
+  --radius: 12px;
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg: #eef2f4;
+    --panel: #ffffff;
+    --panel-2: #f5f7f8;
+    --border: #cfd7dc;
+    --text: #1b2329;
+    --muted: #5d6b76;
+    --copper: #b4531c;
+    --copper-strong: #9a4415;
+    --teal: #0f766e;
+    --danger: #c53b3b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
