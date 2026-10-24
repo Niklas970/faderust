@@ -4,6 +4,7 @@
   import Settings from "./lib/Settings.svelte";
   import Apps from "./lib/Apps.svelte";
   import WindowsAudio from "./lib/WindowsAudio.svelte";
+  import ProgramColumn from "./lib/ProgramColumn.svelte";
   import FxDialog from "./lib/FxDialog.svelte";
   import Presets from "./lib/Presets.svelte";
   import Notices from "./lib/Notices.svelte";
@@ -157,6 +158,7 @@
           onMute={setMuted}
         />
       {/each}
+      <ProgramColumn onRouting={openApps} />
     </main>
   {:else if state}
     <div class="empty">
@@ -198,7 +200,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    height: 40px;
+    height: 48px;
     padding-left: 12px;
     background: var(--panel);
     border-bottom: 1px solid var(--border);
@@ -225,39 +227,39 @@
   }
   .nav {
     display: flex;
-    align-self: stretch;
+    gap: 6px;
   }
   .nav button {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 0 12px;
-    border: 0;
-    border-bottom: 2px solid transparent;
-    border-radius: 0;
-    background: none;
-    color: var(--muted);
+    gap: 7px;
+    height: 32px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--panel-2);
+    color: var(--text);
     font-size: 13px;
+    font-weight: 600;
   }
   .nav button:hover {
-    color: var(--text);
-    background: var(--panel-2);
+    border-color: var(--copper);
   }
   .nav button.active {
-    color: var(--text);
-    border-bottom-color: var(--copper);
+    background: var(--copper);
+    border-color: var(--copper);
+    color: #fff;
   }
   .nav svg {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     fill: none;
-    stroke: currentColor;
-    stroke-width: 1.5;
+    stroke: var(--copper);
+    stroke-width: 1.7;
     stroke-linejoin: round;
   }
-  .nav button.active svg,
-  .nav button:hover svg {
-    stroke: var(--copper);
+  .nav button.active svg {
+    stroke: currentColor;
   }
   .window {
     display: flex;

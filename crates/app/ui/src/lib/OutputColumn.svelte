@@ -26,11 +26,11 @@
     {#each inputs as input, i}
       <Fader
         label={input.label}
-        db={gains[i]?.[index]?.db ?? 0}
+        value={gains[i]?.[index]?.db ?? 0}
         muted={gains[i]?.[index]?.muted ?? false}
         levelDb={input.levelDb}
         connected={input.connected}
-        onGain={(db) => onGain(i, index, db)}
+        onChange={(db) => onGain(i, index, db)}
         onMute={(m) => onMute(i, index, m)}
       />
     {/each}
@@ -131,7 +131,7 @@
   }
   .master .label {
     padding: 3px 6px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -141,9 +141,9 @@
     display: grid;
     place-items: center;
     width: 34px;
-    height: 22px;
+    height: 26px;
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 12px;
     color: var(--teal);
     background: var(--well);
     border: 1px solid var(--border);
