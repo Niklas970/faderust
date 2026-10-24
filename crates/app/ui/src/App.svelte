@@ -9,6 +9,8 @@
   import Presets from "./lib/Presets.svelte";
   import Notices from "./lib/Notices.svelte";
   import {
+    checkUpdate,
+    installUpdate,
     fxActive,
     getConfig,
     getVersion,
@@ -30,6 +32,24 @@
   let error = $state("");
   let version = $state("");
   getVersion().then((v) => (version = v));
+
+  // Look for a new release shortly after start; offline or rate-limited is fine.
+  let update = $state(null);
+  let updating = $state(null); // download progress 0…1 while installing
+  onMount(() => {
+    const id = setTimeout(() => checkUpdate().then((u) => (update = u), () => {}), 3000);
+    return () => clearTimeout(id);
+  });
+
+  async function runUpdate() {
+    updating = 0;
+    try {
+      await installUpdate((p) => (updating = p));
+    } catch (e) {
+      error = `Update fehlgeschlagen: ${e}`;
+      updating = null;
+    }
+  }
 
   onMount(() => {
     let unlisten;
@@ -82,6 +102,11 @@
       <img src="/logo.svg" alt="" width="22" height="22" data-tauri-drag-region />
       <span class="name" data-tauri-drag-region>Faderust</span>
       {#if version}<span class="version" data-tauri-drag-region>v{version}</span>{/if}
+      {#if update}
+        <button class="update" onclick={runUpdate} disabled={updating !== null} title="Herunterladen und installieren">
+          {updating === null ? `Update auf ${update.version}` : `Lädt … ${Math.round(updating * 100)} %`}
+        </button>
+      {/if}
     </div>
 
     <div class="inputs" data-tauri-drag-region>
@@ -224,6 +249,24 @@
     font-family: var(--mono);
     font-size: 11px;
     color: var(--muted);
+  }
+  .update {
+    height: 26px;
+    margin-left: 6px;
+    padding: 0 10px;
+    border: 1px solid var(--teal);
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--teal);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .update:hover:not(:disabled) {
+    background: var(--teal);
+    color: var(--bg);
+  }
+  .update:disabled {
+    cursor: progress;
   }
   .nav {
     display: flex;

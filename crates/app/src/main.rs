@@ -392,6 +392,7 @@ fn main() {
         // Starting Faderust again (e.g. from the Start menu while it runs in
         // the tray) shows the running window instead of opening the devices
         // a second time.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             show_main(app)
         }))
