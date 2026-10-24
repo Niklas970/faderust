@@ -25,6 +25,9 @@ const SAVE_EVERY: Duration = Duration::from_secs(2);
 pub enum Command {
     SetGain(usize, usize, f32),
     SetMuted(usize, usize, bool),
+    /// Moves a fader by a dB step (Stream Deck dials and keys).
+    AddGain(usize, usize, f32),
+    ToggleMuted(usize, usize),
     SetFx(usize, Fx),
     /// The gains in the config changed as a whole (preset loaded).
     ApplyGains,
@@ -232,6 +235,23 @@ fn run(app: AppHandle, config: Arc<Mutex<Config>>, path: PathBuf, rx: Receiver<C
                                 dirty_since.get_or_insert_with(Instant::now);
                             }
                         }
+                        Command::AddGain(i, o, delta) => {
+                            let step = |g: &mut crate::config::Gain| g.db = step_db(g.db, delta);
+                            if let Some(g) = gain_mut(&config, i, o, step) {
+                                if let Some(e) = &engine {
+                                    e.matrix.set_gain_db(i, o, g.db);
+                                }
+                                dirty_since.get_or_insert_with(Instant::now);
+                            }
+                        }
+                        Command::ToggleMuted(i, o) => {
+                            if let Some(g) = gain_mut(&config, i, o, |g| g.muted = !g.muted) {
+                                if let Some(e) = &engine {
+                                    e.matrix.set_muted(i, o, g.muted);
+                                }
+                                dirty_since.get_or_insert_with(Instant::now);
+                            }
+                        }
                     }
                 }
             }
@@ -266,6 +286,17 @@ fn run(app: AppHandle, config: Arc<Mutex<Config>>, path: PathBuf, rx: Receiver<C
             }
             dirty_since = None;
         }
+    }
+}
+
+/// One dial click or key press on a fader, within the UI's range: below
+/// -60 dB is off, and off comes back at -60 dB.
+fn step_db(db: f32, delta: f32) -> f32 {
+    let next = db.max(-60.0) + delta;
+    if next < -60.0 {
+        -120.0
+    } else {
+        next.min(6.0)
     }
 }
 
@@ -366,5 +397,19 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
         outputs,
         gains: config.gains.clone(),
         lanes,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::step_db;
+
+    #[test]
+    fn steps_stay_in_fader_range() {
+        assert_eq!(step_db(0.0, 1.0), 1.0);
+        assert_eq!(step_db(5.5, 1.0), 6.0);
+        assert_eq!(step_db(-59.0, -2.0), -120.0);
+        assert_eq!(step_db(-120.0, 1.0), -59.0);
+        assert_eq!(step_db(-120.0, -1.0), -120.0);
     }
 }

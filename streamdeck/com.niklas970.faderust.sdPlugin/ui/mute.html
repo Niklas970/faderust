@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>Stumm</title>
+    <link rel="stylesheet" href="pi.css" />
+  </head>
+  <body>
+    <div id="status" class="status" hidden>Faderust läuft nicht. Starte Faderust, dann erscheinen hier die Auswahllisten.</div>
+    <div class="item"><label for="input">Eingang</label><select id="input" data-setting="input" data-source="inputs" data-type="number"></select></div>
+    <div class="item"><label for="output">Ausgang</label><select id="output" data-setting="output" data-source="outputs" data-type="number" data-extra="-1|Alle Ausgänge"></select></div>
+    <p class="hint">„Alle Ausgänge“ schaltet den Eingang überall stumm, z. B. das Mikrofon.</p>
+    <script src="pi.js"></script>
+  </body>
+</html>
