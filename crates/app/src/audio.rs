@@ -63,6 +63,9 @@ struct UiDevice {
     level_db: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
     buffer_ms: Option<u32>,
+    /// Outputs only: closed while nothing plays for them.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    released: bool,
     /// Inputs only.
     #[serde(skip_serializing_if = "Option::is_none")]
     fx: Option<Fx>,
@@ -127,6 +130,8 @@ fn build(config: &Config, skip: Option<&str>) -> Option<Engine<CpalBackend>> {
             .map(|o| OutputConfig {
                 device: o.device.clone(),
                 buffer_ms: o.buffer_ms,
+                release_after: (o.release_after_s > 0)
+                    .then(|| Duration::from_secs(o.release_after_s.into())),
             })
             .collect(),
     };
@@ -154,6 +159,8 @@ fn apply_gains(engine: &Engine<CpalBackend>, config: &Config) {
 struct Notices {
     /// Last failure text per (is_output, slot).
     failing: std::collections::HashMap<(bool, usize), String>,
+    /// Outputs released after silence: coming back is routine, not news.
+    released: std::collections::HashSet<usize>,
 }
 
 impl Notices {
@@ -172,7 +179,8 @@ impl Notices {
                 dir, slot, device, ..
             } => {
                 let was_failing = self.failing.remove(&key(dir, *slot)).is_some();
-                (!quiet || was_failing).then(|| Notice {
+                let resumed = *dir == Direction::Output && self.released.remove(slot);
+                ((!quiet && !resumed) || was_failing).then(|| Notice {
                     level: "info",
                     text: format!("„{}“ verbunden: {}", label(dir, *slot), device.name),
                 })
@@ -191,6 +199,10 @@ impl Notices {
                     }
                 },
             }),
+            EngineEvent::Released { slot } => {
+                self.released.insert(*slot);
+                None
+            }
             EngineEvent::ConnectFailed { dir, slot, error } => {
                 let previous = self.failing.insert(key(dir, *slot), error.clone());
                 (previous.as_ref() != Some(error)).then(|| Notice {
@@ -399,6 +411,7 @@ fn device(
         device_name: connected.map(|(d, _)| d.name.clone()),
         level_db,
         buffer_ms,
+        released: false,
         fx: None,
     }
 }
@@ -422,8 +435,9 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
         .outputs
         .iter()
         .enumerate()
-        .map(|(o, c)| {
-            device(
+        .map(|(o, c)| UiDevice {
+            released: engine.is_some_and(|e| e.is_released(o)),
+            ..device(
                 &c.label,
                 &c.device,
                 engine.and_then(|e| e.outputs().get(o)),

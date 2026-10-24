@@ -128,6 +128,7 @@ fn run(args: Args) -> Result<(), String> {
             .map(|(d, ms)| OutputConfig {
                 device: d.clone(),
                 buffer_ms: *ms,
+                release_after: None,
             })
             .collect(),
     };

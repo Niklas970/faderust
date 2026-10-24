@@ -1,5 +1,9 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.3.8:
+
+- Ausgänge können sich bei Stille freigeben: Unter **Geräte** pro Ausgang „Frei nach 10 s“ bis „Frei nach 10 min“ wählen. Läuft so lange nichts auf den Ausgang, schließt Faderust das Gerät, und Bluetooth-Kopfhörer können per Multipoint zum Handy wechseln. Kommt wieder Ton, öffnet Faderust das Gerät von selbst (die erste Sekunde fehlt dabei).
+
 Neu in 0.3.7:
 
 - Absturz behoben, wenn ein Programm mit „+ Eingang“ aufgenommen wird

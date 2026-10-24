@@ -79,6 +79,10 @@ pub struct OutputEntry {
     pub device: String,
     #[serde(default = "default_buffer_ms")]
     pub buffer_ms: u32,
+    /// Seconds without signal before the device is closed so others can use
+    /// it (Bluetooth multipoint); 0 keeps it open.
+    #[serde(default)]
+    pub release_after_s: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -128,6 +132,9 @@ fn default_buffer_ms() -> u32 {
     60
 }
 
+/// Longest wait before a silent output is released: one hour.
+pub const RELEASE_MAX_S: u32 = 3600;
+
 /// Buffers below this underrun constantly; above it latency gets silly.
 pub const BUFFER_RANGE: std::ops::RangeInclusive<u32> = 10..=500;
 
@@ -146,6 +153,7 @@ impl Config {
             o.buffer_ms = o
                 .buffer_ms
                 .clamp(*BUFFER_RANGE.start(), *BUFFER_RANGE.end());
+            o.release_after_s = o.release_after_s.min(RELEASE_MAX_S);
         }
         self
     }
@@ -213,11 +221,13 @@ mod tests {
                     label: "PS5".into(),
                     device: "USB Sound".into(),
                     buffer_ms: 30,
+                    release_after_s: 0,
                 },
                 OutputEntry {
                     label: "Kopfhörer".into(),
                     device: "Buds".into(),
                     buffer_ms: 80,
+                    release_after_s: 30,
                 },
             ],
             gains: vec![],
@@ -232,11 +242,13 @@ mod tests {
         assert_eq!(c.gains, vec![vec![Gain::default(); 2]]);
         c.gains[0][1].db = f32::NAN;
         c.outputs[0].buffer_ms = 1;
+        c.outputs[1].release_after_s = 99_999;
         c.inputs.push(c.inputs[0].clone());
         let c = c.normalized();
         assert_eq!(c.gains.len(), 2);
         assert_eq!(c.gains[0][1].db, -120.0);
         assert_eq!(c.outputs[0].buffer_ms, 10);
+        assert_eq!(c.outputs[1].release_after_s, RELEASE_MAX_S);
     }
 
     #[test]
@@ -292,6 +304,7 @@ mod tests {
     fn fills_defaults() {
         let c: Config = toml::from_str("[[outputs]]\nlabel = \"A\"\ndevice = \"x\"\n").unwrap();
         assert_eq!(c.outputs[0].buffer_ms, 60);
+        assert_eq!(c.outputs[0].release_after_s, 0);
         assert!(c.inputs.is_empty());
         let c: Config =
             toml::from_str("[[inputs]]\nlabel = \"A\"\ndevice = \"x\"\n[inputs.fx]\ngate = true\n")
