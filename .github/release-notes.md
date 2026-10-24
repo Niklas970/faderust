@@ -1,5 +1,13 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.4.0:
+
+- **Schleifen-Schutz:** Spielt ein Ausgang auf das Kabel, von dem ein Eingang kommt (z. B. CABLE Input → CABLE Output), schaltet Faderust diese Verbindung stumm und zeigt „Schleife“ am Fader
+- **Kein Doppelt-Hören:** „+ Eingang“ unter **Programme** stellt das Programm gleich auf ein freies Kabel, das du nicht hörst. Hörst du ein Programm trotzdem doppelt, zeigt der Dialog das und bietet die Lösung mit einem Klick
+- **Programm-Mikro** für Discord, Teams & Co.: Unter **Geräte** legt „+ Programm-Mikro“ einen Ausgang auf einem freien virtuellen Kabel an (nur das Mikro ist an, alles andere stumm). Im Programm wählst du die andere Seite des Kabels als Mikrofon, auf Wunsch setzt Faderust sie gleich als Windows-Mikrofon für Anrufe
+- **Aufgeräumt:** Die Programm-Lautstärken lassen sich rechts zu einer schmalen Leiste einklappen (Faderust merkt sich das). Programme, die schon Eingänge sind, stehen dort nicht mehr doppelt
+- Fehlt ein virtuelles Kabel, öffnet „Virtuelles Kabel einrichten“ die Download-Seite von VB-Cable
+
 Neu in 0.3.8:
 
 - Ausgänge können sich bei Stille freigeben: Unter **Geräte** pro Ausgang „Frei nach 10 s“ bis „Frei nach 10 min“ wählen. Läuft so lange nichts auf den Ausgang, schließt Faderust das Gerät, und Bluetooth-Kopfhörer können per Multipoint zum Handy wechseln. Kommt wieder Ton, öffnet Faderust das Gerät von selbst (die erste Sekunde fehlt dabei).

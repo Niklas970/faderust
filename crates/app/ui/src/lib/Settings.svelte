@@ -1,6 +1,15 @@
 <script>
   import { untrack } from "svelte";
-  import { getAutostart, getDevices, setAutostart } from "./api.js";
+  import {
+    cableCounterpart,
+    getAutostart,
+    getDevices,
+    getWindowsAudio,
+    isCable,
+    openCablePage,
+    setAutostart,
+    setDefaultDevice,
+  } from "./api.js";
 
   /** Device setup: which inputs and outputs, their names and buffers. */
   let { config, onSave, onClose } = $props();
@@ -70,6 +79,47 @@
   function moveOutput(o, by) {
     swap(draft.outputs, o, o + by);
     for (const m of matrices()) for (const row of m) if (o + by < row.length) swap(row, o, o + by);
+  }
+
+  // "Programm-Mikro": an output on a virtual cable, so Discord, Teams & co.
+  // get Faderust's microphone mix by recording the cable's other end.
+  const matches = (name, pattern) => !!pattern && name.toLowerCase().includes(pattern.toLowerCase());
+  // A cable's playback end that is no output yet and whose recording end is
+  // no input (that would loop).
+  let micCable = $derived(
+    devices.outputs.find(
+      (d) =>
+        isCable(d.name) &&
+        /input/i.test(d.name) &&
+        !draft.outputs.some((o) => matches(d.name, o.device)) &&
+        !draft.inputs.some((i) => matches(cableCounterpart(d.name), i.device)),
+    ),
+  );
+  let hasCable = $derived(devices.outputs.some((d) => isCable(d.name)));
+  // Recording device the programs pick, once the output is added.
+  let micDevice = $state(null);
+  let micDefault = $state(true);
+  let micError = $state("");
+
+  function addProgramMic() {
+    // Read before the push: afterwards the cable is taken and `micCable` moves on.
+    const cable = micCable.name;
+    draft.outputs.push({ label: "Programm-Mikro", device: cable, bufferMs: 30, releaseAfterS: 0 });
+    // The first input (usually the microphone) at 0 dB, everything else muted.
+    for (const m of matrices()) m.forEach((row, i) => row.push({ db: 0, muted: i !== 0 }));
+    micDevice = cableCounterpart(cable);
+  }
+
+  async function save() {
+    if (micDevice && micDefault) {
+      try {
+        const rec = (await getWindowsAudio()).recording?.find((d) => d.name === micDevice);
+        if (rec) await setDefaultDevice(rec.id, true);
+      } catch (e) {
+        micError = `Standardgerät nicht gesetzt: ${e}`;
+      }
+    }
+    onSave($state.snapshot(draft));
   }
 
   function selected(list, current) {
@@ -164,6 +214,33 @@
   >
     + Ausgang
   </button>
+  {#if micDevice}
+    <div class="hint">
+      <p>
+        <strong>Programm-Mikro angelegt.</strong> Wähle in Discord, Teams usw. als Mikrofon
+        <strong>{micDevice}</strong>. Die Spalte „Programm-Mikro“ bestimmt, was dort ankommt.
+      </p>
+      <label class="check">
+        <input type="checkbox" bind:checked={micDefault} />
+        Als Windows-Mikrofon für Anrufe setzen
+      </label>
+    </div>
+  {:else if micCable}
+    <button class="add" onclick={addProgramMic} title="Ausgang auf einem virtuellen Kabel, den Programme als Mikrofon nutzen">
+      + Programm-Mikro
+    </button>
+  {:else}
+    <div class="hint">
+      <p>
+        {hasCable
+          ? "Für ein Programm-Mikro (Discord, Teams …) braucht es ein freies virtuelles Kabel. Alle Kabel sind schon belegt."
+          : "Für ein Programm-Mikro (Discord, Teams …) braucht es ein virtuelles Kabel."}
+        Installiere das kostenlose VB-Cable (für ein zweites Kabel VB-Cable A+B) und starte den PC neu.
+      </p>
+      <button onclick={() => openCablePage()}>Virtuelles Kabel einrichten</button>
+    </div>
+  {/if}
+  {#if micError}<p class="error">{micError}</p>{/if}
 
   <h3>Start</h3>
   <label class="check">
@@ -179,7 +256,7 @@
 
   <footer>
     <button onclick={onClose}>Abbrechen</button>
-    <button class="primary" onclick={() => onSave($state.snapshot(draft))}>Speichern</button>
+    <button class="primary" onclick={save}>Speichern</button>
   </footer>
 </div>
 
@@ -269,6 +346,24 @@
   }
   .add {
     border-style: dashed;
+  }
+  .add + .add {
+    margin-left: 6px;
+  }
+  .hint {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    line-height: 1.4;
+  }
+  .hint p {
+    flex: 1 1 300px;
+    margin: 0;
   }
   .check {
     display: flex;

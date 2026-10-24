@@ -327,7 +327,27 @@ impl<B: AudioBackend> Engine<B> {
                 }
             }
         }
+        self.block_loops();
         events
+    }
+
+    /// Silences every pair whose output feeds straight back into the input,
+    /// e.g. "CABLE Input" to "CABLE Output": it would howl.
+    fn block_loops(&self) {
+        for (i, input) in self.inputs.iter().enumerate() {
+            for (o, output) in self.outputs.iter().enumerate() {
+                let looped = match (&input.device, &output.device) {
+                    (Some((i_dev, _)), Some((o_dev, _))) => feeds_back(&o_dev.name, &i_dev.name),
+                    _ => false,
+                };
+                self.matrix.set_blocked(i, o, looped);
+            }
+        }
+    }
+
+    /// Whether the pair is silenced because it would feed back.
+    pub fn is_loop(&self, input: usize, output: usize) -> bool {
+        self.matrix.is_blocked(input, output)
     }
 
     /// Closes outputs that had no signal for their `release_after` and marks
@@ -547,6 +567,14 @@ impl<B: AudioBackend> Engine<B> {
             let _ = live.handle.send(OutputCommand::SetLane(i, None));
         }
     }
+}
+
+/// Whether playing on `output` reaches the recording device `input`: the
+/// two ends of one virtual cable, named alike except for "Input"/"Output"
+/// ("CABLE Input (VB-Audio Virtual Cable)", "VoiceMeeter Input" …).
+pub fn feeds_back(output: &str, input: &str) -> bool {
+    let output = output.to_lowercase();
+    output.contains("input") && output.replacen("input", "output", 1) == input.to_lowercase()
 }
 
 /// Finds a device whose id equals `pattern` or whose name contains it
@@ -883,6 +911,58 @@ mod tests {
         let out = b.pump(3000, level);
         assert_level(&out["bt"], 0.4, 1e-2);
         assert!(engine.maintain_at(at(30)).is_empty());
+    }
+
+    #[test]
+    fn cable_ends_feed_back() {
+        assert!(feeds_back(
+            "CABLE Input (VB-Audio Virtual Cable)",
+            "CABLE Output (VB-Audio Virtual Cable)"
+        ));
+        assert!(feeds_back(
+            "CABLE-A Input (VB-Audio Cable A)",
+            "CABLE-A Output (VB-Audio Cable A)"
+        ));
+        assert!(feeds_back(
+            "VoiceMeeter Input (VB-Audio VoiceMeeter VAIO)",
+            "VoiceMeeter Output (VB-Audio VoiceMeeter VAIO)"
+        ));
+        assert!(!feeds_back(
+            "CABLE-A Input (VB-Audio Cable A)",
+            "CABLE-B Output (VB-Audio Cable B)"
+        ));
+        assert!(!feeds_back(
+            "Lautsprecher (USB Audio)",
+            "Mikrofon (USB Audio)"
+        ));
+    }
+
+    #[test]
+    fn loop_through_a_cable_stays_silent() {
+        let b = FakeBackend::default();
+        b.plug_input("CABLE Output", 48_000, 2);
+        b.plug_input("mic", 48_000, 1);
+        b.plug_output("CABLE Input", 48_000, 2);
+        b.plug_output("usb", 48_000, 2);
+        let mut engine = Engine::new(
+            b.clone(),
+            config(
+                &["CABLE Output", "mic"],
+                &[("CABLE Input", 20), ("usb", 20)],
+            ),
+        )
+        .unwrap();
+        engine.maintain();
+        assert!(engine.is_loop(0, 0));
+        assert!(!engine.is_loop(0, 1) && !engine.is_loop(1, 0));
+        let out = b.pump(3000, |n| if n == "CABLE Output" { 0.4 } else { level(n) });
+        assert_level(&out["CABLE Input"], 0.2, 1e-3);
+        assert_level(&out["usb"], 0.6, 2e-3);
+
+        // Gone with the device: a fresh one with another name is no loop.
+        b.unplug("CABLE Input");
+        engine.maintain();
+        assert!(!engine.is_loop(0, 0));
     }
 
     #[test]

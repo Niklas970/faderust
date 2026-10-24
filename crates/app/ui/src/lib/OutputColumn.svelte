@@ -35,6 +35,9 @@
         muted={gains[i]?.[index]?.muted ?? false}
         levelDb={input.levelDb}
         connected={input.connected}
+        blocked={lanes[i]?.[index]?.looped ?? false}
+        note={lanes[i]?.[index]?.looped ? "Schleife" : ""}
+        noteTitle="Stumm geschaltet: Dieser Ausgang spielt auf das Kabel, von dem der Eingang kommt. Du würdest dich selbst hören."
         onChange={(db) => onGain(i, index, db)}
         onMute={(m) => onMute(i, index, m)}
       />

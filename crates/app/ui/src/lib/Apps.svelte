@@ -1,12 +1,12 @@
 <script>
-  import { getApps, getDevices, isCable, setAppOutput } from "./api.js";
+  import { cableCounterpart, getApps, getDevices, isCable, openCablePage, setAppOutput } from "./api.js";
 
   /**
    * Which program plays on which device, and which programs Faderust records
    * as inputs of their own. A program on a virtual cable also reaches
    * Faderust through the cable's capture side.
    */
-  let { inputs, onAddInput, onClose } = $props();
+  let { inputs, outputs = [], onAddInput, onClose } = $props();
 
   let data = $state(null);
   let cableInputs = $state([]);
@@ -25,16 +25,39 @@
 
   let hasCable = $derived(data?.devices.some((d) => d.cable));
   // Cable capture devices no input uses yet.
+  // Not offered when Faderust plays on the cable's other end (that would loop).
   let unusedCables = $derived(
     cableInputs.filter(
-      (c) => !inputs.some((i) => i.device && c.name.toLowerCase().includes(i.device.toLowerCase())),
+      (c) =>
+        !inputs.some((i) => i.device && c.name.toLowerCase().includes(i.device.toLowerCase())) &&
+        !outputs.some((o) => o.device && c.name.replace(/output/i, "Input").toLowerCase().includes(o.device.toLowerCase())) &&
+        // Nor when a program input is parked on the cable (heard twice).
+        !data?.apps.some(
+          (a) => isInput(a) && cableCounterpart(data.devices.find((d) => d.id === a.device)?.name ?? "") === c.name,
+        ),
     ),
   );
 
   // Program inputs record the program itself, see engine apps::capture.
   const programId = (app) => `app:${app.exe.toLowerCase()}`;
   const isInput = (app) => inputs.some((i) => i.device === programId(app));
-  let anyProgramInput = $derived(data?.apps.some(isInput));
+
+  // A cable nobody hears: Faderust neither records its other end nor plays
+  // on it. A program input parked there is heard only through its fader.
+  const matches = (name, pattern) => !!pattern && name.toLowerCase().includes(pattern.toLowerCase());
+  const silent = (d) =>
+    !!d?.cable &&
+    !inputs.some((i) => matches(cableCounterpart(d.name), i.device)) &&
+    !outputs.some((o) => matches(d.name, o.device));
+  let quietCable = $derived(data?.devices.find(silent));
+  // Recorded as an input and still playing somewhere you hear it.
+  const doubled = (app) => isInput(app) && !silent(data.devices.find((d) => d.id === app.device));
+
+  // Record the program and park its own output on a quiet cable at once.
+  async function addAsInput(app) {
+    await onAddInput(programId(app), app.name);
+    if (quietCable) await change(app, quietCable.id);
+  }
 
   async function change(app, device) {
     try {
@@ -62,8 +85,8 @@
       <div class="hint">
         <strong>Kein virtuelles Kabel gefunden.</strong>
         Mit „+ Eingang“ nimmt Faderust ein Programm direkt auf. Damit es dann nicht zusätzlich über die Boxen
-        läuft, braucht es ein Gerät, das du nicht hörst: Installiere das kostenlose VB-Cable von
-        <span class="url">vb-audio.com/Cable</span> und starte den PC neu.
+        läuft, braucht es ein Gerät, das du nicht hörst: Installiere das kostenlose VB-Cable und starte den PC neu.
+        <button onclick={() => openCablePage()}>Virtuelles Kabel einrichten</button>
       </div>
     {/if}
     {#each unusedCables as cable}
@@ -96,21 +119,27 @@
               <span class="is-input" title="Faderust nimmt das Programm als eigenen Eingang auf">Eingang</span>
             {:else}
               <button
-                title="Programm als eigenen Eingang mit Fader und Effekten aufnehmen"
-                onclick={() => onAddInput(programId(app), app.name)}>+ Eingang</button
+                title={quietCable
+                  ? `Programm als eigenen Eingang aufnehmen und auf ${quietCable.name} stellen, damit du es nicht doppelt hörst`
+                  : "Programm als eigenen Eingang mit Fader und Effekten aufnehmen"}
+                onclick={() => addAsInput(app)}>+ Eingang</button
               >
             {/if}
           </li>
+          {#if doubled(app)}
+            <li class="double">
+              <span>Du hörst {app.name} doppelt: einmal über den Fader, einmal über sein eigenes Gerät.</span>
+              {#if quietCable}
+                <button class="primary" onclick={() => change(app, quietCable.id)}>Auf {quietCable.name} stellen</button>
+              {:else}
+                <button onclick={() => openCablePage()}>Virtuelles Kabel einrichten</button>
+              {/if}
+            </li>
+          {/if}
         {/each}
       </ul>
     {:else}
       <p class="note">Gerade spielt kein Programm Ton ab. Starte die Wiedergabe und tippe auf „Aktualisieren“.</p>
-    {/if}
-    {#if anyProgramInput}
-      <p class="hint">
-        Programme als Eingang spielen weiter auch auf ihrem eigenen Gerät. Damit du sie nicht doppelt hörst, stell
-        sie auf ein Gerät, das du nicht direkt hörst, zum Beispiel ein VB-Cable, das kein Eingang ist.
-      </p>
     {/if}
     <p class="note small">
       Windows merkt sich die Zuordnung pro Programm. Manche Programme übernehmen sie erst nach einem Neustart.
@@ -188,6 +217,16 @@
   }
   select.cable {
     border-color: var(--signal);
+  }
+  li.double {
+    margin: -4px 0 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+  }
+  li.double span {
+    flex: 1;
   }
   .hint {
     display: flex;

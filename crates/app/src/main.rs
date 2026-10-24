@@ -281,6 +281,24 @@ async fn set_device_volume(
         .map_err(|e| e.to_string())
 }
 
+/// VB-Audio's page with the free VB-Cable download.
+const CABLE_PAGE: &str = "https://vb-audio.com/Cable/";
+
+/// Opens the VB-Cable download page in the browser. Faderust must not ship
+/// the driver itself.
+#[tauri::command]
+fn open_cable_page() -> Result<(), String> {
+    if cfg!(windows) {
+        std::process::Command::new("explorer")
+            .arg(CABLE_PAGE)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    } else {
+        Err(format!("Bitte {CABLE_PAGE} im Browser öffnen"))
+    }
+}
+
 #[tauri::command]
 fn get_autostart(app: AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
@@ -526,6 +544,7 @@ fn main() {
             set_device_volume,
             get_autostart,
             set_autostart,
+            open_cable_page,
             get_config,
             save_config,
             set_gain,
