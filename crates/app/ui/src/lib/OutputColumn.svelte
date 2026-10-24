@@ -12,32 +12,32 @@
 
 <section class="column" class:offline={!output.connected}>
   <header>
-    <span class="dot" class:on={output.connected} title={output.connected ? "Verbunden" : "Nicht verbunden"}></span>
+    <span class="bus">A{index + 1}</span>
     <div class="titles">
       <h2>{output.label}</h2>
       <div class="device" title={output.deviceName ?? output.device}>
         {output.connected ? output.deviceName : "Wartet auf Gerät …"}
       </div>
     </div>
+    <span class="led" class:on={output.connected} title={output.connected ? "Verbunden" : "Nicht verbunden"}></span>
   </header>
 
   <div class="faders">
     {#each inputs as input, i}
       <Fader
         label={input.label}
-        db={gains[i]?.[index]?.db ?? 0}
+        value={gains[i]?.[index]?.db ?? 0}
         muted={gains[i]?.[index]?.muted ?? false}
         levelDb={input.levelDb}
         connected={input.connected}
-        onGain={(db) => onGain(i, index, db)}
+        onChange={(db) => onGain(i, index, db)}
         onMute={(m) => onMute(i, index, m)}
       />
     {/each}
     <div class="master">
-      <div class="label">Summe</div>
+      <div class="label">Out</div>
       <div class="master-meter"><Meter db={output.connected ? output.levelDb : -120} /></div>
-      <div class="db">{output.connected && output.levelDb > -60 ? output.levelDb.toFixed(0) : "−∞"}</div>
-      <div class="spacer"></div>
+      <div class="readout">{output.connected && output.levelDb > -60 ? output.levelDb.toFixed(0) : "−∞"}</div>
     </div>
   </div>
 
@@ -51,8 +51,8 @@
   .column {
     display: grid;
     grid-template-rows: auto 1fr auto;
-    gap: 12px;
-    padding: 14px;
+    gap: 10px;
+    padding: 10px;
     min-width: max-content;
     background: var(--panel);
     border: 1px solid var(--border);
@@ -66,44 +66,58 @@
     align-items: center;
     gap: 10px;
     min-width: 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .bus {
+    flex: none;
+    padding: 2px 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--copper);
+    border: 1px solid var(--copper);
+    border-radius: var(--radius-sm);
   }
   .titles {
+    flex: 1;
     min-width: 0;
   }
   h2 {
     margin: 0;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
   }
   .device {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--muted);
     max-width: 220px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .dot {
+  .led {
     flex: none;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--border);
+    width: 8px;
+    height: 8px;
+    border-radius: 1px;
+    background: var(--well);
+    border: 1px solid var(--border);
   }
-  .dot.on {
+  .led.on {
     background: var(--teal);
-    box-shadow: 0 0 8px var(--teal);
+    border-color: var(--teal);
   }
   .faders {
     display: flex;
-    gap: 4px;
+    gap: 2px;
     min-height: 0;
   }
   .master {
     display: grid;
-    grid-template-rows: auto 1fr auto auto;
+    grid-template-rows: auto 1fr auto;
     justify-items: center;
-    gap: 6px;
+    gap: 8px;
     padding-left: 10px;
     margin-left: 6px;
     border-left: 1px solid var(--border);
@@ -112,23 +126,36 @@
     height: 100%;
     padding: 11px 0;
   }
-  .master .label,
-  .master .db {
+  .master-meter :global(.meter) {
+    width: 14px;
+  }
+  .master .label {
+    padding: 3px 6px;
     font-size: 12px;
     font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     color: var(--muted);
-    font-variant-numeric: tabular-nums;
   }
-  .spacer {
+  .readout {
+    display: grid;
+    place-items: center;
+    width: 34px;
     height: 26px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--teal);
+    background: var(--well);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
   }
   footer {
     display: flex;
     justify-content: space-between;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--muted);
   }
   .warn {
-    color: var(--copper);
+    color: var(--amber);
   }
 </style>

@@ -1,5 +1,11 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.3.1:
+
+- Eingänge werden bei kurzen Aussetzern nicht mehr ständig neu verbunden
+- Pult-Design im Stil von Voicemeeter: breite Fader mit dB-Wert auf der Kappe, LED-Pegel, Ausgänge als A1, A2 …
+- Programm-Lautstärken als eigene Fader auf der Hauptseite
+
 Neu in 0.3:
 
 - Effekte pro Eingang: Low-Cut, Drei-Band-EQ und Gate (Klick auf den Eingang oben)

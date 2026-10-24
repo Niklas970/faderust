@@ -142,7 +142,7 @@
   .segmented {
     display: inline-flex;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
   }
   .segmented button {
@@ -214,7 +214,7 @@
   }
   button {
     padding: 6px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     background: var(--panel-2);
   }

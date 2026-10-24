@@ -1,18 +1,23 @@
 :root {
   color-scheme: dark;
-  --bg: #11171c;
-  --panel: #171e24;
-  --panel-2: #1d262e;
-  --border: #2b3641;
-  --text: #e6ecef;
-  --muted: #8a99a6;
-  --copper: #ec8d5b;
-  --copper-strong: #f3a273;
-  /* Top of the fader cap gradient. */
-  --copper-light: #f7b48e;
-  --teal: #4fd1c0;
-  --danger: #ef6b6b;
-  --radius: 12px;
+  /* Graphite like a mixing desk; copper for controls, teal only for signal. */
+  --bg: #16181b;
+  --panel: #202226;
+  --panel-2: #2a2d32;
+  /* Recessed areas: fader slots, meters, inputs. */
+  --well: #0e0f11;
+  --border: #383c42;
+  --text: #dcdfe3;
+  --muted: #858b93;
+  --copper: #d9834f;
+  --copper-strong: #e8955f;
+  --copper-light: #f0ad80;
+  --teal: #3fc8b4;
+  --amber: #e2b13c;
+  --danger: #e0524b;
+  --radius: 4px;
+  --radius-sm: 3px;
+  --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
 }
@@ -20,16 +25,18 @@
 @media (prefers-color-scheme: light) {
   :root {
     color-scheme: light;
-    --bg: #eef2f4;
-    --panel: #ffffff;
-    --panel-2: #f5f7f8;
-    --border: #cfd7dc;
-    --text: #1b2329;
-    --muted: #5d6b76;
+    --bg: #e4e6e9;
+    --panel: #f3f4f6;
+    --panel-2: #e9ebee;
+    --well: #2a2d32;
+    --border: #c3c8ce;
+    --text: #1c1f23;
+    --muted: #5f666e;
     --copper: #b4531c;
     --copper-strong: #9a4415;
     --copper-light: #d9773f;
-    --teal: #0f766e;
+    --teal: #0f8a7e;
+    --amber: #b7860f;
     --danger: #c53b3b;
   }
 }
@@ -58,6 +65,6 @@ button {
 }
 
 :focus-visible {
-  outline: 2px solid var(--teal);
+  outline: 1px solid var(--copper);
   outline-offset: 2px;
 }
