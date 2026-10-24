@@ -1,9 +1,13 @@
 //! Per-device processing run inside the device callbacks.
+//!
+//! The topology changes while audio runs (devices come and go), so nodes get
+//! their lanes through command queues and hand replaced ones back through a
+//! garbage queue. That way nothing is allocated or freed on an audio thread.
 
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 
-use rtrb::Producer;
+use rtrb::{Consumer, Producer, RingBuffer};
 
 use crate::lane::{Lane, LaneStats};
 use crate::matrix::MixMatrix;
@@ -12,22 +16,121 @@ use crate::BUS_CHANNELS;
 
 /// Largest block an output node mixes at once; bigger callbacks are split.
 const MAX_BLOCK_FRAMES: usize = 1024;
+/// Capacity of the command and garbage queues of each node.
+const QUEUE_LEN: usize = 64;
+
+/// Input end of a lane.
+pub type LaneInput = (Producer<f32>, Arc<LaneStats>);
+
+/// Changes to an input node: set or clear the lane to output `usize`.
+pub enum InputCommand {
+    SetLane(usize, Option<LaneInput>),
+}
+
+/// Changes to an output node: set or clear the lane from input `usize`.
+pub enum OutputCommand {
+    SetLane(usize, Option<Box<Lane>>),
+}
+
+/// Values removed on an audio thread, to be dropped on the control thread.
+pub enum Garbage {
+    LaneInput(LaneInput),
+    Lane(Box<Lane>),
+}
+
+/// Control-thread ends of a node's queues.
+pub struct NodeHandle<C> {
+    pub commands: Producer<C>,
+    pub garbage: Consumer<Garbage>,
+}
+
+impl<C> NodeHandle<C> {
+    /// Drops everything the node handed back.
+    pub fn collect_garbage(&mut self) {
+        while self.garbage.pop().is_ok() {}
+    }
+
+    /// Queues a command. Fails only if the node has not run for a while.
+    pub fn send(&mut self, command: C) -> Result<(), C> {
+        self.commands
+            .push(command)
+            .map_err(|rtrb::PushError::Full(c)| c)
+    }
+}
+
+/// Queues shared by a node (audio side) and its handle (control side).
+struct Queues<C> {
+    commands: Consumer<C>,
+    garbage: Producer<Garbage>,
+}
+
+fn queues<C>() -> (Queues<C>, NodeHandle<C>) {
+    let (cmd_tx, cmd_rx) = RingBuffer::new(QUEUE_LEN);
+    let (garbage_tx, garbage_rx) = RingBuffer::new(QUEUE_LEN);
+    (
+        Queues {
+            commands: cmd_rx,
+            garbage: garbage_tx,
+        },
+        NodeHandle {
+            commands: cmd_tx,
+            garbage: garbage_rx,
+        },
+    )
+}
+
+impl<C> Queues<C> {
+    fn dispose(&mut self, item: Garbage) {
+        // Never free on the audio thread. If the control thread stalls long
+        // enough to fill the queue, leaking one lane is the lesser evil.
+        if let Err(rtrb::PushError::Full(item)) = self.garbage.push(item) {
+            std::mem::forget(item);
+        }
+    }
+}
 
 /// Input side: converts device frames to the stereo bus and fans them out to
 /// one ring buffer per output.
 pub struct InputNode {
-    lanes: Vec<(Producer<f32>, Arc<LaneStats>)>,
+    /// Indexed by output slot.
+    lanes: Vec<Option<LaneInput>>,
     meter: Arc<PeakMeter>,
+    queues: Queues<InputCommand>,
 }
 
 impl InputNode {
-    pub fn new(lanes: Vec<(Producer<f32>, Arc<LaneStats>)>, meter: Arc<PeakMeter>) -> Self {
-        Self { lanes, meter }
+    /// `lanes` must have one entry per output slot.
+    pub fn new(
+        lanes: Vec<Option<LaneInput>>,
+        meter: Arc<PeakMeter>,
+    ) -> (Self, NodeHandle<InputCommand>) {
+        let (queues, handle) = queues();
+        (
+            Self {
+                lanes,
+                meter,
+                queues,
+            },
+            handle,
+        )
+    }
+
+    fn apply_commands(&mut self) {
+        while let Ok(InputCommand::SetLane(output, lane)) = self.queues.commands.pop() {
+            let old = match self.lanes.get_mut(output) {
+                Some(slot) => std::mem::replace(slot, lane),
+                None => lane,
+            };
+            if let Some(old) = old {
+                self.queues.dispose(Garbage::LaneInput(old));
+            }
+        }
     }
 
     /// Handles one device callback of interleaved samples with `channels`
     /// channels. Real-time safe.
     pub fn process(&mut self, data: &[f32], channels: usize) {
+        self.apply_commands();
         if channels == 0 {
             return;
         }
@@ -47,7 +150,7 @@ impl InputNode {
             self.meter.update(&block[..n * BUS_CHANNELS]);
         }
 
-        for (producer, stats) in &mut self.lanes {
+        for (producer, stats) in self.lanes.iter_mut().flatten() {
             let writable = (producer.slots() / BUS_CHANNELS).min(frames);
             if writable < frames {
                 stats
@@ -84,32 +187,52 @@ fn to_stereo(frame: &[f32]) -> (f32, f32) {
 /// Output side: mixes every input's lane with the matrix gains.
 pub struct OutputNode {
     index: usize,
-    /// `(input index, lane)`.
-    lanes: Vec<(usize, Lane)>,
+    /// Indexed by input slot.
+    lanes: Vec<Option<Box<Lane>>>,
     matrix: Arc<MixMatrix>,
     meter: Arc<PeakMeter>,
     mix: Vec<f32>,
+    queues: Queues<OutputCommand>,
 }
 
 impl OutputNode {
+    /// `index` is this output's slot; `lanes` has one entry per input slot.
     pub fn new(
         index: usize,
-        lanes: Vec<(usize, Lane)>,
+        lanes: Vec<Option<Box<Lane>>>,
         matrix: Arc<MixMatrix>,
         meter: Arc<PeakMeter>,
-    ) -> Self {
-        Self {
-            index,
-            lanes,
-            matrix,
-            meter,
-            mix: vec![0.0; MAX_BLOCK_FRAMES * BUS_CHANNELS],
+    ) -> (Self, NodeHandle<OutputCommand>) {
+        let (queues, handle) = queues();
+        (
+            Self {
+                index,
+                lanes,
+                matrix,
+                meter,
+                mix: vec![0.0; MAX_BLOCK_FRAMES * BUS_CHANNELS],
+                queues,
+            },
+            handle,
+        )
+    }
+
+    fn apply_commands(&mut self) {
+        while let Ok(OutputCommand::SetLane(input, lane)) = self.queues.commands.pop() {
+            let old = match self.lanes.get_mut(input) {
+                Some(slot) => std::mem::replace(slot, lane),
+                None => lane,
+            };
+            if let Some(old) = old {
+                self.queues.dispose(Garbage::Lane(old));
+            }
         }
     }
 
     /// Fills one device callback of interleaved samples with `channels`
     /// channels. Real-time safe.
     pub fn render(&mut self, data: &mut [f32], channels: usize) {
+        self.apply_commands();
         if channels == 0 {
             return;
         }
@@ -117,9 +240,11 @@ impl OutputNode {
             let frames = out.len() / channels;
             let mix = &mut self.mix[..frames * BUS_CHANNELS];
             mix.fill(0.0);
-            for (input, lane) in &mut self.lanes {
-                let gain = self.matrix.effective_gain(*input, self.index);
-                lane.render_add(mix, gain);
+            for (input, lane) in self.lanes.iter_mut().enumerate() {
+                if let Some(lane) = lane {
+                    let gain = self.matrix.effective_gain(input, self.index);
+                    lane.render_add(mix, gain);
+                }
             }
             self.meter.update(mix);
             for (dst, src) in out
@@ -157,24 +282,29 @@ mod tests {
     }
 
     fn sim(in_rate: u32, out_rate: u32, target_ms: u32) -> Sim {
-        let (producer, lane) = lane(LaneSpec {
-            input_rate: in_rate,
-            output_rate: out_rate,
-            target_ms,
-        });
-        let stats = Arc::clone(lane.stats());
+        let stats = Arc::new(LaneStats::default());
+        let (producer, lane) = lane(
+            LaneSpec {
+                input_rate: in_rate,
+                output_rate: out_rate,
+                target_ms,
+            },
+            Arc::clone(&stats),
+        );
         let matrix = Arc::new(MixMatrix::new(1, 1));
+        let (input, _) = InputNode::new(
+            vec![Some((producer, Arc::clone(&stats)))],
+            Arc::new(PeakMeter::new()),
+        );
+        let (output, _) = OutputNode::new(
+            0,
+            vec![Some(Box::new(lane))],
+            Arc::clone(&matrix),
+            Arc::new(PeakMeter::new()),
+        );
         Sim {
-            input: InputNode::new(
-                vec![(producer, Arc::clone(&stats))],
-                Arc::new(PeakMeter::new()),
-            ),
-            output: OutputNode::new(
-                0,
-                vec![(0, lane)],
-                Arc::clone(&matrix),
-                Arc::new(PeakMeter::new()),
-            ),
+            input,
+            output,
             stats,
             matrix,
             t_in: 0.0,
@@ -256,5 +386,47 @@ mod tests {
             assert!((v - 0.5).abs() < 1e-2, "got {v}");
         }
         assert_eq!(s.stats.underruns.load(Relaxed), 0);
+    }
+
+    #[test]
+    fn swaps_lanes_through_commands() {
+        let matrix = Arc::new(MixMatrix::new(2, 1));
+        let (mut node, mut handle) =
+            OutputNode::new(0, vec![None, None], matrix, Arc::new(PeakMeter::new()));
+        let spec = LaneSpec {
+            input_rate: 48_000,
+            output_rate: 48_000,
+            target_ms: 10,
+        };
+        let stats = Arc::new(LaneStats::default());
+        let (_p1, l1) = lane(spec, Arc::clone(&stats));
+        let (_p2, l2) = lane(spec, Arc::clone(&stats));
+        let mut buf = vec![0.0; 960];
+
+        assert!(handle
+            .send(OutputCommand::SetLane(1, Some(Box::new(l1))))
+            .is_ok());
+        node.render(&mut buf, 2);
+        assert!(handle.garbage.is_empty());
+
+        // Replacing hands the old lane back instead of freeing it.
+        assert!(handle
+            .send(OutputCommand::SetLane(1, Some(Box::new(l2))))
+            .is_ok());
+        node.render(&mut buf, 2);
+        assert_eq!(handle.garbage.slots(), 1);
+        assert!(handle.send(OutputCommand::SetLane(1, None)).is_ok());
+        node.render(&mut buf, 2);
+        assert_eq!(handle.garbage.slots(), 2);
+        handle.collect_garbage();
+        assert!(handle.garbage.is_empty());
+
+        // Out-of-range slots are ignored, the lane still comes back.
+        let (_p3, l3) = lane(spec, stats);
+        assert!(handle
+            .send(OutputCommand::SetLane(7, Some(Box::new(l3))))
+            .is_ok());
+        node.render(&mut buf, 2);
+        assert_eq!(handle.garbage.slots(), 1);
     }
 }
