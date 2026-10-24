@@ -35,12 +35,37 @@
   let version = $state("");
   getVersion().then((v) => (version = v));
 
-  // Look for a new release shortly after start; offline or rate-limited is fine.
+  // Look for a new release shortly after start, then every half hour and
+  // when the window comes back (Faderust often runs for days in the tray).
+  // Offline or rate-limited is fine; the next look tries again.
   let update = $state(null);
   let updating = $state(null); // download progress 0…1 while installing
+  const RECHECK_MS = 30 * 60 * 1000;
+  const REFOCUS_MS = 5 * 60 * 1000;
+  let lastCheck = 0;
+  async function lookForUpdate() {
+    if (updating !== null) return;
+    lastCheck = Date.now();
+    try {
+      update = (await checkUpdate()) ?? update;
+    } catch {
+      // Try again next time.
+    }
+  }
   onMount(() => {
-    const id = setTimeout(() => checkUpdate().then((u) => (update = u), () => {}), 3000);
-    return () => clearTimeout(id);
+    const first = setTimeout(lookForUpdate, 3000);
+    const every = setInterval(lookForUpdate, RECHECK_MS);
+    const back = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastCheck > REFOCUS_MS) lookForUpdate();
+    };
+    document.addEventListener("visibilitychange", back);
+    window.addEventListener("focus", back);
+    return () => {
+      clearTimeout(first);
+      clearInterval(every);
+      document.removeEventListener("visibilitychange", back);
+      window.removeEventListener("focus", back);
+    };
   });
 
   async function runUpdate() {
