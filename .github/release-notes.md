@@ -4,9 +4,10 @@ Neu in 0.2: Dialog **Programme**. Dort bekommt jedes Programm (Spotify, Discord,
 
 ## Installation
 
-1. `Faderust_*_x64_en-US.msi` herunterladen und starten.
-2. Die MSI ist nicht signiert. Windows SmartScreen warnt deshalb: „Weitere Informationen“ → „Trotzdem ausführen“.
-3. Faderust aus dem Startmenü starten. Fehlt WebView2, lädt der Installer es nach.
+1. `Faderust_*_x64-setup.exe` herunterladen und starten. Der Installer spricht Deutsch oder Englisch, je nach Windows-Sprache, und braucht keine Admin-Rechte.
+2. Eine früher installierte MSI-Version entfernt er dabei selbst.
+3. Der Installer ist nicht signiert. Windows SmartScreen warnt deshalb: „Weitere Informationen“ → „Trotzdem ausführen“.
+4. Faderust aus dem Startmenü starten. Fehlt WebView2, lädt der Installer es nach.
 
 Die Konfiguration liegt unter `%APPDATA%\io.github.niklas970.faderust\config.toml`.
 

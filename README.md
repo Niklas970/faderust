@@ -49,9 +49,15 @@ cargo run --release -p faderust
 
 Zum Entwickeln mit Live-Neuladen: in `crates/app/ui` `npm run dev` starten und parallel `cargo run -p faderust` (Debug-Builds laden die Oberfläche von `localhost:5173`). `npm run dev` allein zeigt die Oberfläche im Browser mit simulierten Geräten.
 
-Installer bauen: `cd crates/app && ui/node_modules/.bin/tauri build` (nach `npm run build`), ergibt NSIS-Setup und MSI unter `target/release/bundle/`. Fertige MSI-Dateien liegen unter [Releases](https://github.com/Niklas970/faderust/releases); ein Release entsteht über den Workflow „Release“ (Tag `v*` oder von Hand).
+Installer bauen: `cd crates/app && ui/node_modules/.bin/tauri build` (nach `npm run build`), ergibt das Setup unter `target/release/bundle/nsis/`. Es folgt der Windows-Sprache (Deutsch oder Englisch). Fertige Setups liegen unter [Releases](https://github.com/Niklas970/faderust/releases); ein Release entsteht über den Workflow „Release“ (Tag `v*` oder von Hand).
 
-Die Einstellungen (Geräte, Pegel) liegen in `%APPDATA%\io.github.niklas970.faderust\config.toml`. Das Fenster schließen lässt den Mixer im Tray weiterlaufen; beenden über das Tray-Menü.
+Die Einstellungen (Geräte, Pegel) liegen in `%APPDATA%\io.github.niklas970.faderust\config.toml`. Das Fenster schließen lässt den Mixer im Tray weiterlaufen; beenden über das Tray-Menü. Unter **Geräte → Start** lässt sich Faderust mit Windows starten (direkt in den Tray). Ein zweiter Start holt nur das laufende Fenster nach vorn.
+
+## Effekte, Presets, Meldungen
+
+- **Effekte pro Eingang:** Klick auf einen Eingang oben in der Leiste öffnet Low-Cut, einen Drei-Band-EQ (Bass, Präsenz, Höhen) und ein Gate. Änderungen wirken sofort; aktive Effekte zeigt ein „FX“ am Eingang.
+- **Presets:** Unter **Presets** die aktuellen Fader unter einem Namen speichern und später mit einem Klick laden.
+- **Meldungen:** Getrennte, wieder verbundene oder blockierte Geräte meldet Faderust unten rechts.
 
 ## Programme auf eigene Fader
 

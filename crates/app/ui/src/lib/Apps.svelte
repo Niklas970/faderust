@@ -1,5 +1,6 @@
 <script>
-  import { getApps, getDevices, isCable, setAppOutput } from "./api.js";
+  import { getApps, getDevices, isCable, setAppOutput, setAppVolume } from "./api.js";
+  import Volume from "./Volume.svelte";
 
   /**
    * Which program plays on which device. A program on a virtual cable
@@ -29,6 +30,14 @@
       (c) => !inputs.some((i) => i.device && c.name.toLowerCase().includes(i.device.toLowerCase())),
     ),
   );
+
+  async function volume(app, v, m) {
+    try {
+      await setAppVolume($state.snapshot(app.pids), v, m);
+    } catch (e) {
+      error = String(e);
+    }
+  }
 
   async function change(app, device) {
     try {
@@ -85,6 +94,14 @@
                 <option value={app.device}>Gerät nicht verbunden</option>
               {/if}
             </select>
+            <div class="vol">
+              <Volume
+                volume={app.volume}
+                muted={app.muted}
+                label={app.name}
+                onChange={(v, m) => volume(app, v, m)}
+              />
+            </div>
           </li>
         {/each}
       </ul>
@@ -112,7 +129,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: min(640px, calc(100vw - 32px));
+    width: min(760px, calc(100vw - 32px));
     max-height: calc(100vh - 32px);
     overflow: auto;
     padding: 20px;
@@ -141,8 +158,12 @@
     gap: 8px;
     margin-bottom: 8px;
   }
+  .vol {
+    width: 180px;
+    flex: none;
+  }
   .name {
-    width: 150px;
+    width: 130px;
     flex: none;
     overflow: hidden;
     text-overflow: ellipsis;

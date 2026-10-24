@@ -1,17 +1,20 @@
-//! [`AppRouter`] on Windows. Audio sessions come from WASAPI; the device per
-//! program goes through the undocumented `AudioPolicyConfig` factory that the
-//! Settings app uses (EarTrumpet and SoundSwitch call it the same way).
+//! [`AppRouter`] and [`SystemAudio`] on Windows. Sessions and volumes come
+//! from the documented WASAPI interfaces. Two things have no public API and
+//! go through the undocumented interfaces the Settings app uses (EarTrumpet
+//! and SoundSwitch call them the same way): the device per program
+//! (`AudioPolicyConfig` factory) and the default devices (`IPolicyConfig`).
 
 use std::ffi::c_void;
-use std::ptr::null_mut;
+use std::ptr::{null, null_mut};
 
-use windows::core::{IInspectable, IUnknown, Interface, GUID, HRESULT, HSTRING, PWSTR};
+use windows::core::{IInspectable, IUnknown, Interface, GUID, HRESULT, HSTRING, PCWSTR, PWSTR};
 use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
 use windows::Win32::Foundation::{CloseHandle, RPC_E_CHANGED_MODE, S_OK};
+use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::{
-    eConsole, eMultimedia, eRender, AudioSessionStateExpired, EDataFlow, ERole,
-    IAudioSessionControl2, IAudioSessionManager2, IMMDevice, IMMDeviceEnumerator,
-    MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
+    eCapture, eCommunications, eConsole, eMultimedia, eRender, AudioSessionStateExpired, EDataFlow,
+    ERole, IAudioSessionControl2, IAudioSessionManager2, IMMDevice, IMMDeviceEnumerator,
+    ISimpleAudioVolume, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
 };
 use windows::Win32::System::Com::StructuredStorage::PropVariantToStringAlloc;
 use windows::Win32::System::Com::{
@@ -23,7 +26,10 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::System::WinRT::RoGetActivationFactory;
 
-use super::{group_sessions, AppAudio, AppRouter, RenderDevice, RouterError};
+use super::{
+    group_sessions, AppAudio, AppRouter, Endpoint, Flow, RenderDevice, Role, RouterError, Session,
+    SystemAudio,
+};
 
 type Result<T> = std::result::Result<T, RouterError>;
 
@@ -44,7 +50,7 @@ impl AppRouter for WasapiRouter {
     fn render_devices(&self) -> Result<Vec<RenderDevice>> {
         let _com = Com::init()?;
         let mut devices = Vec::new();
-        for device in active_render(&enumerator()?)? {
+        for device in active(&enumerator()?, eRender)? {
             let id = device_id(&device)?;
             let name = friendly_name(&device).unwrap_or_else(|_| id.clone());
             devices.push(RenderDevice { id, name });
@@ -56,17 +62,29 @@ impl AppRouter for WasapiRouter {
         let _com = Com::init()?;
         // A program pinned to a cable has its session there, not on the
         // default device: look at all of them.
-        let mut pids = Vec::new();
-        for device in active_render(&enumerator()?)? {
+        let mut found: Vec<(u32, f32, bool)> = Vec::new();
+        for device in active(&enumerator()?, eRender)? {
             // One broken driver should not hide the other devices' programs.
-            let _ = session_pids(&device, &mut pids);
+            let _ = for_each_session(&device, |pid, volume| {
+                if !found.iter().any(|(p, ..)| *p == pid) {
+                    let level = unsafe { volume.GetMasterVolume() }.unwrap_or(1.0);
+                    let muted = unsafe { volume.GetMute() }.is_ok_and(|m| m.as_bool());
+                    found.push((pid, level, muted));
+                }
+            });
         }
         let policy = Policy::new().ok();
-        Ok(group_sessions(pids.into_iter().filter_map(|pid| {
-            let exe = exe_name(pid)?;
-            let device = policy.as_ref().and_then(|p| p.get(pid));
-            Some((pid, exe, device))
-        })))
+        Ok(group_sessions(found.into_iter().filter_map(
+            |(pid, volume, muted)| {
+                Some(Session {
+                    pid,
+                    exe: exe_name(pid)?,
+                    device: policy.as_ref().and_then(|p| p.get(pid)),
+                    volume,
+                    muted,
+                })
+            },
+        )))
     }
 
     fn set_output(&self, pids: &[u32], device: Option<&str>) -> Result<()> {
@@ -75,6 +93,101 @@ impl AppRouter for WasapiRouter {
         let path = device.map_or_else(HSTRING::new, |id| HSTRING::from(device_path(id)));
         for &pid in pids {
             policy.set(pid, &path)?;
+        }
+        Ok(())
+    }
+
+    fn set_app_volume(&self, pids: &[u32], volume: Option<f32>, muted: Option<bool>) -> Result<()> {
+        let _com = Com::init()?;
+        let mut result = Ok(());
+        for device in active(&enumerator()?, eRender)? {
+            let _ = for_each_session(&device, |pid, session| {
+                if !pids.contains(&pid) {
+                    return;
+                }
+                if let Some(v) = volume {
+                    if let Err(e) = unsafe { session.SetMasterVolume(v.clamp(0.0, 1.0), null()) } {
+                        result = Err(err(e));
+                    }
+                }
+                if let Some(m) = muted {
+                    if let Err(e) = unsafe { session.SetMute(m, null()) } {
+                        result = Err(err(e));
+                    }
+                }
+            });
+        }
+        result
+    }
+}
+
+impl SystemAudio for WasapiRouter {
+    fn endpoints(&self) -> Result<Vec<Endpoint>> {
+        let _com = Com::init()?;
+        let enumerator = enumerator()?;
+        let mut endpoints = Vec::new();
+        for (flow, data_flow) in [(Flow::Playback, eRender), (Flow::Recording, eCapture)] {
+            let default_id = |role| {
+                unsafe { enumerator.GetDefaultAudioEndpoint(data_flow, role) }
+                    .ok()
+                    .and_then(|d| device_id(&d).ok())
+            };
+            let (default, communications) = (default_id(eConsole), default_id(eCommunications));
+            for device in active(&enumerator, data_flow)? {
+                let id = device_id(&device)?;
+                let name = friendly_name(&device).unwrap_or_else(|_| id.clone());
+                let volume: Option<IAudioEndpointVolume> =
+                    unsafe { device.Activate(CLSCTX_ALL, None) }.ok();
+                let level = volume
+                    .as_ref()
+                    .and_then(|v| unsafe { v.GetMasterVolumeLevelScalar() }.ok())
+                    .unwrap_or(1.0);
+                let muted = volume
+                    .as_ref()
+                    .is_some_and(|v| unsafe { v.GetMute() }.is_ok_and(|m| m.as_bool()));
+                endpoints.push(Endpoint {
+                    is_default: default.as_deref() == Some(id.as_str()),
+                    is_default_communications: communications.as_deref() == Some(id.as_str()),
+                    id,
+                    name,
+                    flow,
+                    volume: level,
+                    muted,
+                });
+            }
+        }
+        Ok(endpoints)
+    }
+
+    fn set_default(&self, id: &str, role: Role) -> Result<()> {
+        let _com = Com::init()?;
+        let config = PolicyConfig::new()?;
+        let roles: &[ERole] = match role {
+            Role::Default => &[eConsole, eMultimedia],
+            Role::Communications => &[eCommunications],
+        };
+        for &r in roles {
+            config.set_default_endpoint(id, r)?;
+        }
+        Ok(())
+    }
+
+    fn set_endpoint_volume(
+        &self,
+        id: &str,
+        volume: Option<f32>,
+        muted: Option<bool>,
+    ) -> Result<()> {
+        let _com = Com::init()?;
+        let device = unsafe { enumerator()?.GetDevice(&HSTRING::from(id)) }.map_err(err)?;
+        let control: IAudioEndpointVolume =
+            unsafe { device.Activate(CLSCTX_ALL, None) }.map_err(err)?;
+        if let Some(v) = volume {
+            unsafe { control.SetMasterVolumeLevelScalar(v.clamp(0.0, 1.0), null()) }
+                .map_err(err)?;
+        }
+        if let Some(m) = muted {
+            unsafe { control.SetMute(m, null()) }.map_err(err)?;
         }
         Ok(())
     }
@@ -110,9 +223,9 @@ fn enumerator() -> Result<IMMDeviceEnumerator> {
     unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) }.map_err(err)
 }
 
-fn active_render(enumerator: &IMMDeviceEnumerator) -> Result<Vec<IMMDevice>> {
+fn active(enumerator: &IMMDeviceEnumerator, flow: EDataFlow) -> Result<Vec<IMMDevice>> {
     let devices =
-        unsafe { enumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE) }.map_err(err)?;
+        unsafe { enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE) }.map_err(err)?;
     let count = unsafe { devices.GetCount() }.map_err(err)?;
     (0..count)
         .map(|i| unsafe { devices.Item(i) }.map_err(err))
@@ -136,7 +249,9 @@ fn friendly_name(device: &IMMDevice) -> Result<String> {
     take_string(unsafe { PropVariantToStringAlloc(&value) }.map_err(err)?)
 }
 
-fn session_pids(device: &IMMDevice, pids: &mut Vec<u32>) -> Result<()> {
+/// Calls `f(pid, volume)` for every live program session on `device`,
+/// skipping system sounds.
+fn for_each_session(device: &IMMDevice, mut f: impl FnMut(u32, &ISimpleAudioVolume)) -> Result<()> {
     let manager: IAudioSessionManager2 =
         unsafe { device.Activate(CLSCTX_ALL, None) }.map_err(err)?;
     let sessions = unsafe { manager.GetSessionEnumerator() }.map_err(err)?;
@@ -147,15 +262,18 @@ fn session_pids(device: &IMMDevice, pids: &mut Vec<u32>) -> Result<()> {
         if unsafe { session.GetState() }.is_ok_and(|s| s == AudioSessionStateExpired) {
             continue;
         }
-        let Ok(session) = session.cast::<IAudioSessionControl2>() else {
+        let Ok(control) = session.cast::<IAudioSessionControl2>() else {
             continue;
         };
-        if unsafe { session.IsSystemSoundsSession() } == S_OK {
+        if unsafe { control.IsSystemSoundsSession() } == S_OK {
             continue;
         }
-        if let Ok(pid) = unsafe { session.GetProcessId() } {
-            if pid != 0 && !pids.contains(&pid) {
-                pids.push(pid);
+        let Ok(volume) = session.cast::<ISimpleAudioVolume>() else {
+            continue;
+        };
+        if let Ok(pid) = unsafe { control.GetProcessId() } {
+            if pid != 0 {
+                f(pid, &volume);
             }
         }
     }
@@ -288,6 +406,49 @@ impl Policy {
         // Takes ownership: freed when dropped.
         let path: HSTRING = unsafe { std::mem::transmute(raw) };
         endpoint_id(&path.to_string())
+    }
+}
+
+// IPolicyConfig: sets the default devices. Undocumented, stable since
+// Windows 7.
+const CLSID_POLICY_CONFIG: GUID = GUID::from_u128(0x870af99c_171d_4f9e_af0d_e63df40c2bc9);
+const IID_POLICY_CONFIG: GUID = GUID::from_u128(0xf8679f50_850a_41cf_9c72_430f290290c8);
+
+#[repr(C)]
+struct PolicyConfigVtbl {
+    // IUnknown (3), then 10 methods not used here (formats, periods, share
+    // mode, property values).
+    _skipped: [usize; 13],
+    set_default_endpoint:
+        unsafe extern "system" fn(this: *mut c_void, device: PCWSTR, role: ERole) -> HRESULT,
+}
+
+struct PolicyConfig(IUnknown);
+
+impl PolicyConfig {
+    fn new() -> Result<Self> {
+        let unknown: IUnknown =
+            unsafe { CoCreateInstance(&CLSID_POLICY_CONFIG, None, CLSCTX_ALL) }.map_err(err)?;
+        let mut raw = null_mut();
+        unsafe { unknown.query(&IID_POLICY_CONFIG, &mut raw) }
+            .ok()
+            .map_err(err)?;
+        if raw.is_null() {
+            return Err(RouterError(
+                "Standardgeräte lassen sich hier nicht setzen".into(),
+            ));
+        }
+        Ok(Self(unsafe { IUnknown::from_raw(raw) }))
+    }
+
+    fn set_default_endpoint(&self, id: &str, role: ERole) -> Result<()> {
+        let id = HSTRING::from(id);
+        unsafe {
+            let vtbl = &**(self.0.as_raw() as *const *const PolicyConfigVtbl);
+            (vtbl.set_default_endpoint)(self.0.as_raw(), PCWSTR(id.as_ptr()), role)
+        }
+        .ok()
+        .map_err(err)
     }
 }
 

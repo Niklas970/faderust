@@ -35,7 +35,7 @@
     {/each}
     <div class="master">
       <div class="label">Summe</div>
-      <Meter db={output.connected ? output.levelDb : -120} />
+      <div class="master-meter"><Meter db={output.connected ? output.levelDb : -120} /></div>
       <div class="db">{output.connected && output.levelDb > -60 ? output.levelDb.toFixed(0) : "−∞"}</div>
       <div class="spacer"></div>
     </div>
@@ -108,14 +108,19 @@
     margin-left: 6px;
     border-left: 1px solid var(--border);
   }
+  .master-meter {
+    height: 100%;
+    padding: 11px 0;
+  }
   .master .label,
   .master .db {
     font-size: 12px;
+    font-weight: 600;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
   }
   .spacer {
-    height: 24px;
+    height: 26px;
   }
   footer {
     display: flex;

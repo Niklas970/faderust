@@ -1,7 +1,7 @@
 name: Release
 
-# Builds the Windows MSI. Runs on a version tag (v*), by hand from the
-# Actions tab, or as a dry run (MSI as workflow artifact, no release) on
+# Builds the Windows installer (NSIS setup). Runs on a version tag (v*), by hand from the
+# Actions tab, or as a dry run (setup as workflow artifact, no release) on
 # pull requests that touch the packaging.
 on:
   push:
@@ -27,7 +27,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  msi:
+  installer:
     runs-on: windows-latest
     defaults:
       run:
@@ -45,13 +45,14 @@ jobs:
         working-directory: crates/app/ui
       - run: npm run build
         working-directory: crates/app/ui
-      # The Tauri CLI downloads WiX itself.
-      - run: ui/node_modules/.bin/tauri build --bundles msi
+      # The Tauri CLI downloads NSIS itself. The installer follows the
+      # Windows display language (English or German).
+      - run: ui/node_modules/.bin/tauri build --bundles nsis
         working-directory: crates/app
       - uses: actions/upload-artifact@v4
         with:
-          name: faderust-msi
-          path: target/release/bundle/msi/*.msi
+          name: faderust-setup
+          path: target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
       - name: Create release
         if: github.event_name != 'pull_request'
@@ -60,7 +61,7 @@ jobs:
           TAG: ${{ inputs.tag || github.ref_name }}
           TITLE: ${{ inputs.title || github.ref_name }}
         run: |
-          gh release create "$TAG" target/release/bundle/msi/*.msi \
+          gh release create "$TAG" target/release/bundle/nsis/*-setup.exe \
             --title "$TITLE" \
             --notes-file .github/release-notes.md \
             --target "$GITHUB_SHA" \

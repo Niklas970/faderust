@@ -8,6 +8,8 @@
   --muted: #8a99a6;
   --copper: #ec8d5b;
   --copper-strong: #f3a273;
+  /* Top of the fader cap gradient. */
+  --copper-light: #f7b48e;
   --teal: #4fd1c0;
   --danger: #ef6b6b;
   --radius: 12px;
@@ -26,6 +28,7 @@
     --muted: #5d6b76;
     --copper: #b4531c;
     --copper-strong: #9a4415;
+    --copper-light: #d9773f;
     --teal: #0f766e;
     --danger: #c53b3b;
   }

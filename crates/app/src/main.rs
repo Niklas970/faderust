@@ -10,16 +10,20 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
-use faderust_engine::apps::AppRouter;
+use faderust_engine::apps::{AppRouter, Flow, Role, SystemAudio};
 use faderust_engine::backend::cpal::CpalBackend;
 use faderust_engine::backend::AudioBackend;
 use serde::Serialize;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, State, WindowEvent};
+use tauri_plugin_autostart::ManagerExt;
 
 use audio::Command;
-use config::{Config, InputEntry, OutputEntry};
+use config::{Config, Fx, InputEntry, OutputEntry};
+
+/// Passed by the Windows autostart entry: start in the tray, no window.
+const MINIMIZED_ARG: &str = "--minimized";
 
 struct AppState {
     config: Arc<Mutex<Config>>,
@@ -76,6 +80,8 @@ struct App {
     exe: String,
     pids: Vec<u32>,
     device: Option<String>,
+    volume: f32,
+    muted: bool,
 }
 
 #[derive(Serialize)]
@@ -124,6 +130,8 @@ async fn get_apps() -> Result<Apps, String> {
                 exe: a.exe,
                 pids: a.pids,
                 device: a.device,
+                volume: a.volume,
+                muted: a.muted,
             })
             .collect(),
     })
@@ -136,6 +144,119 @@ async fn set_app_output(pids: Vec<u32>, device: Option<String>) -> Result<(), St
     router
         .set_output(&pids, device.as_deref())
         .map_err(|e| e.to_string())
+}
+
+/// Sets a program's Windows volume (0…1) and/or mute.
+#[tauri::command]
+async fn set_app_volume(
+    pids: Vec<u32>,
+    volume: Option<f32>,
+    muted: Option<bool>,
+) -> Result<(), String> {
+    let router = router().ok_or("Nur unter Windows verfügbar")?;
+    router
+        .set_app_volume(&pids, volume.map(|v| v.clamp(0.0, 1.0)), muted)
+        .map_err(|e| e.to_string())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Endpoint {
+    id: String,
+    name: String,
+    is_default: bool,
+    is_default_communications: bool,
+    volume: f32,
+    muted: bool,
+}
+
+#[derive(Serialize)]
+struct WindowsAudio {
+    supported: bool,
+    playback: Vec<Endpoint>,
+    recording: Vec<Endpoint>,
+}
+
+#[cfg(windows)]
+fn system_audio() -> Option<Box<dyn SystemAudio>> {
+    Some(Box::new(faderust_engine::apps::wasapi::WasapiRouter::new()))
+}
+
+#[cfg(not(windows))]
+fn system_audio() -> Option<Box<dyn SystemAudio>> {
+    None
+}
+
+/// The Windows default devices and device volumes.
+#[tauri::command]
+async fn get_windows_audio() -> Result<WindowsAudio, String> {
+    let Some(sys) = system_audio() else {
+        return Ok(WindowsAudio {
+            supported: false,
+            playback: vec![],
+            recording: vec![],
+        });
+    };
+    let mut out = WindowsAudio {
+        supported: true,
+        playback: vec![],
+        recording: vec![],
+    };
+    for e in sys.endpoints().map_err(|e| e.to_string())? {
+        let list = match e.flow {
+            Flow::Playback => &mut out.playback,
+            Flow::Recording => &mut out.recording,
+        };
+        list.push(Endpoint {
+            id: e.id,
+            name: e.name,
+            is_default: e.is_default,
+            is_default_communications: e.is_default_communications,
+            volume: e.volume,
+            muted: e.muted,
+        });
+    }
+    Ok(out)
+}
+
+/// Makes a device the Windows default, for everything or only for calls.
+#[tauri::command]
+async fn set_default_device(id: String, communications: bool) -> Result<(), String> {
+    let sys = system_audio().ok_or("Nur unter Windows verfügbar")?;
+    let role = if communications {
+        Role::Communications
+    } else {
+        Role::Default
+    };
+    sys.set_default(&id, role).map_err(|e| e.to_string())
+}
+
+/// Sets a device's Windows volume (0…1) and/or mute.
+#[tauri::command]
+async fn set_device_volume(
+    id: String,
+    volume: Option<f32>,
+    muted: Option<bool>,
+) -> Result<(), String> {
+    let sys = system_audio().ok_or("Nur unter Windows verfügbar")?;
+    sys.set_endpoint_volume(&id, volume.map(|v| v.clamp(0.0, 1.0)), muted)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_autostart(app: AppHandle) -> Result<bool, String> {
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_autostart(enabled: bool, app: AppHandle) -> Result<(), String> {
+    let autostart = app.autolaunch();
+    if enabled {
+        autostart.enable()
+    } else {
+        autostart.disable()
+    }
+    .map_err(|e| format!("Autostart nicht geändert: {e}"))
 }
 
 #[tauri::command]
@@ -168,6 +289,52 @@ fn set_muted(
     send(&state, Command::SetMuted(input, output, muted))
 }
 
+/// Changes an input's effects while it plays; saved with the next fader save.
+#[tauri::command]
+fn set_fx(input: usize, fx: Fx, state: State<AppState>) -> Result<(), String> {
+    send(&state, Command::SetFx(input, fx))
+}
+
+/// Edits the presets and writes the file right away.
+fn edit_presets(state: &AppState, f: impl FnOnce(&mut Config) -> bool) -> Result<bool, String> {
+    let mut config = state.config.lock().unwrap();
+    let changed = f(&mut config);
+    config
+        .save(&state.path)
+        .map_err(|e| format!("Konfiguration nicht gespeichert: {e}"))?;
+    Ok(changed)
+}
+
+#[tauri::command]
+fn save_preset(name: String, state: State<AppState>) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("Das Preset braucht einen Namen".into());
+    }
+    edit_presets(&state, |c| {
+        c.save_preset(name);
+        true
+    })
+    .map(drop)
+}
+
+#[tauri::command]
+fn load_preset(name: String, state: State<AppState>) -> Result<(), String> {
+    if !edit_presets(&state, |c| c.load_preset(&name))? {
+        return Err(format!("Preset „{name}“ gibt es nicht"));
+    }
+    send(&state, Command::ApplyGains)
+}
+
+#[tauri::command]
+fn delete_preset(name: String, state: State<AppState>) -> Result<(), String> {
+    edit_presets(&state, |c| {
+        c.delete_preset(&name);
+        true
+    })
+    .map(drop)
+}
+
 fn send(state: &AppState, cmd: Command) -> Result<(), String> {
     state
         .audio
@@ -186,6 +353,7 @@ fn initial_config() -> Config {
             .map(|d| InputEntry {
                 label: "Mikrofon".into(),
                 device: d.name,
+                fx: Default::default(),
             })
             .into_iter()
             .collect(),
@@ -199,6 +367,7 @@ fn initial_config() -> Config {
             .into_iter()
             .collect(),
         gains: vec![],
+        presets: vec![],
     }
     .normalized()
 }
@@ -220,6 +389,17 @@ fn show_main(app: &AppHandle) {
 
 fn main() {
     tauri::Builder::default()
+        // Starting Faderust again (e.g. from the Start menu while it runs in
+        // the tray) shows the running window instead of opening the devices
+        // a second time.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            show_main(app)
+        }))
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .arg(MINIMIZED_ARG)
+                .build(),
+        )
         .setup(|app| {
             let path = app.path().app_config_dir()?.join("config.toml");
             let config = match Config::load(&path) {
@@ -266,6 +446,12 @@ fn main() {
                 tray = tray.icon(icon.clone());
             }
             tray.build(app)?;
+
+            // The window starts hidden (tauri.conf.json) so autostart does
+            // not flash it.
+            if !std::env::args().any(|a| a == MINIMIZED_ARG) {
+                show_main(app.handle());
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -279,10 +465,20 @@ fn main() {
             get_devices,
             get_apps,
             set_app_output,
+            set_app_volume,
+            get_windows_audio,
+            set_default_device,
+            set_device_volume,
+            get_autostart,
+            set_autostart,
             get_config,
             save_config,
             set_gain,
-            set_muted
+            set_muted,
+            set_fx,
+            save_preset,
+            load_preset,
+            delete_preset
         ])
         .run(tauri::generate_context!())
         .expect("error while running Faderust");
