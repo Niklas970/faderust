@@ -1,10 +1,16 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.3.4:
+
+- Fader gehen bis +12 dB
+- Reihenfolge von Ein- und Ausgängen unter **Geräte** mit Pfeilen änderbar (Presets wandern mit)
+
 Neu in 0.3.3:
 
 - Programme haben eine Pegelanzeige, darunter steht, ob ihr Ton über Faderust läuft oder direkt rausgeht
 - Gate schneidet Wortenden nicht mehr ab (längere Haltezeit, weicheres Ausblenden)
-- Fader mit Hardware-Kappe und Wertefenster, breitere LED-Ketten
+- Fader-Kappe „Graphit & Kupferkante“ mit dB-Wert oben und unten, beleuchtete MUTE-Tasten, breitere LED-Ketten
+- Neuer Knopf **Design**: Akzent- und Signalfarbe frei wählbar, hell oder dunkel
 
 Neu in 0.3.2: Faderust sucht beim Start nach Updates. Gibt es eine neue Version, erscheint oben „Update auf …“. Ein Klick lädt sie, prüft die Signatur und installiert sie. Diese Version muss noch einmal von Hand installiert werden.
 

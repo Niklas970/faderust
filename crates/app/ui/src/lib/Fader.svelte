@@ -3,7 +3,7 @@
 
   /**
    * A desk fader with scale, mute and an optional meter. `unit` "db" is an
-   * input's gain on an output (-∞…+6 dB, hardware taper); "pct" a Windows
+   * input's gain on an output (-∞…+12 dB, hardware taper); "pct" a Windows
    * volume (0…100 %). Drag the cap, click the track to jump, scroll to nudge
    * (Shift: finer), double-click for the default, arrow keys when focused.
    */
@@ -26,18 +26,19 @@
     toPos(d) {
       if (d <= -60) return 0;
       if (d < -24) return 0.05 + ((d + 60) / 36) * 0.2;
-      return 0.25 + ((Math.min(d, 6) + 24) / 30) * 0.75;
+      return 0.25 + ((Math.min(d, 12) + 24) / 36) * 0.75;
     },
     fromPos(p) {
       if (p <= 0.05) return OFF;
       if (p < 0.25) return -60 + ((p - 0.05) / 0.2) * 36;
-      return -24 + ((Math.min(p, 1) - 0.25) / 0.75) * 30;
+      return -24 + ((Math.min(p, 1) - 0.25) / 0.75) * 36;
     },
-    clamp: (d) => (d <= -60 ? OFF : Math.min(6, Math.round(d * 2) / 2)),
+    clamp: (d) => (d <= -60 ? OFF : Math.min(12, Math.round(d * 2) / 2)),
     // From off, the first step up lands at -59 dB.
     nudge: (d, delta) => (d <= OFF ? (delta > 0 ? -59 : OFF) : d + delta),
     format: (d) => (d <= OFF ? "−∞" : `${d > 0 ? "+" : ""}${d.toFixed(1)}`),
     ticks: [
+      [12, "+12"],
       [6, "+6"],
       [0, "0"],
       [-6, "-6"],
@@ -51,7 +52,7 @@
     page: 6,
     home: 0,
     min: -60,
-    max: 6,
+    max: 12,
     aria: (d) => (d <= OFF ? "aus" : `${d.toFixed(1)} dB`),
   };
   const PCT = {
