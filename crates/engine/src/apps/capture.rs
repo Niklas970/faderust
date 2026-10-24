@@ -1,0 +1,393 @@
+//! Recording a single program (WASAPI process loopback, Windows 10 2004 and
+//! later). Windows hands over what the program plays, whatever device it
+//! plays on, so every program can become its own input with its own effects
+//! without a virtual cable per program.
+//!
+//! The program keeps playing on its own device too. To hear it only through
+//! Faderust, point it at a device nobody listens to (e.g. a VB-Cable whose
+//! other side is no input).
+
+use std::mem::size_of;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc};
+use std::thread::JoinHandle;
+
+use windows::core::{implement, Interface, Ref, HRESULT, PCWSTR};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT};
+use windows::Win32::Media::Audio::{
+    ActivateAudioInterfaceAsync, IActivateAudioInterfaceAsyncOperation,
+    IActivateAudioInterfaceCompletionHandler, IActivateAudioInterfaceCompletionHandler_Impl,
+    IAudioCaptureClient, IAudioClient, AUDCLNT_BUFFERFLAGS_SILENT, AUDCLNT_SHAREMODE_SHARED,
+    AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+    AUDCLNT_STREAMFLAGS_LOOPBACK, AUDIOCLIENT_ACTIVATION_PARAMS, AUDIOCLIENT_ACTIVATION_PARAMS_0,
+    AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK, AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS,
+    PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE, VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
+    WAVEFORMATEX,
+};
+use windows::Win32::System::Com::StructuredStorage::{
+    PROPVARIANT, PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0,
+};
+use windows::Win32::System::Com::{IAgileObject, IAgileObject_Impl, BLOB};
+use windows::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+};
+use windows::Win32::System::Threading::{
+    CreateEventW, OpenProcess, SetEvent, WaitForMultipleObjects, WaitForSingleObject, INFINITE,
+    PROCESS_SYNCHRONIZE,
+};
+use windows::Win32::System::Variant::VT_BLOB;
+
+use super::wasapi::{Com, WasapiRouter};
+use super::{capture_roots, AppAudio, AppRouter};
+use crate::backend::{ErrorCallback, InputCallback};
+
+/// Programs arrive in this format; Windows converts from whatever they play.
+pub const SAMPLE_RATE: u32 = 48_000;
+pub const CHANNELS: u16 = 2;
+
+/// `WAVE_FORMAT_IEEE_FLOAT` from mmreg.h.
+const WAVE_FORMAT_IEEE_FLOAT: u16 = 3;
+
+/// Frames of silence handed on when Windows reports a silent packet.
+const SILENCE_FRAMES: usize = 2048;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaptureError(pub String);
+
+impl std::fmt::Display for CaptureError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+fn err(e: windows::core::Error) -> CaptureError {
+    CaptureError(e.message())
+}
+
+/// Programs that play audio right now, except Faderust itself.
+pub fn programs() -> Result<Vec<AppAudio>, CaptureError> {
+    let own = std::process::id();
+    let mut apps = WasapiRouter::new().apps().map_err(|e| CaptureError(e.0))?;
+    apps.retain(|a| !a.pids.contains(&own));
+    Ok(apps)
+}
+
+/// Running processes as `(pid, parent, exe)`.
+fn processes() -> Result<Vec<(u32, u32, String)>, CaptureError> {
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) }.map_err(err)?;
+    let mut list = Vec::new();
+    let mut entry = PROCESSENTRY32W {
+        dwSize: size_of::<PROCESSENTRY32W>() as u32,
+        ..Default::default()
+    };
+    let mut more = unsafe { Process32FirstW(snapshot, &mut entry) }.is_ok();
+    while more {
+        let len = entry
+            .szExeFile
+            .iter()
+            .position(|&c| c == 0)
+            .unwrap_or(entry.szExeFile.len());
+        list.push((
+            entry.th32ProcessID,
+            entry.th32ParentProcessID,
+            String::from_utf16_lossy(&entry.szExeFile[..len]),
+        ));
+        more = unsafe { Process32NextW(snapshot, &mut entry) }.is_ok();
+    }
+    unsafe {
+        let _ = CloseHandle(snapshot);
+    }
+    Ok(list)
+}
+
+/// Records the program `exe` (e.g. `spotify.exe`) until dropped. `data` gets
+/// interleaved stereo `f32` at [`SAMPLE_RATE`] on a thread of its own;
+/// `error` runs once if recording stops by itself (the program quit).
+pub fn open(
+    exe: &str,
+    mut data: InputCallback,
+    mut error: ErrorCallback,
+) -> Result<ProgramCapture, CaptureError> {
+    let app = programs()?
+        .into_iter()
+        .find(|a| a.exe.eq_ignore_ascii_case(exe))
+        .ok_or_else(|| CaptureError(format!("{exe} spielt gerade keinen Ton ab")))?;
+    let roots = capture_roots(&app.pids, &processes()?);
+    if roots.is_empty() {
+        return Err(CaptureError(format!("{exe} läuft nicht mehr")));
+    }
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let thread_stop = Arc::clone(&stop);
+    let thread = std::thread::Builder::new()
+        .name(format!("capture {exe}"))
+        .spawn(move || {
+            let result = Recorder::new(&roots);
+            match result {
+                Ok(mut recorder) => {
+                    let _ = ready_tx.send(Ok(()));
+                    if !recorder.run(&thread_stop, &mut *data)
+                        && !thread_stop.load(Ordering::Relaxed)
+                    {
+                        error();
+                    }
+                }
+                Err(e) => {
+                    let _ = ready_tx.send(Err(e));
+                }
+            }
+        })
+        .map_err(|e| CaptureError(e.to_string()))?;
+    match ready_rx.recv() {
+        Ok(Ok(())) => Ok(ProgramCapture {
+            stop,
+            thread: Some(thread),
+        }),
+        Ok(Err(e)) => {
+            let _ = thread.join();
+            Err(e)
+        }
+        Err(_) => Err(CaptureError("Aufnahme-Thread beendet".into())),
+    }
+}
+
+/// A running program recording; dropping it stops the recording.
+pub struct ProgramCapture {
+    stop: Arc<AtomicBool>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl Drop for ProgramCapture {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
+/// One loopback client per root process, all on the recording thread.
+struct Recorder {
+    // Field order matters: COM objects go before COM itself.
+    sources: Vec<Source>,
+    /// Signalled when any of the programs' processes ends.
+    processes: Vec<HANDLE>,
+    _com: Com,
+}
+
+struct Source {
+    client: IAudioClient,
+    capture: IAudioCaptureClient,
+    event: HANDLE,
+}
+
+impl Recorder {
+    fn new(roots: &[u32]) -> Result<Self, CaptureError> {
+        let com = Com::init().map_err(|e| CaptureError(e.0))?;
+        let mut recorder = Self {
+            sources: Vec::new(),
+            processes: Vec::new(),
+            _com: com,
+        };
+        for &pid in roots {
+            if let Ok(process) = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, false, pid) } {
+                recorder.processes.push(process);
+            }
+            recorder.sources.push(Source::new(pid)?);
+        }
+        for s in &recorder.sources {
+            unsafe { s.client.Start() }.map_err(err)?;
+        }
+        Ok(recorder)
+    }
+
+    /// Hands on audio until `stop` is set (true) or a process ends (false).
+    fn run(&mut self, stop: &AtomicBool, data: &mut dyn FnMut(&[f32])) -> bool {
+        let silence = vec![0.0f32; SILENCE_FRAMES * CHANNELS as usize];
+        let events: Vec<HANDLE> = self.sources.iter().map(|s| s.event).collect();
+        while !stop.load(Ordering::Relaxed) {
+            if self
+                .processes
+                .iter()
+                .any(|&p| unsafe { WaitForSingleObject(p, 0) } == WAIT_OBJECT_0)
+            {
+                return false;
+            }
+            let woke = unsafe { WaitForMultipleObjects(&events, false, 100) };
+            if woke == WAIT_TIMEOUT {
+                continue;
+            }
+            for s in &self.sources {
+                if s.drain(data, &silence).is_err() {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+}
+
+impl Drop for Recorder {
+    fn drop(&mut self) {
+        for s in &self.sources {
+            unsafe {
+                let _ = s.client.Stop();
+            }
+        }
+        for &p in &self.processes {
+            unsafe {
+                let _ = CloseHandle(p);
+            }
+        }
+    }
+}
+
+impl Source {
+    fn new(pid: u32) -> Result<Self, CaptureError> {
+        let client = activate(pid)?;
+        let format = WAVEFORMATEX {
+            wFormatTag: WAVE_FORMAT_IEEE_FLOAT,
+            nChannels: CHANNELS,
+            nSamplesPerSec: SAMPLE_RATE,
+            nAvgBytesPerSec: SAMPLE_RATE * u32::from(CHANNELS) * 4,
+            nBlockAlign: CHANNELS * 4,
+            wBitsPerSample: 32,
+            cbSize: 0,
+        };
+        unsafe {
+            client.Initialize(
+                AUDCLNT_SHAREMODE_SHARED,
+                AUDCLNT_STREAMFLAGS_LOOPBACK
+                    | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
+                    | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+                200_000, // 20 ms in 100 ns units
+                0,
+                &format,
+                None,
+            )
+        }
+        .map_err(err)?;
+        let event = unsafe { CreateEventW(None, false, false, PCWSTR::null()) }.map_err(err)?;
+        let source = Self {
+            capture: unsafe { client.GetService() }.map_err(err)?,
+            client,
+            event,
+        };
+        unsafe { source.client.SetEventHandle(source.event) }.map_err(err)?;
+        Ok(source)
+    }
+
+    fn drain(&self, data: &mut dyn FnMut(&[f32]), silence: &[f32]) -> windows::core::Result<()> {
+        let channels = CHANNELS as usize;
+        while unsafe { self.capture.GetNextPacketSize() }? > 0 {
+            let mut buffer = std::ptr::null_mut();
+            let mut frames = 0u32;
+            let mut flags = 0u32;
+            unsafe {
+                self.capture
+                    .GetBuffer(&mut buffer, &mut frames, &mut flags, None, None)
+            }?;
+            let len = frames as usize * channels;
+            if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 || buffer.is_null() {
+                let mut left = len;
+                while left > 0 {
+                    let n = left.min(silence.len());
+                    data(&silence[..n]);
+                    left -= n;
+                }
+            } else {
+                // The client delivers the float format it was initialised with.
+                let samples = unsafe { std::slice::from_raw_parts(buffer as *const f32, len) };
+                data(samples);
+            }
+            unsafe { self.capture.ReleaseBuffer(frames) }?;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for Source {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = CloseHandle(self.event);
+        }
+    }
+}
+
+/// Signals an event when the asynchronous activation is done. Agile, as the
+/// API requires; it may complete on any thread.
+#[implement(IActivateAudioInterfaceCompletionHandler, IAgileObject)]
+struct Activated(HANDLE);
+
+impl IActivateAudioInterfaceCompletionHandler_Impl for Activated_Impl {
+    fn ActivateCompleted(
+        &self,
+        _operation: Ref<IActivateAudioInterfaceAsyncOperation>,
+    ) -> windows::core::Result<()> {
+        unsafe { SetEvent(self.0) }
+    }
+}
+
+impl IAgileObject_Impl for Activated_Impl {}
+
+fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
+    let mut params = AUDIOCLIENT_ACTIVATION_PARAMS {
+        ActivationType: AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
+        Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
+            ProcessLoopbackParams: AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS {
+                TargetProcessId: pid,
+                ProcessLoopbackMode: PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
+            },
+        },
+    };
+    let blob = PROPVARIANT {
+        Anonymous: PROPVARIANT_0 {
+            Anonymous: std::mem::ManuallyDrop::new(PROPVARIANT_0_0 {
+                vt: VT_BLOB,
+                wReserved1: 0,
+                wReserved2: 0,
+                wReserved3: 0,
+                Anonymous: PROPVARIANT_0_0_0 {
+                    blob: BLOB {
+                        cbSize: size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>() as u32,
+                        pBlobData: &mut params as *mut _ as *mut u8,
+                    },
+                },
+            }),
+        },
+    };
+
+    let done = unsafe { CreateEventW(None, true, false, PCWSTR::null()) }.map_err(err)?;
+    let handler: IActivateAudioInterfaceCompletionHandler = Activated(done).into();
+    let result = (|| {
+        let operation = unsafe {
+            ActivateAudioInterfaceAsync(
+                VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
+                &IAudioClient::IID,
+                Some(&blob),
+                &handler,
+            )
+        }
+        .map_err(err)?;
+        unsafe { WaitForSingleObject(done, INFINITE) };
+        let mut hr = HRESULT(0);
+        let mut unknown = None;
+        unsafe { operation.GetActivateResult(&mut hr, &mut unknown) }.map_err(err)?;
+        hr.ok().map_err(|e| {
+            CaptureError(format!(
+                "Programm-Aufnahme nicht möglich (braucht Windows 10 2004 oder neuer): {}",
+                e.message()
+            ))
+        })?;
+        unknown
+            .ok_or_else(|| CaptureError("keine Aufnahme erhalten".into()))?
+            .cast::<IAudioClient>()
+            .map_err(err)
+    })();
+    unsafe {
+        let _ = CloseHandle(done);
+    }
+    // `blob` points at `params`; both live on this frame until here.
+    result
+}

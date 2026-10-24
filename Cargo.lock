@@ -1191,6 +1191,7 @@ dependencies = [
  "rtrb",
  "rubato",
  "windows",
+ "windows-core",
 ]
 
 [[package]]

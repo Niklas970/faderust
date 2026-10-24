@@ -23,7 +23,7 @@
 - **Geräte kommen und gehen.** Bluetooth-Kopfhörer aus- und wieder einschalten, USB-Gerät abziehen: Faderust verbindet neu, ohne die anderen Geräte zu unterbrechen.
 - **Effekte pro Eingang:** Low-Cut, Drei-Band-EQ und Gate, zum Beispiel gegen Tastaturgeräusche am Mikro.
 - **Programme auf der Hauptseite:** Lautstärke, Stumm und Pegel für jedes Programm, das gerade Ton abspielt.
-- **Programme auf eigene Fader:** Mit [VB-Cable](https://vb-audio.com/Cable/) läuft ein Programm durch Faderust und landet in der Mischung.
+- **Programme als Eingänge:** Faderust nimmt einzelne Programme direkt auf, jedes mit eigenem Fader und EQ. Alternativ geht es über [VB-Cable](https://vb-audio.com/Cable/).
 - **Windows-Sound direkt aus Faderust:** Standardgeräte für Wiedergabe, Aufnahme und Anrufe sowie die Lautstärke pro Gerät.
 - **Presets** für Fader-Stellungen, **Autostart** mit Windows (im Tray), **Updates** in der App mit Signaturprüfung.
 - **Eigene Farben:** Akzent- und Signalfarbe frei wählbar, hell oder dunkel.
@@ -43,7 +43,13 @@ Voraussetzung ist Windows 10 oder 11. WebView2 ist dort meist schon da, sonst l�
 3. Fader bedienen: ziehen, auf die Bahn klicken, Mausrad (mit Shift feiner), Doppelklick setzt auf 0 dB. Der Bereich geht von −∞ bis +12 dB.
 4. Ein Klick auf einen Eingang oben in der Leiste öffnet seine Effekte.
 
-### Programme durch Faderust schicken
+### Programme als eigene Eingänge
+
+Unter **Programme** nimmt **+ Eingang** ein Programm direkt auf (Windows-Prozess-Loopback, ab Windows 10 Version 2004). Das Programm bekommt dann in jeder Ausgangsspalte einen Fader und eigene Effekte wie EQ und Gate, ganz ohne ein Kabel pro Programm. Es erscheint, sobald das Programm Ton abspielt, und verbindet sich nach einem Neustart des Programms von selbst neu.
+
+Das Programm spielt weiter auch auf seinem eigenen Gerät. Damit du es nicht doppelt hörst, stell es im selben Dialog auf ein Gerät, das du nicht direkt hörst, zum Beispiel ein VB-Cable, das kein Eingang ist.
+
+### Programme über ein virtuelles Kabel
 
 Damit ein Programm (Spotify, Discord, Browser …) in der Mischung landet, spielt es auf ein virtuelles Kabel, und Faderust nimmt die andere Seite des Kabels als Eingang:
 

@@ -8,6 +8,8 @@
 //! the program and Faderust.
 
 #[cfg(windows)]
+pub mod capture;
+#[cfg(windows)]
 pub mod wasapi;
 
 use std::fmt;
@@ -172,6 +174,35 @@ pub fn group_sessions(sessions: impl IntoIterator<Item = Session>) -> Vec<AppAud
     apps
 }
 
+/// Processes to record a program from. A program often runs as several
+/// processes (browsers, Discord) and Windows records a process together with
+/// its children, so each session's process is followed up to the topmost
+/// parent with the same executable. `processes` lists `(pid, parent, exe)`.
+pub fn capture_roots(pids: &[u32], processes: &[(u32, u32, String)]) -> Vec<u32> {
+    let find = |pid: u32| processes.iter().find(|(p, ..)| *p == pid);
+    let mut roots = Vec::new();
+    for &pid in pids {
+        let Some(mut current) = find(pid) else {
+            continue;
+        };
+        // Bounded: a reused pid can make the parent chain loop.
+        for _ in 0..processes.len() {
+            match find(current.1) {
+                Some(parent)
+                    if parent.0 != current.0 && parent.2.eq_ignore_ascii_case(&current.2) =>
+                {
+                    current = parent
+                }
+                _ => break,
+            }
+        }
+        if !roots.contains(&current.0) {
+            roots.push(current.0);
+        }
+    }
+    roots
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -207,5 +238,24 @@ mod tests {
         assert_eq!(apps[1].device.as_deref(), Some("cable"));
         assert_eq!(apps[2].device, None);
         assert_eq!(apps[1].volume, 0.2);
+    }
+
+    #[test]
+    fn capture_roots_follow_same_program_parents() {
+        let p = |pid, parent, exe: &str| (pid, parent, exe.to_string());
+        let processes = vec![
+            p(1, 0, "explorer.exe"),
+            p(10, 1, "chrome.exe"),
+            p(11, 10, "chrome.exe"), // audio service
+            p(12, 10, "chrome.exe"),
+            p(20, 1, "Discord.exe"),
+            p(21, 20, "discord.exe"),
+            p(30, 31, "loop.exe"), // pid reuse: parents point at each other
+            p(31, 30, "loop.exe"),
+        ];
+        assert_eq!(capture_roots(&[11, 12], &processes), vec![10]);
+        assert_eq!(capture_roots(&[21, 20], &processes), vec![20]);
+        assert_eq!(capture_roots(&[99], &processes), Vec::<u32>::new());
+        assert_eq!(capture_roots(&[30], &processes).len(), 1);
     }
 }

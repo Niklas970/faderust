@@ -2,8 +2,9 @@
   import { getApps, getDevices, isCable, setAppOutput } from "./api.js";
 
   /**
-   * Which program plays on which device. A program on a virtual cable
-   * reaches Faderust through the cable's capture side, as its own input.
+   * Which program plays on which device, and which programs Faderust records
+   * as inputs of their own. A program on a virtual cable also reaches
+   * Faderust through the cable's capture side.
    */
   let { inputs, onAddInput, onClose } = $props();
 
@@ -30,6 +31,11 @@
     ),
   );
 
+  // Program inputs record the program itself, see engine apps::capture.
+  const programId = (app) => `app:${app.exe.toLowerCase()}`;
+  const isInput = (app) => inputs.some((i) => i.device === programId(app));
+  let anyProgramInput = $derived(data?.apps.some(isInput));
+
   async function change(app, device) {
     try {
       await setAppOutput($state.snapshot(app.pids), device || null);
@@ -55,8 +61,9 @@
     {#if !hasCable}
       <div class="hint">
         <strong>Kein virtuelles Kabel gefunden.</strong>
-        Damit ein Programm einen eigenen Fader bekommt, braucht es ein virtuelles Kabel. Installiere das
-        kostenlose VB-Cable von <span class="url">vb-audio.com/Cable</span> und starte den PC neu.
+        Mit „+ Eingang“ nimmt Faderust ein Programm direkt auf. Damit es dann nicht zusätzlich über die Boxen
+        läuft, braucht es ein Gerät, das du nicht hörst: Installiere das kostenlose VB-Cable von
+        <span class="url">vb-audio.com/Cable</span> und starte den PC neu.
       </div>
     {/if}
     {#each unusedCables as cable}
@@ -85,11 +92,25 @@
                 <option value={app.device}>Gerät nicht verbunden</option>
               {/if}
             </select>
+            {#if isInput(app)}
+              <span class="is-input" title="Faderust nimmt das Programm als eigenen Eingang auf">Eingang</span>
+            {:else}
+              <button
+                title="Programm als eigenen Eingang mit Fader und Effekten aufnehmen"
+                onclick={() => onAddInput(programId(app), app.name)}>+ Eingang</button
+              >
+            {/if}
           </li>
         {/each}
       </ul>
     {:else}
       <p class="note">Gerade spielt kein Programm Ton ab. Starte die Wiedergabe und tippe auf „Aktualisieren“.</p>
+    {/if}
+    {#if anyProgramInput}
+      <p class="hint">
+        Programme als Eingang spielen weiter auch auf ihrem eigenen Gerät. Damit du sie nicht doppelt hörst, stell
+        sie auf ein Gerät, das du nicht direkt hörst, zum Beispiel ein VB-Cable, das kein Eingang ist.
+      </p>
     {/if}
     <p class="note small">
       Windows merkt sich die Zuordnung pro Programm. Manche Programme übernehmen sie erst nach einem Neustart.
@@ -155,6 +176,15 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--panel-2);
+  }
+  .is-input {
+    flex: none;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--signal);
+    border: 1px solid var(--signal);
+    border-radius: var(--radius-sm);
   }
   select.cable {
     border-color: var(--signal);
