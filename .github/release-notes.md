@@ -42,6 +42,8 @@ Neu in 0.3:
 3. Der Installer ist nicht signiert. Windows SmartScreen warnt deshalb: „Weitere Informationen“ → „Trotzdem ausführen“.
 4. Faderust aus dem Startmenü starten. Fehlt WebView2, lädt der Installer es nach.
 
+Stream Deck (optional): `com.niklas970.faderust.streamDeckPlugin` doppelklicken, die Aktionen stehen dann unter „Faderust“. Braucht Stream Deck 7.1 oder neuer und ein laufendes Faderust.
+
 Die Konfiguration liegt unter `%APPDATA%\io.github.niklas970.faderust\config.toml`.
 
 ## Was drin ist

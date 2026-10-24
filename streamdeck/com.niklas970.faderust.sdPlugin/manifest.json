@@ -1,0 +1,118 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "Name": "Faderust",
+  "Version": "0.3.0.0",
+  "Author": "Niklas970",
+  "Description": "Steuert den Faderust-Mixer: Fader, Stummschalten, Presets und Windows-Standardgeräte.",
+  "URL": "https://github.com/Niklas970/faderust",
+  "UUID": "com.niklas970.faderust",
+  "Category": "Faderust",
+  "CategoryIcon": "imgs/plugin/category",
+  "Icon": "imgs/plugin/icon",
+  "CodePath": "bin/plugin.js",
+  "SDKVersion": 3,
+  "Software": {
+    "MinimumVersion": "7.1"
+  },
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Nodejs": {
+    "Version": "24"
+  },
+  "Actions": [
+    {
+      "Name": "Fader",
+      "UUID": "com.niklas970.faderust.volume",
+      "Icon": "imgs/actions/volume/icon",
+      "Tooltip": "Regler: Pegel ändern, drücken schaltet stumm. Taste: Pegel um einen Schritt ändern.",
+      "PropertyInspectorPath": "ui/volume.html",
+      "Controllers": [
+        "Keypad",
+        "Encoder"
+      ],
+      "Encoder": {
+        "layout": "$B1",
+        "Icon": "imgs/actions/volume/icon",
+        "TriggerDescription": {
+          "Rotate": "Pegel",
+          "Push": "Stumm",
+          "Touch": "Stumm"
+        }
+      },
+      "States": [
+        {
+          "Image": "imgs/actions/volume/key",
+          "TitleAlignment": "bottom",
+          "FontSize": 11
+        }
+      ]
+    },
+    {
+      "Name": "Stumm",
+      "UUID": "com.niklas970.faderust.mute",
+      "Icon": "imgs/actions/mute/icon",
+      "Tooltip": "Schaltet einen Eingang auf einem oder allen Ausgängen stumm.",
+      "PropertyInspectorPath": "ui/mute.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "States": [
+        {
+          "Image": "imgs/actions/mute/on",
+          "TitleAlignment": "bottom"
+        },
+        {
+          "Image": "imgs/actions/mute/off",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Preset laden",
+      "UUID": "com.niklas970.faderust.preset",
+      "Icon": "imgs/actions/preset/icon",
+      "Tooltip": "Lädt ein gespeichertes Preset. Leuchtet, solange die Fader dazu passen.",
+      "PropertyInspectorPath": "ui/preset.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "States": [
+        {
+          "Image": "imgs/actions/preset/key",
+          "TitleAlignment": "bottom"
+        },
+        {
+          "Image": "imgs/actions/preset/active",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Standardgerät",
+      "UUID": "com.niklas970.faderust.device",
+      "Icon": "imgs/actions/device/icon",
+      "Tooltip": "Macht ein Gerät zum Windows-Standard (Wiedergabe oder Aufnahme).",
+      "PropertyInspectorPath": "ui/device.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "States": [
+        {
+          "Image": "imgs/actions/device/key",
+          "TitleAlignment": "bottom"
+        },
+        {
+          "Image": "imgs/actions/device/active",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+/* Settings panel, close to Stream Deck's own look. */
+:root { color-scheme: dark; }
+body {
+  margin: 0;
+  padding: 8px 12px 12px 0;
+  background: #2d2d2d;
+  color: #d8d8d8;
+  font: 9pt "Segoe UI", system-ui, sans-serif;
+}
+.item { display: flex; align-items: center; min-height: 32px; }
+.item > label:first-child { flex: 0 0 96px; padding: 0 8px; text-align: right; color: #9a9a9a; }
+select, input[type="number"] {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 3px;
+  background: #3d3d3d;
+  color: #d8d8d8;
+  font: inherit;
+}
+input[type="checkbox"] { margin: 0 6px 0 0; accent-color: #4fd1c0; }
+.check { display: flex; align-items: center; }
+.hint { margin: 2px 0 6px 104px; color: #8a8a8a; line-height: 1.4; }
+.status { margin: 0 0 6px 104px; padding: 6px 8px; border-radius: 3px; background: #4a2b1d; color: #f2b08d; }
+.status[hidden] { display: none; }

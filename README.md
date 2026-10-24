@@ -70,6 +70,7 @@ Faderust ist in Rust geschrieben, die Oberfläche in Svelte mit Tauri 2. Planung
 | `crates/engine` | Audio-Kern: Geräte (WASAPI über cpal), Ringpuffer, Drift-Ausgleich, Mix-Matrix, Effekte, Programm-Steuerung |
 | `crates/app` | Tauri-App: Befehle, Konfiguration, Tray, Updater |
 | `crates/app/ui` | Oberfläche in Svelte 5 |
+| `streamdeck` | Stream-Deck-Plugin |
 
 Voraussetzungen: Rust (stable), Node.js 22, unter Windows WebView2.
 
@@ -92,6 +93,10 @@ cargo run --release -p faderust        # App starten
   `--output NAME:MS` setzt den Puffer pro Ausgang, `--gain I:O:DB` und `--mute I:O` stellen die Matrix ein. Geräte werden über Teile des Namens gefunden.
 
 Vor einem Commit laufen `cargo fmt`, `cargo clippy -- -D warnings` und `cargo test`. Neue Abhängigkeiten brauchen eine freizügige Lizenz (`cargo deny check`).
+
+## Stream Deck
+
+Das Plugin in [`streamdeck/`](streamdeck/README.md) steuert Faderust vom Elgato Stream Deck: Fader per Drehregler (Stream Deck+) oder Taste, Stummschalten, Presets laden und Windows-Standardgerät wechseln. Installieren: `com.niklas970.faderust.streamDeckPlugin` aus den [Releases](https://github.com/Niklas970/faderust/releases) doppelklicken. Braucht Stream Deck 7.1 oder neuer.
 
 ## Lizenz
 
