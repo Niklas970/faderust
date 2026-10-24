@@ -7,7 +7,18 @@
    * volume (0…100 %). Drag the cap, click the track to jump, scroll to nudge
    * (Shift: finer), double-click for the default, arrow keys when focused.
    */
-  let { label, value, unit = "db", muted, levelDb = null, connected = true, onChange, onMute } = $props();
+  let {
+    label,
+    value,
+    unit = "db",
+    muted,
+    levelDb = null,
+    connected = true,
+    note = "",
+    noteOn = false,
+    onChange,
+    onMute,
+  } = $props();
 
   const OFF = -120;
   const DB = {
@@ -142,6 +153,7 @@
 
 <div class="strip" class:offline={!connected}>
   <div class="label" title={label}>{label}</div>
+  {#if note}<div class="note" class:on={noteOn}>{note}</div>{/if}
   <div class="body">
     <div
       class="track"
@@ -169,7 +181,9 @@
       <div class="slot">
         <div class="fill" class:muted style:height={`${pos * 100}%`}></div>
       </div>
-      <div class="cap" class:off={isOff} style:bottom={`${pos * 100}%`}>{scale.format(local)}</div>
+      <div class="cap" class:off={isOff} style:bottom={`${pos * 100}%`}>
+        <span class="value">{scale.format(local)}</span>
+      </div>
     </div>
     {#if levelDb != null}<Meter db={meterDb} />{/if}
   </div>
@@ -180,11 +194,11 @@
 
 <style>
   .strip {
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    justify-items: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     gap: 8px;
-    width: 112px;
+    width: 124px;
     min-height: 0;
   }
   .offline {
@@ -205,12 +219,20 @@
     background: var(--panel-2);
     border-radius: var(--radius-sm);
   }
+  .note {
+    margin-top: -4px;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .note.on {
+    color: var(--teal);
+  }
   .body {
+    flex: 1;
     display: flex;
-    gap: 5px;
-    height: 100%;
+    gap: 6px;
     min-height: 160px;
-    padding: 11px 0;
+    padding: 18px 0;
   }
   .track {
     position: relative;
@@ -220,7 +242,7 @@
     touch-action: none;
   }
   .track:focus-visible {
-    outline-offset: 12px;
+    outline-offset: 18px;
   }
   .scale {
     position: absolute;
@@ -235,18 +257,27 @@
     line-height: 1;
     color: var(--muted);
   }
+  /* Scale marks left and right of the slot. */
+  .tick::before,
   .tick::after {
     content: "";
     position: absolute;
     top: 50%;
-    right: -26px;
-    width: 6px;
+    width: 7px;
     height: 1px;
     background: var(--border);
   }
+  .tick::before {
+    right: -27px;
+  }
+  .tick::after {
+    right: -45px;
+  }
   .tick.zero {
     color: var(--text);
+    font-weight: 700;
   }
+  .tick.zero::before,
   .tick.zero::after {
     background: var(--muted);
   }
@@ -254,80 +285,110 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 54px;
-    width: 8px;
+    left: 55px;
+    width: 6px;
     background: var(--well);
-    box-shadow: 0 0 0 1px var(--border);
+    border-radius: 3px;
+    box-shadow:
+      inset 0 1px 3px rgb(0 0 0 / 0.8),
+      0 0 0 1px var(--border);
+    overflow: hidden;
   }
   .fill {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    background: var(--copper);
+    background: linear-gradient(to top, color-mix(in srgb, var(--copper) 55%, black), var(--copper));
   }
   .fill.muted {
     background: var(--border);
   }
-  /* Flat cap with the gain printed on it. */
+  /* Hardware-style cap: shaded body, grip ridges, gain in a recessed window. */
   .cap {
     position: absolute;
-    left: 30px;
-    width: 56px;
-    height: 30px;
+    left: 29px;
+    width: 58px;
+    height: 38px;
     transform: translateY(50%);
     display: grid;
     place-items: center;
-    font-family: var(--mono);
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 1;
-    color: var(--text);
-    background: var(--panel-2);
-    border: 1px solid #5a6068;
-    border-top-color: #737a83;
-    border-radius: 2px;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+    background: linear-gradient(
+      to bottom,
+      #646b74 0%,
+      #464c53 18%,
+      #33383e 50%,
+      #2a2e33 82%,
+      #3a3f45 100%
+    );
+    border: 1px solid #121417;
+    border-radius: 4px;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      inset 0 -1px 0 rgb(0 0 0 / 0.4),
+      0 3px 6px rgb(0 0 0 / 0.55);
     pointer-events: none;
     transition: bottom 40ms linear;
   }
-  /* Grip ridges above and below the value. */
   .cap::before,
   .cap::after {
     content: "";
     position: absolute;
-    left: 6px;
-    right: 6px;
-    height: 1px;
-    background: #5a6068;
+    left: 8px;
+    right: 8px;
+    height: 2px;
+    border-top: 1px solid rgb(0 0 0 / 0.45);
+    border-bottom: 1px solid rgb(255 255 255 / 0.12);
   }
   .cap::before {
-    top: 3px;
+    top: 4px;
   }
   .cap::after {
-    bottom: 3px;
+    bottom: 4px;
   }
-  .cap.off {
+  .value {
+    min-width: 42px;
+    padding: 2px 3px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    color: #e9ecef;
+    background: #0d0e10;
+    border-radius: 2px;
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.9);
+  }
+  .cap.off .value {
     color: var(--muted);
+  }
+  .track:hover .cap {
+    border-color: #000;
   }
   .track:focus-visible .cap,
   .dragging .cap {
-    border-color: var(--copper);
-    color: var(--copper-light);
     transition: none;
   }
+  .track:focus-visible .value,
+  .dragging .value {
+    color: var(--copper-light);
+  }
+  .body :global(.meter.vertical) {
+    width: 14px;
+  }
   .mute {
-    width: 64px;
-    height: 26px;
+    width: 72px;
+    height: 28px;
     padding: 0;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border);
-    background: var(--panel-2);
+    background: linear-gradient(to bottom, var(--panel-2), var(--panel));
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--muted);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
   }
   .mute:hover {
     color: var(--text);
@@ -336,5 +397,6 @@
     background: var(--danger);
     border-color: var(--danger);
     color: #fff;
+    box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.4);
   }
 </style>

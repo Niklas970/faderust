@@ -109,6 +109,10 @@ pub trait AppRouter: Send + Sync {
         volume: Option<f32>,
         muted: Option<bool>,
     ) -> Result<(), RouterError>;
+
+    /// Current peak (0…1) of every process playing audio, as Windows meters
+    /// it after the program volume.
+    fn levels(&self) -> Result<Vec<(u32, f32)>, RouterError>;
 }
 
 /// The system's default devices and device volumes.

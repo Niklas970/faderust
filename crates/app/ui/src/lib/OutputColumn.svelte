@@ -124,10 +124,10 @@
   }
   .master-meter {
     height: 100%;
-    padding: 11px 0;
+    padding: 18px 0;
   }
   .master-meter :global(.meter) {
-    width: 14px;
+    width: 22px;
   }
   .master .label {
     padding: 3px 6px;
@@ -140,8 +140,8 @@
   .readout {
     display: grid;
     place-items: center;
-    width: 34px;
-    height: 26px;
+    width: 38px;
+    height: 28px;
     font-family: var(--mono);
     font-size: 12px;
     color: var(--teal);

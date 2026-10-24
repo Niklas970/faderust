@@ -21,7 +21,7 @@
     overflow: hidden;
   }
   .meter.vertical {
-    width: 10px;
+    width: 14px;
     height: 100%;
   }
   .meter.vertical.thin {
@@ -45,7 +45,7 @@
       var(--danger) 95%
     );
     clip-path: inset(calc(100% - var(--pct)) 0 0 0);
-    mask: repeating-linear-gradient(to top, #000 0 3px, transparent 3px 4px);
+    mask: repeating-linear-gradient(to top, #000 0 4px, transparent 4px 6px);
   }
   .meter:not(.vertical) .leds {
     background: linear-gradient(
