@@ -217,8 +217,8 @@
     margin-top: 20px;
   }
   .primary {
-    background: var(--copper);
-    border-color: var(--copper);
+    background: var(--accent);
+    border-color: var(--accent);
     color: #fff;
   }
 </style>

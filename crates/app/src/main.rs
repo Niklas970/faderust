@@ -160,6 +160,34 @@ async fn set_app_volume(
 }
 
 #[derive(Serialize)]
+struct AppLevel {
+    pid: u32,
+    /// Peak in dBFS.
+    db: f32,
+}
+
+/// Peak level of every process playing audio, polled for the program meters.
+#[tauri::command]
+async fn get_app_levels() -> Result<Vec<AppLevel>, String> {
+    let Some(router) = router() else {
+        return Ok(vec![]);
+    };
+    Ok(router
+        .levels()
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|(pid, peak)| AppLevel {
+            pid,
+            db: if peak > 1e-6 {
+                20.0 * peak.log10()
+            } else {
+                -120.0
+            },
+        })
+        .collect())
+}
+
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Endpoint {
     id: String,
@@ -467,6 +495,7 @@ fn main() {
             get_apps,
             set_app_output,
             set_app_volume,
+            get_app_levels,
             get_windows_audio,
             set_default_device,
             set_device_volume,

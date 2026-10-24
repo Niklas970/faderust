@@ -143,7 +143,7 @@
     font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--copper);
+    color: var(--accent);
   }
   .defaults {
     display: grid;
@@ -190,8 +190,8 @@
     border-radius: var(--radius-sm);
     font-style: normal;
     font-size: 11px;
-    color: var(--teal);
-    border: 1px solid var(--teal);
+    color: var(--signal);
+    border: 1px solid var(--signal);
   }
   .note {
     color: var(--muted);

@@ -87,6 +87,12 @@ export async function setAppVolume(pids, volume, muted) {
   return (await tauri()).invoke("set_app_volume", { pids, volume, muted });
 }
 
+/** Current peak per process, as `[{ pid, db }]`. */
+export async function getAppLevels() {
+  if (!inTauri) return mock.appLevels();
+  return (await tauri()).invoke("get_app_levels");
+}
+
 /** Windows playback and recording devices with defaults and volume. */
 export async function getWindowsAudio() {
   if (!inTauri) return structuredClone(mock.windows);
@@ -329,6 +335,19 @@ const mock = {
         muted: false,
       },
     ],
+  },
+  appLevels() {
+    const t = Date.now() / 1000;
+    return this.apps.apps.flatMap((a, k) =>
+      a.pids.map((pid) => ({
+        pid,
+        db: a.muted
+          ? -120
+          : -24 +
+            14 * Math.sin(t * (1.1 + k) + k) +
+            20 * Math.log10(a.volume || 1e-6),
+      })),
+    );
   },
   setAppVolume(pids, volume, muted) {
     const app = this.apps.apps.find((a) => a.pids[0] === pids[0]);

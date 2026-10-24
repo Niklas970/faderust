@@ -1,5 +1,11 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.3.3:
+
+- Programme haben eine Pegelanzeige, darunter steht, ob ihr Ton über Faderust läuft oder direkt rausgeht
+- Gate schneidet Wortenden nicht mehr ab (längere Haltezeit, weicheres Ausblenden)
+- Fader mit Hardware-Kappe und Wertefenster, breitere LED-Ketten
+
 Neu in 0.3.2: Faderust sucht beim Start nach Updates. Gibt es eine neue Version, erscheint oben „Update auf …“. Ein Klick lädt sie, prüft die Signatur und installiert sie. Diese Version muss noch einmal von Hand installiert werden.
 
 Neu in 0.3.1:

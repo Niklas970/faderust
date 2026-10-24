@@ -111,8 +111,8 @@
     opacity: 0.5;
   }
   .primary {
-    background: var(--copper);
-    border-color: var(--copper);
+    background: var(--accent);
+    border-color: var(--accent);
     color: #fff;
   }
 </style>

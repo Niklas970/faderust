@@ -1,6 +1,6 @@
 <script>
   import { onMount } from "svelte";
-  import { getApps, setAppVolume } from "./api.js";
+  import { getAppLevels, getApps, setAppVolume } from "./api.js";
   import Fader from "./Fader.svelte";
 
   /** Windows volume of every program playing audio, one fader each. */
@@ -18,11 +18,38 @@
     }
   }
 
+  // Peak per process; a program's meter shows its loudest process.
+  let levels = $state(new Map());
+  let polling = false;
+  async function poll() {
+    if (polling) return;
+    polling = true;
+    try {
+      levels = new Map((await getAppLevels()).map((l) => [l.pid, l.db]));
+    } catch {
+      // Meters just stand still; the list refresh reports errors.
+    } finally {
+      polling = false;
+    }
+  }
+  const levelOf = (app) => Math.max(-120, ...app.pids.map((p) => levels.get(p) ?? -120));
+
+  /** Where the program's sound ends up: through Faderust (a cable) or straight out. */
+  function route(app) {
+    const device = data.devices.find((d) => d.id === app.device);
+    if (device?.cable) return { text: "über Faderust", via: true };
+    return { text: device ? "direkt" : "Windows-Standard", via: false };
+  }
+
   // Programs come and go; look again every few seconds.
   onMount(() => {
     refresh();
-    const id = setInterval(refresh, 3000);
-    return () => clearInterval(id);
+    const list = setInterval(refresh, 3000);
+    const meters = setInterval(poll, 100);
+    return () => {
+      clearInterval(list);
+      clearInterval(meters);
+    };
   });
 
   // One change per program on its way at a time; only the newest waits.
@@ -81,6 +108,9 @@
             unit="pct"
             value={app.volume * 100}
             muted={app.muted}
+            levelDb={levelOf(app)}
+            note={route(app).text}
+            noteOn={route(app).via}
             onChange={(v) => volume(app, v)}
             onMute={(m) => mute(app, m)}
           />
@@ -120,8 +150,8 @@
     font-family: var(--mono);
     font-size: 12px;
     font-weight: 700;
-    color: var(--teal);
-    border: 1px solid var(--teal);
+    color: var(--signal);
+    border: 1px solid var(--signal);
     border-radius: var(--radius-sm);
   }
   .titles {
@@ -146,7 +176,7 @@
     background: var(--panel-2);
   }
   .route:hover {
-    border-color: var(--copper);
+    border-color: var(--accent);
   }
   .faders {
     display: flex;

@@ -75,8 +75,8 @@
     font-family: var(--mono);
     font-size: 12px;
     font-weight: 700;
-    color: var(--copper);
-    border: 1px solid var(--copper);
+    color: var(--accent);
+    border: 1px solid var(--accent);
     border-radius: var(--radius-sm);
   }
   .titles {
@@ -105,8 +105,8 @@
     border: 1px solid var(--border);
   }
   .led.on {
-    background: var(--teal);
-    border-color: var(--teal);
+    background: var(--signal);
+    border-color: var(--signal);
   }
   .faders {
     display: flex;
@@ -124,10 +124,10 @@
   }
   .master-meter {
     height: 100%;
-    padding: 11px 0;
+    padding: 18px 0;
   }
   .master-meter :global(.meter) {
-    width: 14px;
+    width: 22px;
   }
   .master .label {
     padding: 3px 6px;
@@ -140,11 +140,11 @@
   .readout {
     display: grid;
     place-items: center;
-    width: 34px;
-    height: 26px;
+    width: 38px;
+    height: 28px;
     font-family: var(--mono);
     font-size: 12px;
-    color: var(--teal);
+    color: var(--signal);
     background: var(--well);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);

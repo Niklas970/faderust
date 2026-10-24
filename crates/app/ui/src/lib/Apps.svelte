@@ -157,7 +157,7 @@
     background: var(--panel-2);
   }
   select.cable {
-    border-color: var(--teal);
+    border-color: var(--signal);
   }
   .hint {
     display: flex;
@@ -165,7 +165,7 @@
     gap: 12px;
     margin-bottom: 12px;
     padding: 10px 12px;
-    border: 1px solid var(--copper);
+    border: 1px solid var(--accent);
     border-radius: var(--radius-sm);
     line-height: 1.4;
   }
@@ -194,8 +194,8 @@
     white-space: nowrap;
   }
   .primary {
-    background: var(--copper);
-    border-color: var(--copper);
+    background: var(--accent);
+    border-color: var(--accent);
     color: #fff;
   }
   footer {

@@ -10,7 +10,7 @@ use std::ptr::{null, null_mut};
 use windows::core::{IInspectable, IUnknown, Interface, GUID, HRESULT, HSTRING, PCWSTR, PWSTR};
 use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
 use windows::Win32::Foundation::{CloseHandle, RPC_E_CHANGED_MODE, S_OK};
-use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
+use windows::Win32::Media::Audio::Endpoints::{IAudioEndpointVolume, IAudioMeterInformation};
 use windows::Win32::Media::Audio::{
     eCapture, eCommunications, eConsole, eMultimedia, eRender, AudioSessionStateExpired, EDataFlow,
     ERole, IAudioSessionControl2, IAudioSessionManager2, IMMDevice, IMMDeviceEnumerator,
@@ -65,7 +65,10 @@ impl AppRouter for WasapiRouter {
         let mut found: Vec<(u32, f32, bool)> = Vec::new();
         for device in active(&enumerator()?, eRender)? {
             // One broken driver should not hide the other devices' programs.
-            let _ = for_each_session(&device, |pid, volume| {
+            let _ = for_each_session(&device, |pid, session| {
+                let Ok(volume) = session.cast::<ISimpleAudioVolume>() else {
+                    return;
+                };
                 if !found.iter().any(|(p, ..)| *p == pid) {
                     let level = unsafe { volume.GetMasterVolume() }.unwrap_or(1.0);
                     let muted = unsafe { volume.GetMute() }.is_ok_and(|m| m.as_bool());
@@ -105,6 +108,9 @@ impl AppRouter for WasapiRouter {
                 if !pids.contains(&pid) {
                     return;
                 }
+                let Ok(session) = session.cast::<ISimpleAudioVolume>() else {
+                    return;
+                };
                 if let Some(v) = volume {
                     if let Err(e) = unsafe { session.SetMasterVolume(v.clamp(0.0, 1.0), null()) } {
                         result = Err(err(e));
@@ -118,6 +124,24 @@ impl AppRouter for WasapiRouter {
             });
         }
         result
+    }
+
+    fn levels(&self) -> Result<Vec<(u32, f32)>> {
+        let _com = Com::init()?;
+        let mut peaks: Vec<(u32, f32)> = Vec::new();
+        for device in active(&enumerator()?, eRender)? {
+            let _ = for_each_session(&device, |pid, session| {
+                let Ok(meter) = session.cast::<IAudioMeterInformation>() else {
+                    return;
+                };
+                let peak = unsafe { meter.GetPeakValue() }.unwrap_or(0.0);
+                match peaks.iter_mut().find(|(p, _)| *p == pid) {
+                    Some((_, v)) => *v = v.max(peak),
+                    None => peaks.push((pid, peak)),
+                }
+            });
+        }
+        Ok(peaks)
     }
 }
 
@@ -249,9 +273,12 @@ fn friendly_name(device: &IMMDevice) -> Result<String> {
     take_string(unsafe { PropVariantToStringAlloc(&value) }.map_err(err)?)
 }
 
-/// Calls `f(pid, volume)` for every live program session on `device`,
+/// Calls `f(pid, session)` for every live program session on `device`,
 /// skipping system sounds.
-fn for_each_session(device: &IMMDevice, mut f: impl FnMut(u32, &ISimpleAudioVolume)) -> Result<()> {
+fn for_each_session(
+    device: &IMMDevice,
+    mut f: impl FnMut(u32, &IAudioSessionControl2),
+) -> Result<()> {
     let manager: IAudioSessionManager2 =
         unsafe { device.Activate(CLSCTX_ALL, None) }.map_err(err)?;
     let sessions = unsafe { manager.GetSessionEnumerator() }.map_err(err)?;
@@ -268,12 +295,9 @@ fn for_each_session(device: &IMMDevice, mut f: impl FnMut(u32, &ISimpleAudioVolu
         if unsafe { control.IsSystemSoundsSession() } == S_OK {
             continue;
         }
-        let Ok(volume) = session.cast::<ISimpleAudioVolume>() else {
-            continue;
-        };
         if let Ok(pid) = unsafe { control.GetProcessId() } {
             if pid != 0 {
-                f(pid, &volume);
+                f(pid, &control);
             }
         }
     }
