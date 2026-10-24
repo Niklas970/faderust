@@ -1,5 +1,9 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.3.6:
+
+- Programme als eigene Eingänge: Unter **Programme** nimmt „+ Eingang“ ein Programm direkt auf (ab Windows 10 Version 2004). Es bekommt in jeder Spalte einen Fader und eigene Effekte wie EQ und Gate, ohne ein Kabel pro Programm. Damit du es nicht doppelt hörst, stell das Programm auf ein Gerät, das du nicht direkt hörst (z. B. VB-Cable).
+
 Neu in 0.3.5:
 
 - Faderust sucht auch im laufenden Betrieb nach Updates (alle 30 Minuten und wenn das Fenster wieder geöffnet wird), nicht nur beim Start
