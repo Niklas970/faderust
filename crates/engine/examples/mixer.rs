@@ -1,4 +1,5 @@
-//! E1 test harness: several inputs, several outputs, one mix per output.
+//! Engine test harness: several inputs, several outputs, one mix per output,
+//! devices plugged in and out at runtime.
 //!
 //! ```text
 //! cargo run --release -p faderust-engine --example mixer -- --list
@@ -9,6 +10,7 @@
 //! ```
 //!
 //! Inputs and outputs are numbered in the order given, starting at 0.
+//! Devices may be missing at start and may come and go while it runs.
 //! Runs until Enter is pressed.
 
 use std::io::BufRead;
@@ -19,8 +21,7 @@ use std::time::Duration;
 use std::{env, io, thread};
 
 use faderust_engine::backend::cpal::CpalBackend;
-use faderust_engine::backend::{AudioBackend, DeviceInfo};
-use faderust_engine::engine::find_device;
+use faderust_engine::backend::AudioBackend;
 use faderust_engine::meter::to_db;
 use faderust_engine::{Engine, EngineConfig, InputConfig, OutputConfig};
 
@@ -96,22 +97,15 @@ fn parse_args() -> Result<Args, String> {
     Ok(a)
 }
 
-fn pick(devices: &[DeviceInfo], pattern: &str, kind: &str) -> Result<DeviceInfo, String> {
-    find_device(devices, pattern).ok_or(format!("no {kind} matching \"{pattern}\" (try --list)"))
-}
-
 fn run(args: Args) -> Result<(), String> {
     let backend = CpalBackend::new();
-    let in_devices = backend.input_devices().map_err(|e| e.to_string())?;
-    let out_devices = backend.output_devices().map_err(|e| e.to_string())?;
-
     if args.list {
         println!("Inputs:");
-        for d in &in_devices {
+        for d in backend.input_devices().map_err(|e| e.to_string())? {
             println!("  {}", d.name);
         }
         println!("Outputs:");
-        for d in &out_devices {
+        for d in backend.output_devices().map_err(|e| e.to_string())? {
             println!("  {}", d.name);
         }
         return Ok(());
@@ -120,24 +114,25 @@ fn run(args: Args) -> Result<(), String> {
         return Err("need at least one --input and one --output".into());
     }
 
-    let mut config = EngineConfig::default();
-    let mut names = (vec![], vec![]);
-    for p in &args.inputs {
-        let d = pick(&in_devices, p, "input")?;
-        config.inputs.push(InputConfig { device_id: d.id });
-        names.0.push(d.name);
-    }
-    for (p, ms) in &args.outputs {
-        let d = pick(&out_devices, p, "output")?;
-        config.outputs.push(OutputConfig {
-            device_id: d.id,
-            buffer_ms: *ms,
-        });
-        names.1.push(d.name);
-    }
-
-    let engine = Engine::start(&backend, &config).map_err(|e| e.to_string())?;
+    // Devices are matched by name on every check, so a Bluetooth headset
+    // that is off now connects as soon as it shows up.
+    let config = EngineConfig {
+        inputs: args
+            .inputs
+            .iter()
+            .map(|d| InputConfig { device: d.clone() })
+            .collect(),
+        outputs: args
+            .outputs
+            .iter()
+            .map(|(d, ms)| OutputConfig {
+                device: d.clone(),
+                buffer_ms: *ms,
+            })
+            .collect(),
+    };
     let (n_in, n_out) = (config.inputs.len(), config.outputs.len());
+    let mut engine = Engine::new(backend, config).map_err(|e| e.to_string())?;
     for &(i, o, db) in &args.gains {
         if i >= n_in || o >= n_out {
             return Err(format!("--gain {i}:{o}: no such pair"));
@@ -150,19 +145,6 @@ fn run(args: Args) -> Result<(), String> {
         }
         engine.matrix.set_muted(i, o, true);
     }
-
-    for (i, (name, d)) in names.0.iter().zip(&engine.inputs).enumerate() {
-        println!(
-            "in{i}:  {name} ({} Hz, {} ch)",
-            d.format.sample_rate, d.format.channels
-        );
-    }
-    for (o, (name, d)) in names.1.iter().zip(&engine.outputs).enumerate() {
-        println!(
-            "out{o}: {name} ({} Hz, {} ch, buffer {} ms)",
-            d.format.sample_rate, d.format.channels, config.outputs[o].buffer_ms
-        );
-    }
     println!("Press Enter to stop.\n");
 
     let stop = Arc::new(AtomicBool::new(false));
@@ -173,37 +155,39 @@ fn run(args: Args) -> Result<(), String> {
     });
 
     while !stop.load(Relaxed) {
-        thread::sleep(Duration::from_secs(1));
-        let mut line = String::new();
-        for (i, d) in engine.inputs.iter().enumerate() {
-            let [l, r] = d.meter.take();
-            line += &format!("in{i} {:>5.1}dB  ", to_db(l.max(r)));
+        for event in engine.maintain() {
+            println!("* {event}");
         }
-        for (o, d) in engine.outputs.iter().enumerate() {
-            let [l, r] = d.meter.take();
-            line += &format!("out{o} {:>5.1}dB  ", to_db(l.max(r)));
+        thread::sleep(Duration::from_secs(1));
+
+        let mut line = String::new();
+        for (dir, slots) in [("in", engine.inputs()), ("out", engine.outputs())] {
+            for (n, s) in slots.iter().enumerate() {
+                let [l, r] = s.meter.take();
+                match s.device {
+                    Some(_) => line += &format!("{dir}{n} {:>6.1}dB  ", to_db(l.max(r))),
+                    None => line += &format!("{dir}{n}  offline  "),
+                }
+            }
         }
         println!("{line}");
-        for (i, lanes) in engine.lanes.iter().enumerate() {
-            for (o, s) in lanes.iter().enumerate() {
-                let rate = engine.inputs[i].format.sample_rate as f64;
+        for (i, input) in engine.inputs().iter().enumerate() {
+            let Some((_, format)) = &input.device else {
+                continue;
+            };
+            for (o, output) in engine.outputs().iter().enumerate() {
+                if output.device.is_none() {
+                    continue;
+                }
+                let s = engine.lane_stats(i, o);
                 println!(
                     "    in{i}->out{o}: fill {:>5.1} ms, drift corr {:>5} ppm, underruns {}, dropped {}",
-                    s.fill_frames.load(Relaxed) as f64 * 1000.0 / rate,
+                    s.fill_frames.load(Relaxed) as f64 * 1000.0 / format.sample_rate as f64,
                     s.correction_ppm.load(Relaxed),
                     s.underruns.load(Relaxed),
                     s.dropped_frames.load(Relaxed),
                 );
             }
-        }
-        let errors: u64 = engine
-            .inputs
-            .iter()
-            .chain(&engine.outputs)
-            .map(|d| d.stream_errors.load(Relaxed))
-            .sum();
-        if errors > 0 {
-            println!("    stream errors: {errors} (device lost? hot-plug comes in E2)");
         }
     }
     Ok(())

@@ -41,8 +41,9 @@ pub struct LaneSpec {
 }
 
 /// Creates both ends of a lane. The producer goes to the input callback,
-/// the [`Lane`] to the output callback.
-pub fn lane(spec: LaneSpec) -> (Producer<f32>, Lane) {
+/// the [`Lane`] to the output callback. `stats` outlives reconnections, so
+/// the UI can keep one handle per (input, output) pair.
+pub fn lane(spec: LaneSpec, stats: Arc<LaneStats>) -> (Producer<f32>, Lane) {
     let target_frames = (spec.input_rate as u64 * spec.target_ms as u64 / 1000).max(1) as usize;
     let capacity_frames = (target_frames * 4).max(spec.input_rate as usize / 2);
     let (producer, consumer) = RingBuffer::new(capacity_frames * BUS_CHANNELS);
@@ -90,7 +91,7 @@ pub fn lane(spec: LaneSpec) -> (Producer<f32>, Lane) {
         out_len: 0,
         primed: false,
         gain: 0.0,
-        stats: Arc::new(LaneStats::default()),
+        stats,
     };
     (producer, lane)
 }
