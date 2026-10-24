@@ -170,7 +170,7 @@ fn serve(app: &AppHandle, stream: TcpStream) -> Result<(), Box<dyn std::error::E
             Err(e) => return Err(e.into()),
         }
 
-        let now = State::of(&state.config.lock().unwrap());
+        let now = State::of(&state.config.lock().unwrap_or_else(|e| e.into_inner()));
         if sent_state.as_ref() != Some(&now) {
             send(&mut ws, &Push::State(&now))?;
             sent_state = Some(now);

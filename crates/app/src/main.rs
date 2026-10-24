@@ -5,6 +5,7 @@
 
 mod audio;
 mod config;
+mod log;
 mod remote;
 
 use std::path::PathBuf;
@@ -298,7 +299,11 @@ fn set_autostart(enabled: bool, app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn get_config(state: State<AppState>) -> Config {
-    state.config.lock().unwrap().clone()
+    state
+        .config
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
 }
 
 #[tauri::command]
@@ -307,7 +312,7 @@ fn save_config(config: Config, state: State<AppState>) -> Result<(), String> {
     config
         .save(&state.path)
         .map_err(|e| format!("Konfiguration nicht gespeichert: {e}"))?;
-    *state.config.lock().unwrap() = config;
+    *state.config.lock().unwrap_or_else(|e| e.into_inner()) = config;
     send(&state, Command::Reconfigure)
 }
 
@@ -334,7 +339,7 @@ fn set_fx(input: usize, fx: Fx, state: State<AppState>) -> Result<(), String> {
 
 /// Edits the presets and writes the file right away.
 fn edit_presets(state: &AppState, f: impl FnOnce(&mut Config) -> bool) -> Result<bool, String> {
-    let mut config = state.config.lock().unwrap();
+    let mut config = state.config.lock().unwrap_or_else(|e| e.into_inner());
     let changed = f(&mut config);
     config
         .save(&state.path)
@@ -443,13 +448,18 @@ fn main() {
                 .build(),
         )
         .setup(|app| {
-            let path = app.path().app_config_dir()?.join("config.toml");
+            let dir = app.path().app_config_dir()?;
+            let _ = std::fs::create_dir_all(&dir);
+            log::init(dir.join("faderust.log"));
+            #[cfg(windows)]
+            faderust_engine::apps::capture::set_crash_marker(dir.join("capture-starting"));
+            let path = dir.join("config.toml");
             let config = match Config::load(&path) {
                 Ok(Some(c)) => c,
                 Ok(None) => first_start(),
                 Err(e) => {
                     // Keep the broken file for the user, start fresh.
-                    eprintln!("{}: {e}", path.display());
+                    log::write(&format!("{}: {e}", path.display()));
                     let _ = std::fs::rename(&path, path.with_extension("toml.broken"));
                     first_start()
                 }

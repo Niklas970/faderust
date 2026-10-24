@@ -65,7 +65,7 @@ Windows merkt sich das Gerät pro Programm. Für mehrere getrennte Programm-Fade
 - Windows liefert den Ton pro Programm, nicht pro Browser-Tab. Alle Tabs eines Browsers laufen über denselben Audio-Prozess und lassen sich deshalb nicht einzeln trennen.
 - Die Zuordnung „Programm → Gerät“ nutzt dieselbe nicht dokumentierte Windows-Schnittstelle wie der Lautstärkemixer in den Einstellungen. Ein großes Windows-Update könnte sie ändern.
 
-Die Einstellungen liegen in `%APPDATA%\io.github.niklas970.faderust\config.toml`.
+Die Einstellungen liegen in `%APPDATA%\io.github.niklas970.faderust\config.toml`, daneben ein Protokoll `faderust.log`, das bei Fehlermeldungen hilft.
 
 ## Entwicklung
 

@@ -7,10 +7,12 @@
 //! Faderust, point it at a device nobody listens to (e.g. a VB-Cable whose
 //! other side is no input).
 
-use std::mem::size_of;
+use std::mem::{size_of, ManuallyDrop};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, OnceLock};
 use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use windows::core::{implement, Interface, Ref, HRESULT, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT};
@@ -27,12 +29,12 @@ use windows::Win32::Media::Audio::{
 use windows::Win32::System::Com::StructuredStorage::{
     PROPVARIANT, PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0,
 };
-use windows::Win32::System::Com::{IAgileObject, IAgileObject_Impl, BLOB};
+use windows::Win32::System::Com::BLOB;
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
 use windows::Win32::System::Threading::{
-    CreateEventW, OpenProcess, SetEvent, WaitForMultipleObjects, WaitForSingleObject, INFINITE,
+    CreateEventW, OpenProcess, SetEvent, WaitForMultipleObjects, WaitForSingleObject,
     PROCESS_SYNCHRONIZE,
 };
 use windows::Win32::System::Variant::VT_BLOB;
@@ -44,6 +46,13 @@ use crate::backend::{ErrorCallback, InputCallback};
 /// Programs arrive in this format; Windows converts from whatever they play.
 pub const SAMPLE_RATE: u32 = 48_000;
 pub const CHANNELS: u16 = 2;
+
+/// How long Windows may take to hand over a recording client.
+const ACTIVATE_TIMEOUT_MS: u32 = 5_000;
+/// How long `open` waits for the recording thread to start.
+const OPEN_TIMEOUT: Duration = Duration::from_secs(8);
+/// A recording that ran this long without taking Faderust down is trusted.
+const TRUSTED_AFTER: Duration = Duration::from_secs(5);
 
 /// `WAVE_FORMAT_IEEE_FLOAT` from mmreg.h.
 const WAVE_FORMAT_IEEE_FLOAT: u16 = 3;
@@ -62,6 +71,37 @@ impl std::fmt::Display for CaptureError {
 
 fn err(e: windows::core::Error) -> CaptureError {
     CaptureError(e.message())
+}
+
+static CRASH_MARKER: OnceLock<PathBuf> = OnceLock::new();
+
+/// Program recording is new and goes deep into Windows. While one starts,
+/// a marker file names the program; if Faderust dies before the recording
+/// has run a few seconds, the file is still there at the next start and
+/// [`crashed_last_time`] reports the program so the app can skip it.
+pub fn set_crash_marker(path: PathBuf) {
+    let _ = CRASH_MARKER.set(path);
+}
+
+/// The program whose recording was starting when Faderust last died, if any.
+/// Clears the marker.
+pub fn crashed_last_time() -> Option<String> {
+    let path = CRASH_MARKER.get()?;
+    let exe = std::fs::read_to_string(path).ok()?;
+    let _ = std::fs::remove_file(path);
+    Some(exe.trim().to_string()).filter(|e| !e.is_empty())
+}
+
+fn mark_starting(exe: &str) {
+    if let Some(path) = CRASH_MARKER.get() {
+        let _ = std::fs::write(path, exe);
+    }
+}
+
+fn clear_marker() {
+    if let Some(path) = CRASH_MARKER.get() {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 /// Programs that play audio right now, except Faderust itself.
@@ -117,38 +157,56 @@ pub fn open(
         return Err(CaptureError(format!("{exe} läuft nicht mehr")));
     }
 
+    mark_starting(exe);
     let stop = Arc::new(AtomicBool::new(false));
     let (ready_tx, ready_rx) = mpsc::channel();
     let thread_stop = Arc::clone(&stop);
-    let thread = std::thread::Builder::new()
+    let spawned = std::thread::Builder::new()
         .name(format!("capture {exe}"))
         .spawn(move || {
-            let result = Recorder::new(&roots);
-            match result {
-                Ok(mut recorder) => {
-                    let _ = ready_tx.send(Ok(()));
-                    if !recorder.run(&thread_stop, &mut *data)
-                        && !thread_stop.load(Ordering::Relaxed)
-                    {
-                        error();
+            // A panic here must not take the engine with it.
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                match Recorder::new(&roots) {
+                    Ok(mut recorder) => {
+                        let _ = ready_tx.send(Ok(()));
+                        recorder.run(&thread_stop, &mut *data)
+                    }
+                    Err(e) => {
+                        let _ = ready_tx.send(Err(e));
+                        true
                     }
                 }
-                Err(e) => {
-                    let _ = ready_tx.send(Err(e));
-                }
+            }));
+            // Faderust is still alive, so this recording did not crash it.
+            clear_marker();
+            let stopped_by_us = matches!(outcome, Ok(true)) || thread_stop.load(Ordering::Relaxed);
+            if !stopped_by_us {
+                error();
             }
-        })
-        .map_err(|e| CaptureError(e.to_string()))?;
-    match ready_rx.recv() {
+        });
+    let thread = match spawned {
+        Ok(t) => t,
+        Err(e) => {
+            clear_marker();
+            return Err(CaptureError(e.to_string()));
+        }
+    };
+    match ready_rx.recv_timeout(OPEN_TIMEOUT) {
         Ok(Ok(())) => Ok(ProgramCapture {
             stop,
             thread: Some(thread),
         }),
         Ok(Err(e)) => {
             let _ = thread.join();
+            clear_marker();
             Err(e)
         }
-        Err(_) => Err(CaptureError("Aufnahme-Thread beendet".into())),
+        Err(_) => {
+            // Stuck in Windows or gone: let it finish on its own.
+            stop.store(true, Ordering::Relaxed);
+            clear_marker();
+            Err(CaptureError("Programm-Aufnahme startet nicht".into()))
+        }
     }
 }
 
@@ -206,7 +264,13 @@ impl Recorder {
     fn run(&mut self, stop: &AtomicBool, data: &mut dyn FnMut(&[f32])) -> bool {
         let silence = vec![0.0f32; SILENCE_FRAMES * CHANNELS as usize];
         let events: Vec<HANDLE> = self.sources.iter().map(|s| s.event).collect();
+        let started = Instant::now();
+        let mut trusted = false;
         while !stop.load(Ordering::Relaxed) {
+            if !trusted && started.elapsed() >= TRUSTED_AFTER {
+                clear_marker();
+                trusted = true;
+            }
             if self
                 .processes
                 .iter()
@@ -315,9 +379,9 @@ impl Drop for Source {
     }
 }
 
-/// Signals an event when the asynchronous activation is done. Agile, as the
-/// API requires; it may complete on any thread.
-#[implement(IActivateAudioInterfaceCompletionHandler, IAgileObject)]
+/// Signals an event when the asynchronous activation is done. `implement`
+/// makes it agile, as the API requires; it may complete on any thread.
+#[implement(IActivateAudioInterfaceCompletionHandler)]
 struct Activated(HANDLE);
 
 impl IActivateAudioInterfaceCompletionHandler_Impl for Activated_Impl {
@@ -329,8 +393,6 @@ impl IActivateAudioInterfaceCompletionHandler_Impl for Activated_Impl {
     }
 }
 
-impl IAgileObject_Impl for Activated_Impl {}
-
 fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
     let mut params = AUDIOCLIENT_ACTIVATION_PARAMS {
         ActivationType: AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
@@ -341,9 +403,12 @@ fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
             },
         },
     };
-    let blob = PROPVARIANT {
+    // `PROPVARIANT` frees its contents on drop (`PropVariantClear`), which
+    // would hand `params`, a stack value, to `CoTaskMemFree` and corrupt the
+    // heap. The blob only borrows `params`: never drop it.
+    let blob = ManuallyDrop::new(PROPVARIANT {
         Anonymous: PROPVARIANT_0 {
-            Anonymous: std::mem::ManuallyDrop::new(PROPVARIANT_0_0 {
+            Anonymous: ManuallyDrop::new(PROPVARIANT_0_0 {
                 vt: VT_BLOB,
                 wReserved1: 0,
                 wReserved2: 0,
@@ -356,7 +421,7 @@ fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
                 },
             }),
         },
-    };
+    });
 
     let done = unsafe { CreateEventW(None, true, false, PCWSTR::null()) }.map_err(err)?;
     let handler: IActivateAudioInterfaceCompletionHandler = Activated(done).into();
@@ -365,12 +430,17 @@ fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
             ActivateAudioInterfaceAsync(
                 VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
                 &IAudioClient::IID,
-                Some(&blob),
+                Some(&*blob),
                 &handler,
             )
         }
         .map_err(err)?;
-        unsafe { WaitForSingleObject(done, INFINITE) };
+        if unsafe { WaitForSingleObject(done, ACTIVATE_TIMEOUT_MS) } != WAIT_OBJECT_0 {
+            // The handler may still fire later: leave the event open for it.
+            return Err(CaptureError(
+                "Windows hat die Aufnahme nicht gestartet".into(),
+            ));
+        }
         let mut hr = HRESULT(0);
         let mut unknown = None;
         unsafe { operation.GetActivateResult(&mut hr, &mut unknown) }.map_err(err)?;
@@ -385,8 +455,10 @@ fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
             .cast::<IAudioClient>()
             .map_err(err)
     })();
-    unsafe {
-        let _ = CloseHandle(done);
+    if unsafe { WaitForSingleObject(done, 0) } == WAIT_OBJECT_0 {
+        unsafe {
+            let _ = CloseHandle(done);
+        }
     }
     // `blob` points at `params`; both live on this frame until here.
     result
