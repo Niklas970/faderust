@@ -19,6 +19,20 @@ cpal = { version = "0.18", optional = true }
 rtrb = "0.4"
 rubato = { version = "5.0", default-features = false }
 
+# Per-program output routing (apps::wasapi). Same version cpal uses.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Devices_FunctionDiscovery",
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
+    "Win32_System_WinRT",
+    "Win32_UI_Shell_PropertiesSystem",
+] }
+
 [[example]]
 name = "e0_passthrough"
 required-features = ["cpal"]

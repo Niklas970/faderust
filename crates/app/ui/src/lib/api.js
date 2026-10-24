@@ -16,6 +16,24 @@ export async function getDevices() {
   return (await tauri()).invoke("get_devices");
 }
 
+/** Programs playing audio and the playback devices they can use. */
+export async function getApps() {
+  if (!inTauri) return structuredClone(mock.apps);
+  return (await tauri()).invoke("get_apps");
+}
+
+/** `device` null puts the program back on the Windows default. */
+export async function setAppOutput(pids, device) {
+  if (!inTauri) return mock.setAppOutput(pids, device);
+  return (await tauri()).invoke("set_app_output", { pids, device });
+}
+
+/** VB-Audio's virtual cables, by name ("CABLE Input", "CABLE-A Output", …). */
+export function isCable(name) {
+  const n = name.toLowerCase();
+  return n.includes("vb-audio") || n.startsWith("cable");
+}
+
 export async function getConfig() {
   if (!inTauri) {
     mock.resize();
@@ -72,6 +90,23 @@ const mock = {
     ],
   },
   gains: [],
+  apps: {
+    supported: true,
+    devices: [
+      { id: "ps5out", name: "Lautsprecher (USB Sound Card)", cable: false },
+      { id: "cable", name: "CABLE Input (VB-Audio Virtual Cable)", cable: true },
+      { id: "buds", name: "Kopfhörer (Galaxy Buds2 Pro)", cable: false },
+    ],
+    apps: [
+      { name: "Discord", exe: "Discord.exe", pids: [4120, 4188], device: null },
+      { name: "firefox", exe: "firefox.exe", pids: [9932], device: "cable" },
+      { name: "Spotify", exe: "Spotify.exe", pids: [7311], device: "cable" },
+    ],
+  },
+  setAppOutput(pids, device) {
+    const app = this.apps.apps.find((a) => a.pids[0] === pids[0]);
+    if (app) app.device = device;
+  },
   setConfig(config) {
     this.config = structuredClone(config);
     if (config.gains) this.gains = structuredClone(config.gains);
