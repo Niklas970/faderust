@@ -19,6 +19,7 @@
     setGain,
     setMasterGain,
     setMasterMuted,
+    setInputMuted,
     setMuted,
     windowAction,
   } from "./lib/api.js";
@@ -66,6 +67,25 @@
     side = v;
     try {
       localStorage.setItem(SIDE_KEY, v);
+    } catch {
+      // Remembered for this session only.
+    }
+  }
+  // Program strips silent this long (seconds) are hidden; 0 shows them all.
+  const HIDE_KEY = "faderust.hideSilent";
+  let hideAfter = $state(readHide());
+  function readHide() {
+    try {
+      const v = Number(localStorage.getItem(HIDE_KEY) ?? 120);
+      return Number.isFinite(v) && v >= 0 ? v : 120;
+    } catch {
+      return 120;
+    }
+  }
+  function setHide(v) {
+    hideAfter = v;
+    try {
+      localStorage.setItem(HIDE_KEY, String(v));
     } catch {
       // Remembered for this session only.
     }
@@ -260,6 +280,7 @@
       {:else}
         <StripView
           {side}
+          {hideAfter}
           inputs={state.inputs}
           outputs={state.outputs}
           gains={state.gains}
@@ -268,6 +289,7 @@
           onMute={setMuted}
           onMaster={setMasterGain}
           onMasterMute={setMasterMuted}
+          onInputMute={setInputMuted}
           onFx={(i) => (fxOpen = i)}
           onPrograms={openApps}
         />
@@ -296,7 +318,7 @@
 {/if}
 
 {#if themeOpen}
-  <Theme {view} onView={setView} {side} onSide={setSide} onClose={() => (themeOpen = false)} />
+  <Theme {view} onView={setView} {side} onSide={setSide} {hideAfter} onHide={setHide} onClose={() => (themeOpen = false)} />
 {/if}
 
 {#if windowsOpen}

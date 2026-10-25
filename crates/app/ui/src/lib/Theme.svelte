@@ -2,7 +2,14 @@
   import { ACCENTS, DEFAULT_THEME, MODES, SIGNALS, loadTheme, saveTheme } from "./theme.js";
 
   /** Layout, colours and light/dark; every change shows right away. */
-  let { view, onView, side, onSide, onClose } = $props();
+  let { view, onView, side, onSide, hideAfter, onHide, onClose } = $props();
+
+  const HIDES = [
+    { value: 0, name: "Nie" },
+    { value: 30, name: "30 s" },
+    { value: 120, name: "2 min" },
+    { value: 600, name: "10 min" },
+  ];
 
   const SIDES = [
     { value: "left", name: "Links" },
@@ -53,6 +60,16 @@
       <div class="modes" role="radiogroup" aria-label="Ausgänge im Pult">
         {#each SIDES as v}
           <button class:on={side === v.value} role="radio" aria-checked={side === v.value} onclick={() => onSide(v.value)}>{v.name}</button>
+        {/each}
+      </div>
+    </section>
+    <section>
+      <h3>Stille Programme ausblenden <span>nach so langer Stille</span></h3>
+      <div class="modes" role="radiogroup" aria-label="Stille Programme ausblenden">
+        {#each HIDES as v}
+          <button class:on={hideAfter === v.value} role="radio" aria-checked={hideAfter === v.value} onclick={() => onHide(v.value)}
+            >{v.name}</button
+          >
         {/each}
       </div>
     </section>

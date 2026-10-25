@@ -22,9 +22,6 @@ const EMIT_EVERY: Duration = Duration::from_millis(50);
 const MAINTAIN_EVERY: Duration = Duration::from_secs(1);
 /// How often to check whether anyone sees the window.
 const VISIBLE_EVERY: Duration = Duration::from_millis(250);
-/// Every output closes after this much silence, so other devices can take
-/// over Bluetooth headphones (multipoint), and reopens with signal.
-const RELEASE_AFTER: Duration = Duration::from_secs(5);
 /// Fader moves are saved at most this often.
 const SAVE_EVERY: Duration = Duration::from_secs(2);
 
@@ -37,6 +34,8 @@ pub enum Command {
     /// Master fader of an output.
     SetMasterGain(usize, f32),
     SetMasterMuted(usize, bool),
+    /// Mute of a whole input.
+    SetInputMuted(usize, bool),
     SetFx(usize, Fx),
     /// The gains in the config changed as a whole (preset loaded).
     ApplyGains,
@@ -80,6 +79,9 @@ struct UiDevice {
     /// Outputs only.
     #[serde(skip_serializing_if = "Option::is_none")]
     master: Option<crate::config::Gain>,
+    /// Inputs only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    muted: Option<bool>,
 }
 
 #[derive(Serialize, Clone, Default)]
@@ -143,7 +145,8 @@ fn build(config: &Config, skip: Option<&str>) -> Option<Engine<CpalBackend>> {
             .map(|o| OutputConfig {
                 device: o.device.clone(),
                 buffer_ms: o.buffer_ms,
-                release_after: Some(RELEASE_AFTER),
+                release_after: (o.release_secs > 0)
+                    .then(|| Duration::from_secs(o.release_secs.into())),
             })
             .collect(),
     };
@@ -162,6 +165,9 @@ fn apply_gains(engine: &Engine<CpalBackend>, config: &Config) {
             engine.matrix.set_gain_db(i, o, g.db);
             engine.matrix.set_muted(i, o, g.muted);
         }
+    }
+    for (i, input) in config.inputs.iter().enumerate() {
+        engine.matrix.set_input_muted(i, input.muted);
     }
     for (o, out) in config.outputs.iter().enumerate() {
         engine.matrix.set_master_db(o, out.master.db);
@@ -353,6 +359,16 @@ fn run(
                                 dirty_since.get_or_insert_with(Instant::now);
                             }
                         }
+                        Command::SetInputMuted(i, muted) => {
+                            let mut c = config.lock().unwrap_or_else(|e| e.into_inner());
+                            if let Some(input) = c.inputs.get_mut(i) {
+                                input.muted = muted;
+                                if let Some(e) = &engine {
+                                    e.matrix.set_input_muted(i, muted);
+                                }
+                                dirty_since.get_or_insert_with(Instant::now);
+                            }
+                        }
                         Command::ToggleMuted(i, o) => {
                             if let Some(g) = gain_mut(&config, i, o, |g| g.muted = !g.muted) {
                                 if let Some(e) = &engine {
@@ -497,6 +513,7 @@ fn device(
         released: false,
         fx: None,
         master: None,
+        muted: None,
     }
 }
 
@@ -507,6 +524,7 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
         .enumerate()
         .map(|(i, c)| UiDevice {
             fx: Some(c.fx),
+            muted: Some(c.muted),
             ..device(
                 &c.label,
                 &c.device,

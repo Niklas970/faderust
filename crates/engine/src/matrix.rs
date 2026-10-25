@@ -16,6 +16,8 @@ pub struct MixMatrix {
     /// Master gain per output (linear `f32` bits), applied on top of the pairs.
     master: Box<[AtomicU32]>,
     master_muted: Box<[AtomicBool]>,
+    /// Mute per input, on top of its routing.
+    input_muted: Box<[AtomicBool]>,
 }
 
 impl MixMatrix {
@@ -32,6 +34,7 @@ impl MixMatrix {
                 .map(|_| AtomicU32::new(1.0f32.to_bits()))
                 .collect(),
             master_muted: (0..outputs).map(|_| AtomicBool::new(false)).collect(),
+            input_muted: (0..inputs).map(|_| AtomicBool::new(false)).collect(),
         }
     }
 
@@ -78,6 +81,16 @@ impl MixMatrix {
         self.master_muted[self.output(output)].load(Relaxed)
     }
 
+    pub fn set_input_muted(&self, input: usize, muted: bool) {
+        assert!(input < self.inputs, "input {input} out of range");
+        self.input_muted[input].store(muted, Relaxed);
+    }
+
+    pub fn is_input_muted(&self, input: usize) -> bool {
+        assert!(input < self.inputs, "input {input} out of range");
+        self.input_muted[input].load(Relaxed)
+    }
+
     fn output(&self, output: usize) -> usize {
         assert!(output < self.outputs, "output {output} out of range");
         output
@@ -104,11 +117,13 @@ impl MixMatrix {
     }
 
     /// Gain the audio thread applies: the pair's gain times the output's
-    /// master, 0 when either is muted or the pair is blocked. Real-time safe.
+    /// master, 0 when the pair, the input or the output is muted or the pair
+    /// is blocked. Real-time safe.
     pub fn effective_gain(&self, input: usize, output: usize) -> f32 {
         if self.is_muted(input, output)
             || self.is_blocked(input, output)
             || self.is_master_muted(output)
+            || self.is_input_muted(input)
         {
             0.0
         } else {
@@ -183,6 +198,18 @@ mod tests {
         assert_eq!(m.gain(0, 0), 1.0, "the pairs keep their faders");
         m.set_master_db(1, f32::NAN);
         assert_eq!(m.master(1), 0.0);
+    }
+
+    #[test]
+    fn input_mute_silences_every_output_and_keeps_routing() {
+        let m = MixMatrix::new(2, 2);
+        m.set_input_muted(0, true);
+        assert_eq!(m.effective_gain(0, 0), 0.0);
+        assert_eq!(m.effective_gain(0, 1), 0.0);
+        assert_eq!(m.effective_gain(1, 0), 1.0);
+        assert!(!m.is_muted(0, 0), "routing stays as it was");
+        m.set_input_muted(0, false);
+        assert_eq!(m.effective_gain(0, 1), 1.0);
     }
 
     #[test]

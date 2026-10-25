@@ -119,6 +119,26 @@
     return () => track.removeEventListener("wheel", wheel);
   });
 
+  // The readout below turns into a text field on click: type a value, Enter.
+  let editing = $state(false);
+  let draft = $state("");
+  function edit() {
+    draft = isOff ? (unit === "pct" ? "0" : "-inf") : String(local);
+    editing = true;
+  }
+  function commit() {
+    if (!editing) return;
+    editing = false;
+    const text = draft.trim().toLowerCase().replace(",", ".").replace("−", "-");
+    if (unit === "db" && (text.includes("inf") || text.includes("∞"))) return set(OFF);
+    const v = parseFloat(text);
+    if (Number.isFinite(v)) set(v);
+  }
+  function focus(node) {
+    node.focus();
+    node.select();
+  }
+
   const meterDb = $derived(
     levelDb == null || !connected || muted || blocked ? OFF : levelDb + (unit === "db" && !postFader ? Math.max(local, OFF) : 0),
   );
@@ -160,7 +180,23 @@
     </div>
     {#if levelDb != null}<Meter db={meterDb} />{/if}
   </div>
-  <div class="readout" class:off={isOff || muted}>{scale.format(local)} {unit === "pct" ? "%" : "dB"}</div>
+  {#if editing}
+    <input
+      class="readout edit"
+      bind:value={draft}
+      use:focus
+      aria-label={`${label} Wert`}
+      onblur={commit}
+      onkeydown={(e) => {
+        if (e.key === "Enter") commit();
+        else if (e.key === "Escape") editing = false;
+      }}
+    />
+  {:else}
+    <button class="readout" class:off={isOff || muted} title="Klicken und Wert eintippen" onclick={edit}
+      >{scale.format(local)} {unit === "pct" ? "%" : "dB"}</button
+    >
+  {/if}
   {#if showMute}
     <button class="mute" class:on={muted} aria-pressed={muted} aria-label={`${label} stumm`} onclick={() => onMute(!muted)}
       >Mute</button
@@ -370,10 +406,25 @@
   }
   .readout {
     margin-top: -6px;
+    padding: 0 4px;
     font-family: var(--mono);
     font-size: 13px;
     font-weight: 700;
     color: var(--accent-light);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: text;
+  }
+  .readout:hover {
+    border-color: var(--border);
+  }
+  .readout.edit {
+    width: 72px;
+    height: 20px;
+    text-align: center;
+    border-color: var(--accent);
+    background: var(--well);
   }
   .readout.off {
     color: var(--muted);

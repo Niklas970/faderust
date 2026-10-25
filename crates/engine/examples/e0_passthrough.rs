@@ -8,7 +8,7 @@
 //! ```
 //!
 //! There is deliberately no resampler here: the ring buffer fill level shows
-//! how far the two device clocks run apart. See `docs/E0.md`.
+//! how far the two device clocks run apart.
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -503,7 +503,7 @@ fn run(args: Args) -> Result<(), String> {
     if stats.timestamps_missing.load(Relaxed) {
         println!("  note: the host did not report all stream timestamps; device latency may be 0");
     }
-    println!("  (device latency excludes Bluetooth codec delay; see docs/E0.md)");
+    println!("  (device latency excludes Bluetooth codec delay)");
     Ok(())
 }
 

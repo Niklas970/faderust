@@ -185,6 +185,12 @@ export async function setMasterMuted(output, muted) {
   return (await tauri()).invoke("set_master_muted", { output, muted });
 }
 
+/** Mutes a whole input, its routing stays. */
+export async function setInputMuted(input, muted) {
+  if (!inTauri) return void (mock.config.inputs[input].muted = muted);
+  return (await tauri()).invoke("set_input_muted", { input, muted });
+}
+
 /** Changes an input's effects live. */
 export async function setFx(input, fx) {
   if (!inTauri) return void (mock.config.inputs[input].fx = { ...fx });

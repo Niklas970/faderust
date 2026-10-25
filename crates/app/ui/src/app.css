@@ -16,12 +16,13 @@
 :root,
 :root[data-mode="dark"] {
   color-scheme: dark;
-  --bg: #16181b;
-  --panel: #202226;
-  --panel-2: #2a2d32;
+  /* Near-black like an OLED screen; panels lift only slightly. */
+  --bg: #000;
+  --panel: #0c0d0f;
+  --panel-2: #17191c;
   /* Recessed areas: fader slots, meters, inputs. */
-  --well: #0e0f11;
-  --border: #383c42;
+  --well: #050506;
+  --border: #272a2f;
   --text: #dcdfe3;
   --muted: #858b93;
   --accent: var(--accent-base);
@@ -75,6 +76,8 @@
 html,
 body {
   margin: 0;
+  /* An app, not a page: labels and numbers are not for selecting. */
+  user-select: none;
   height: 100%;
   background: var(--bg);
   color: var(--text);
@@ -94,4 +97,9 @@ button {
 :focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 2px;
+}
+
+input,
+textarea {
+  user-select: text;
 }
