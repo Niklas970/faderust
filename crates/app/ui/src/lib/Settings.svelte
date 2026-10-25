@@ -41,6 +41,7 @@
   }
   const deckLabel = $derived.by(() => {
     if (!deck?.bundled) return "";
+    if (deck.refused) return "Das Plugin ist zu alt und darf sich nicht mehr verbinden. Bitte aktualisieren:";
     if (!deck.connected) return "Stream Deck nicht verbunden. Plugin einrichten oder neu installieren:";
     if (deck.update) return `Plugin ${deck.installed ?? "(alt)"} → ${deck.bundled} verfügbar`;
     return `Plugin ${deck.installed} ist aktuell`;
@@ -285,7 +286,7 @@
     <h3>Stream Deck</h3>
     <div class="deck">
       <span>{deckLabel}</span>
-      <button class:primary={deck.update} onclick={updateDeck}>{deck.connected ? "Plugin aktualisieren" : "Plugin installieren"}</button>
+      <button class:primary={deck.update} onclick={updateDeck}>{deck.connected || deck.refused ? "Plugin aktualisieren" : "Plugin installieren"}</button>
     </div>
     {#if deckError}<p class="error">{deckError}</p>{/if}
   {/if}

@@ -33,6 +33,9 @@ struct AppState {
     audio: Mutex<Sender<Command>>,
     /// The connected Stream Deck plugin, see [`remote`].
     streamdeck: Mutex<remote::Link>,
+    /// Secret the Stream Deck plugin proves with, see [`remote`]; empty
+    /// when the token file could not be written (remote control stays off).
+    token: String,
 }
 
 #[derive(Serialize)]
@@ -314,8 +317,11 @@ struct StreamDeckStatus {
     connected: bool,
     /// Its version; `None` for plugins that predate the hello.
     installed: Option<String>,
-    /// The shipped plugin is newer than the connected one (or it has no version).
+    /// The shipped plugin is newer than the connected one, or one was turned
+    /// away (a plugin from before the token).
     update: bool,
+    /// A plugin tried to connect and was turned away.
+    refused: bool,
 }
 
 fn resource(app: &AppHandle, name: &str) -> Option<PathBuf> {
@@ -339,16 +345,23 @@ fn get_streamdeck(app: AppHandle, state: State<AppState>) -> StreamDeckStatus {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone();
-    let update = match (&bundled, link.clients > 0, &link.version) {
-        (Some(b), true, Some(v)) => remote::is_newer(b, v),
-        (Some(_), true, None) => true,
+    plugin_status(bundled, link)
+}
+
+fn plugin_status(bundled: Option<String>, link: remote::Link) -> StreamDeckStatus {
+    let connected = link.clients > 0;
+    let refused = link.refused && !connected;
+    let update = match (&bundled, &link.version) {
+        (Some(_), _) if refused => true,
+        (Some(b), Some(v)) if connected => remote::is_newer(b, v),
         _ => false,
     };
     StreamDeckStatus {
         bundled,
-        connected: link.clients > 0,
+        connected,
         installed: link.version,
         update,
+        refused,
     }
 }
 
@@ -576,11 +589,24 @@ fn main() {
             };
             let config = Arc::new(Mutex::new(config));
             let audio = audio::spawn(app.handle().clone(), Arc::clone(&config), path.clone());
+            let token = app
+                .path()
+                .app_config_dir()
+                .map_err(|e| e.to_string())
+                .and_then(|dir| {
+                    remote::load_or_create_token(&dir.join(remote::TOKEN_FILE))
+                        .map_err(|e| e.to_string())
+                })
+                .unwrap_or_else(|e| {
+                    log::write(&format!("Fernsteuerung aus: Token nicht angelegt: {e}"));
+                    String::new()
+                });
             app.manage(AppState {
                 config,
                 path,
                 audio: Mutex::new(audio),
                 streamdeck: Mutex::default(),
+                token,
             });
             remote::spawn(app.handle().clone());
 
@@ -653,4 +679,156 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running Faderust");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Gain;
+    use std::sync::mpsc::{channel, Receiver};
+
+    fn config() -> Config {
+        let input = |label: &str| InputEntry {
+            label: label.into(),
+            device: label.into(),
+            fx: Default::default(),
+            muted: false,
+        };
+        Config {
+            inputs: vec![input("Mikro"), input("PC")],
+            outputs: vec![OutputEntry {
+                label: "PS5".into(),
+                device: "PS5".into(),
+                buffer_ms: 40,
+                master: Default::default(),
+                release_secs: 30,
+            }],
+            gains: vec![],
+            presets: vec![],
+        }
+        .normalized()
+    }
+
+    /// App state with a throwaway config file; the receiver sees what the
+    /// audio engine would be sent.
+    fn app(name: &str) -> (AppState, Receiver<Command>, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("faderust-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("config.toml");
+        let (tx, rx) = channel();
+        let state = AppState {
+            config: Arc::new(Mutex::new(config())),
+            path: path.clone(),
+            audio: Mutex::new(tx),
+            streamdeck: Mutex::default(),
+            token: "secret".into(),
+        };
+        (state, rx, path)
+    }
+
+    fn set_db(state: &AppState, input: usize, db: f32) {
+        state.config.lock().unwrap().gains[input][0] = Gain { db, muted: false };
+    }
+
+    #[test]
+    fn loading_a_preset_restores_the_faders_and_tells_the_engine() {
+        let (state, rx, path) = app("preset-load");
+        set_db(&state, 0, -6.0);
+        edit_presets(&state, |c| {
+            c.save_preset("Spielen");
+            true
+        })
+        .unwrap();
+        set_db(&state, 0, 0.0);
+
+        apply_preset(&state, "Spielen").unwrap();
+        assert_eq!(state.config.lock().unwrap().gains[0][0].db, -6.0);
+        assert!(matches!(rx.try_recv(), Ok(Command::ApplyGains)));
+        // Written to disk right away, presets included.
+        let saved = Config::load(&path).unwrap().unwrap();
+        assert_eq!(saved.presets.len(), 1);
+        assert_eq!(saved.gains[0][0].db, -6.0);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn unknown_preset_changes_nothing() {
+        let (state, rx, path) = app("preset-unknown");
+        set_db(&state, 1, -3.0);
+
+        let err = apply_preset(&state, "Gibt es nicht").unwrap_err();
+        assert!(err.contains("Gibt es nicht"), "{err}");
+        assert_eq!(state.config.lock().unwrap().gains[1][0].db, -3.0);
+        assert!(rx.try_recv().is_err(), "the engine must not hear of it");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn failed_save_is_reported_and_the_change_stays_in_memory() {
+        let (mut state, _rx, path) = app("save-fails");
+        // A file where the folder should be: the save cannot succeed.
+        let dir = path.parent().unwrap().to_path_buf();
+        std::fs::create_dir_all(dir.parent().unwrap()).unwrap();
+        std::fs::write(&dir, "in the way").unwrap();
+        state.path = path;
+
+        let err = edit_presets(&state, |c| {
+            c.save_preset("Chat");
+            true
+        })
+        .unwrap_err();
+        assert!(err.starts_with("Konfiguration nicht gespeichert"), "{err}");
+        assert_eq!(state.config.lock().unwrap().presets.len(), 1);
+        let _ = std::fs::remove_file(&dir);
+    }
+
+    #[test]
+    fn commands_fail_clearly_without_an_engine() {
+        let (state, rx, path) = app("no-engine");
+        assert!(send(&state, Command::Reconfigure).is_ok());
+        assert!(matches!(rx.try_recv(), Ok(Command::Reconfigure)));
+
+        drop(rx);
+        assert_eq!(
+            send(&state, Command::Reconfigure).unwrap_err(),
+            "Audio-Engine läuft nicht"
+        );
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    fn link(clients: usize, version: Option<&str>, refused: bool) -> remote::Link {
+        remote::Link {
+            clients,
+            version: version.map(Into::into),
+            refused,
+        }
+    }
+
+    #[test]
+    fn plugin_update_is_offered_only_when_it_helps() {
+        let status = |bundled: Option<&str>, link| plugin_status(bundled.map(Into::into), link);
+
+        // Older plugin connected: update.
+        let s = status(Some("0.3.1"), link(1, Some("0.3.0.0"), false));
+        assert!(s.connected && s.update && !s.refused);
+        // Same version (the plugin writes four numbers): nothing to do.
+        let s = status(Some("0.3.1.0"), link(1, Some("0.3.1"), false));
+        assert!(s.connected && !s.update);
+        // Newer than shipped (plugin installed from a later release).
+        assert!(!status(Some("0.3.1"), link(1, Some("0.4.0.0"), false)).update);
+        // Not connected: no verdict, the button offers to install.
+        let s = status(Some("0.3.1"), link(0, None, false));
+        assert!(!s.connected && !s.update);
+        // Development build without a shipped plugin: never an update.
+        assert!(!status(None, link(1, Some("0.1.0"), false)).update);
+    }
+
+    #[test]
+    fn a_turned_away_plugin_must_be_updated() {
+        let s = plugin_status(Some("0.3.1".into()), link(0, None, true));
+        assert!(!s.connected && s.refused && s.update);
+        // As soon as one signs in, the refusal no longer counts.
+        let s = plugin_status(Some("0.3.1".into()), link(1, Some("0.3.1.0"), true));
+        assert!(s.connected && !s.refused && !s.update);
+    }
 }

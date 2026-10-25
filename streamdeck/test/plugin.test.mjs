@@ -3,12 +3,16 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 
 const plugin = fileURLToPath(new URL("../com.niklas970.faderust.sdPlugin/bin/plugin.js", import.meta.url));
 const UUID = "com.niklas970.faderust";
+const TOKEN = "ab".repeat(32);
 
 /** Collects JSON messages and lets a test wait for one that matches. */
 class Peer {
@@ -81,6 +85,8 @@ before(async () => {
     socket.send(JSON.stringify(state));
     socket.send(JSON.stringify(devices));
   };
+  const tokenFile = join(mkdtempSync(join(tmpdir(), "faderust-")), "remote.token");
+  writeFileSync(tokenFile, `${TOKEN}\n`);
   const info = {
     application: { font: "", language: "de", platform: "windows", platformVersion: "10", version: "7.1.0.0" },
     colors: {},
@@ -93,7 +99,7 @@ before(async () => {
     [plugin, "-port", String(sdServer.address().port), "-pluginUUID", UUID, "-registerEvent", "registerPlugin", "-info", JSON.stringify(info)],
     {
       cwd: fileURLToPath(new URL("../com.niklas970.faderust.sdPlugin/", import.meta.url)),
-      env: { ...process.env, FADERUST_URL: `ws://127.0.0.1:${frServer.address().port}` },
+      env: { ...process.env, FADERUST_URL: `ws://127.0.0.1:${frServer.address().port}`, FADERUST_TOKEN_FILE: tokenFile },
       stdio: "inherit",
     },
   );
@@ -130,8 +136,8 @@ test("connects to Faderust like a desktop program, without an Origin", () => {
   assert.equal(fr.headers.origin, undefined);
 });
 
-test("tells Faderust its version", async () => {
-  assert.deepEqual(await fr.next((m) => m.type === "hello"), { type: "hello", plugin: "0.3.0.0" });
+test("says hello with its version and the token from the config folder", async () => {
+  assert.deepEqual(await fr.next((m) => m.type === "hello"), { type: "hello", plugin: "0.3.0.0", token: TOKEN });
 });
 
 test("dial shows the fader and turns it", async () => {

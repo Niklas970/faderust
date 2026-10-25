@@ -35,9 +35,11 @@ Die Icons entstehen aus `icons/*.svg` mit `node scripts/icons.cjs` (braucht Play
 
 Faderust lauscht auf `ws://127.0.0.1:47811` (nur lokal) und spricht JSON. Verbindungen mit `Origin`-Header (also aus dem Browser) lehnt es ab.
 
+**Anmeldung (ab Protokoll 2):** Die erste Nachricht muss `{"type":"hello","plugin":"<Version>","token":"<Token>"}` sein. Das Token steht in `%APPDATA%\io.github.niklas970.faderust\remote.token` (legt Faderust beim ersten Start an, 64 Hex-Zeichen). Ohne gültiges `hello` innerhalb von 5 Sekunden trennt Faderust die Verbindung und schickt nichts. So können nur Programme desselben Windows-Benutzers steuern, nicht die anderer Benutzer auf demselben PC. Das Plugin liest die Datei bei jedem Verbindungsversuch.
+
 Faderust schickt bei jeder Änderung:
 
-- `{"type":"state","protocol":1,"inputs":[…],"outputs":[…],"gains":[[{"db":0,"muted":false}]],"presets":[…],"activePreset":null}`
+- `{"type":"state","protocol":2,"inputs":[…],"outputs":[…],"gains":[[{"db":0,"muted":false}]],"presets":[…],"activePreset":null}`
 - `{"type":"devices","supported":true,"playback":[…],"recording":[…]}` (Windows-Geräte mit `id`, `name`, `isDefault`, `isDefaultCommunications`)
 - `{"type":"error","message":"…"}` bei einer ungültigen Anfrage
 
