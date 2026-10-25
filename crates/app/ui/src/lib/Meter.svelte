@@ -1,11 +1,24 @@
 <script>
+  import { untrack } from "svelte";
   /**
    * LED bar meter in dBFS, -60 dB (empty) to 0 dB (full). Signal segments
    * up to -12 dB, warning up to -3 dB, clip above.
    */
   let { db = -120, vertical = true, thin = false } = $props();
 
-  const pct = $derived(Math.max(0, Math.min(100, ((db + 60) / 60) * 100)));
+  // Rises at once, falls slowly like a hardware meter (dB per second).
+  const FALL = 20;
+  let shown = $state(-120);
+  let last = 0;
+  $effect(() => {
+    const now = performance.now();
+    const dt = last ? Math.min(0.5, (now - last) / 1000) : 0;
+    last = now;
+    const prev = untrack(() => shown);
+    shown = db >= prev ? db : Math.max(db, prev - FALL * dt);
+  });
+
+  const pct = $derived(Math.max(0, Math.min(100, ((shown + 60) / 60) * 100)));
 </script>
 
 <div class="meter" class:vertical class:thin aria-hidden="true">
@@ -35,7 +48,7 @@
   .leds {
     position: absolute;
     inset: 1px;
-    transition: clip-path 50ms linear;
+    transition: clip-path 120ms ease-out;
   }
   .vertical .leds {
     background: linear-gradient(

@@ -276,6 +276,7 @@ mod tests {
                 label: "Mikro".into(),
                 device: "USB".into(),
                 fx: Default::default(),
+                muted: false,
             }],
             outputs: vec![crate::config::OutputEntry {
                 label: "PS5".into(),

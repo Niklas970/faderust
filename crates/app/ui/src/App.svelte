@@ -19,6 +19,7 @@
     setGain,
     setMasterGain,
     setMasterMuted,
+    setInputMuted,
     setMuted,
     windowAction,
   } from "./lib/api.js";
@@ -268,6 +269,7 @@
           onMute={setMuted}
           onMaster={setMasterGain}
           onMasterMute={setMasterMuted}
+          onInputMute={setInputMuted}
           onFx={(i) => (fxOpen = i)}
           onPrograms={openApps}
         />

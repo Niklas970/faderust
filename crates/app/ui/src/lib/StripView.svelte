@@ -10,7 +10,7 @@
    * (left unless set otherwise) with a master fader each. Per-output levels
    * live in the matrix.
    */
-  let { side = "left", inputs, outputs, gains, lanes, onGain, onMute, onMaster, onMasterMute, onFx, onPrograms } = $props();
+  let { side = "left", inputs, outputs, gains, lanes, onGain, onMute, onMaster, onMasterMute, onInputMute, onFx, onPrograms } = $props();
 
   const isProgram = (input) => input.device.startsWith("app:");
   const devices = $derived(inputs.map((input, i) => ({ input, i })).filter(({ input }) => !isProgram(input)));
@@ -55,12 +55,11 @@
       <Fader
         label={input.label}
         value={stripValue(r)}
-        muted={r.every((g) => g.muted)}
+        muted={input.muted ?? false}
         levelDb={input.levelDb}
         connected={input.connected}
-        showMute={false}
         onChange={(db) => move(i, db)}
-        onMute={() => {}}
+        onMute={(v) => onInputMute(i, v)}
       />
     </div>
     <button class="fx" class:on={fxActive(input.fx)} onclick={() => onFx(i)}>Effekte</button>
@@ -91,6 +90,8 @@
                 onMute={(v) => onMasterMute(o, v)}
               />
             </div>
+            <!-- Keeps the fader level with the inputs' "Effekte" row. -->
+            <span class="fx spacer" aria-hidden="true">Effekte</span>
           </section>
         {/each}
       </div>
@@ -210,6 +211,9 @@
     color: var(--danger);
     border-color: var(--danger);
     text-decoration: line-through;
+  }
+  .fx.spacer {
+    visibility: hidden;
   }
   .fx.on {
     color: var(--accent);

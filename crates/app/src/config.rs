@@ -15,6 +15,9 @@ pub struct InputEntry {
     pub device: String,
     #[serde(default)]
     pub fx: Fx,
+    /// Silences the input everywhere without touching its routing.
+    #[serde(default)]
+    pub muted: bool,
 }
 
 /// Input effects, see [`faderust_engine::FxSettings`].
@@ -219,6 +222,7 @@ mod tests {
                 label: "Mikro".into(),
                 device: "USB".into(),
                 fx: Fx::default(),
+                muted: false,
             }],
             outputs: vec![
                 OutputEntry {
