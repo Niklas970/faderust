@@ -10,11 +10,25 @@
    * (left unless set otherwise) with a master fader each. Per-output levels
    * live in the matrix.
    */
-  let { side = "left", inputs, outputs, gains, lanes, onGain, onMute, onMaster, onMasterMute, onInputMute, onFx, onPrograms } = $props();
+  let { side = "left", hideAfter = 120, inputs, outputs, gains, lanes, onGain, onMute, onMaster, onMasterMute, onInputMute, onFx, onPrograms } = $props();
 
   const isProgram = (input) => input.device.startsWith("app:");
   const devices = $derived(inputs.map((input, i) => ({ input, i })).filter(({ input }) => !isProgram(input)));
-  const programs = $derived(inputs.map((input, i) => ({ input, i })).filter(({ input }) => isProgram(input)));
+  const allPrograms = $derived(inputs.map((input, i) => ({ input, i })).filter(({ input }) => isProgram(input)));
+
+  // When each program was last heard (or first seen); silent ones hide.
+  const heard = new Map();
+  let showAll = $state(false);
+  const audible = $derived.by(() => {
+    const now = Date.now();
+    for (const { input } of allPrograms) {
+      if (!heard.has(input.device) || (input.connected && input.levelDb > -60)) heard.set(input.device, now);
+    }
+    if (!hideAfter) return allPrograms;
+    return allPrograms.filter(({ input }) => now - heard.get(input.device) < hideAfter * 1000);
+  });
+  const programs = $derived(showAll ? allPrograms : audible);
+  const silent = $derived(allPrograms.length - audible.length);
 
   const row = (i) => outputs.map((_, o) => gains[i]?.[o] ?? { db: 0, muted: true });
 
@@ -110,8 +124,15 @@
         {#each programs as { input, i } (i)}
           {@render strip(input, i)}
         {:else}
-          <p class="hint">Mit „+ Programm“ bekommt z. B. Discord oder Brave einen eigenen Streifen.</p>
+          {#if !allPrograms.length}
+            <p class="hint">Mit „+ Programm“ bekommt z. B. Discord oder Brave einen eigenen Streifen.</p>
+          {/if}
         {/each}
+        {#if silent}
+          <button class="more" onclick={() => (showAll = !showAll)}
+            >{showAll ? "Stille ausblenden" : `${silent} still, zeigen`}</button
+          >
+        {/if}
       </div>
     </div>
   </div>
@@ -235,6 +256,15 @@
     border: 1px solid var(--accent);
     background: none;
     color: var(--accent);
+  }
+  .more {
+    align-self: flex-start;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--muted);
+    background: none;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
   }
   .hint {
     width: 160px;

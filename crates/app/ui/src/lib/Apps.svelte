@@ -53,10 +53,14 @@
   // Recorded as an input and still playing somewhere you hear it.
   const doubled = (app) => isInput(app) && !silent(data.devices.find((d) => d.id === app.device));
 
-  // Record the program and park its own output on a quiet cable at once.
+  // Park the program on a quiet cable first and record it once it has
+  // moved there: recording it mid-move can leave it without sound.
   async function addAsInput(app) {
+    if (quietCable) {
+      await change(app, quietCable.id);
+      await new Promise((r) => setTimeout(r, 800));
+    }
     await onAddInput(programId(app), app.name);
-    if (quietCable) await change(app, quietCable.id);
   }
 
   async function change(app, device) {

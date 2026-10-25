@@ -2,6 +2,10 @@ Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler s
 
 Neu in 0.4.5:
 
+- Programme, die eine Weile still sind, blendet das Pult aus (Standard 2 min, unter „Design“ einstellbar: nie, 30 s, 2 min, 10 min). „… still, zeigen“ holt sie zurück
+- „+ Eingang“ stellt ein Programm jetzt erst auf das freie Kabel und nimmt es danach auf. Schlägt die Aufnahme fehl, wartet Faderust 30 s bis zum nächsten Versuch, statt Windows jede Sekunde neu zu fragen (das konnte den Ton des Programms bis zum Neustart lahmlegen)
+- Auf die dB-Zahl unter einem Fader klicken und einen Wert eintippen (z. B. -6,5)
+- Zahlen und Beschriftungen lassen sich nicht mehr versehentlich markieren
 - Dunkle Darstellung jetzt fast schwarz (OLED-Stil)
 - Geräte und Programme haben im Pult einen eigenen MUTE-Knopf. Er schaltet den Eingang überall stumm, die Auswahl A1–A3 bleibt dabei erhalten
 - Ruhigere LED-Anzeigen: Sie steigen sofort, fallen aber langsam ab wie bei einem Hardware-Pult

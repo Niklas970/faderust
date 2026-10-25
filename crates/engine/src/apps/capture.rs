@@ -10,7 +10,7 @@
 use std::mem::{size_of, ManuallyDrop};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, OnceLock};
+use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -51,6 +51,10 @@ pub const CHANNELS: u16 = 2;
 const ACTIVATE_TIMEOUT_MS: u32 = 5_000;
 /// How long `open` waits for the recording thread to start.
 const OPEN_TIMEOUT: Duration = Duration::from_secs(8);
+/// After Windows failed to start a program's recording, wait this long
+/// before asking again. Retrying every second piles up stuck requests in
+/// the Windows audio service, which then breaks the program's sound.
+const RETRY_AFTER: Duration = Duration::from_secs(30);
 /// A recording that ran this long without taking Faderust down is trusted.
 const TRUSTED_AFTER: Duration = Duration::from_secs(5);
 
@@ -140,6 +144,27 @@ fn processes() -> Result<Vec<(u32, u32, String)>, CaptureError> {
     Ok(list)
 }
 
+/// Programs whose recording failed to start, with the time it failed.
+static FAILED: Mutex<Vec<(String, Instant)>> = Mutex::new(Vec::new());
+
+fn failed(exe: &str) {
+    if let Ok(mut f) = FAILED.lock() {
+        let exe = exe.to_lowercase();
+        f.retain(|(e, _)| *e != exe);
+        f.push((exe, Instant::now()));
+    }
+}
+
+/// Time left before `exe` may be tried again, if it failed recently.
+fn backoff(exe: &str) -> Option<Duration> {
+    let f = FAILED.lock().ok()?;
+    let exe = exe.to_lowercase();
+    let (_, at) = f.iter().find(|(e, _)| *e == exe)?;
+    RETRY_AFTER
+        .checked_sub(at.elapsed())
+        .filter(|d| !d.is_zero())
+}
+
 /// Records the program `exe` (e.g. `spotify.exe`) until dropped. `data` gets
 /// interleaved stereo `f32` at [`SAMPLE_RATE`] on a thread of its own;
 /// `error` runs once if recording stops by itself (the program quit).
@@ -148,6 +173,12 @@ pub fn open(
     mut data: InputCallback,
     mut error: ErrorCallback,
 ) -> Result<ProgramCapture, CaptureError> {
+    if let Some(left) = backoff(exe) {
+        return Err(CaptureError(format!(
+            "Aufnahme von {exe} ist eben fehlgeschlagen, neuer Versuch in {} s",
+            left.as_secs().max(1)
+        )));
+    }
     let app = programs()?
         .into_iter()
         .find(|a| a.exe.eq_ignore_ascii_case(exe))
@@ -199,12 +230,14 @@ pub fn open(
         Ok(Err(e)) => {
             let _ = thread.join();
             clear_marker();
+            failed(exe);
             Err(e)
         }
         Err(_) => {
             // Stuck in Windows or gone: let it finish on its own.
             stop.store(true, Ordering::Relaxed);
             clear_marker();
+            failed(exe);
             Err(CaptureError("Programm-Aufnahme startet nicht".into()))
         }
     }

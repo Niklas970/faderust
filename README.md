@@ -19,96 +19,79 @@
 
 ## Was Faderust kann
 
-- **Zwei Ansichten:** das *Pult* im Stil von Voicemeeter (ein Streifen pro Gerät und Programm mit Knöpfen A1–A3, links ein Master-Fader pro Ausgang) und die *Matrix*, in der jeder Eingang für jeden Ausgang einzeln geregelt wird. Mikrofon, PC-Ton und Konsole lassen sich so für Kopfhörer, Lautsprecher und Stream getrennt mischen.
+- **Pult wie bei Voicemeeter.** Jedes Gerät und jedes Programm bekommt einen Streifen mit Fader, MUTE und den Knöpfen A1, A2, A3 für die Ausgänge. Jeder Ausgang hat einen eigenen Master-Fader.
+- **Matrix für Feinarbeit.** Alternativ als Tabelle: jeder Eingang auf jedem Ausgang einzeln geregelt, z. B. das Mikro leiser auf dem Kopfhörer als im Stream.
+- **Programme direkt aufnehmen.** Discord, Spotify oder der Browser bekommen einen eigenen Streifen mit Effekten, ganz ohne virtuelles Kabel pro Programm. Stille Programme blendet Faderust nach einer einstellbaren Zeit aus.
 - **Geräte kommen und gehen.** Bluetooth-Kopfhörer aus- und wieder einschalten, USB-Gerät abziehen: Faderust verbindet neu, ohne die anderen Geräte zu unterbrechen.
-- **Gibt Bluetooth-Kopfhörer frei, wenn nichts läuft.** Nach 30 Sekunden Stille (einstellbar: nie, 5 s, 30 s, 2 min) schließt Faderust einen Bluetooth-Ausgang, damit die Kopfhörer per Multipoint zum Handy wechseln können. Kommt wieder Ton, öffnet er sich sofort von selbst. Kabel- und USB-Geräte bleiben offen und haben so keine Verzögerung.
+- **Multipoint-freundlich.** Bluetooth-Ausgänge gibt Faderust bei Stille frei (nach 30 s, pro Ausgang einstellbar), damit die Kopfhörer zum Handy wechseln können. Kommt wieder Ton, öffnen sie sich von selbst.
 - **Effekte pro Eingang:** Low-Cut, Drei-Band-EQ und Gate, zum Beispiel gegen Tastaturgeräusche am Mikro.
-- **Programme als Eingänge:** Faderust nimmt einzelne Programme direkt auf, jedes mit eigenem Fader und EQ. Alternativ geht es über [VB-Cable](https://vb-audio.com/Cable/).
-- **Windows-Sound direkt aus Faderust:** Standardgeräte für Wiedergabe, Aufnahme und Anrufe sowie die Lautstärke pro Gerät.
-- **Presets** für Fader-Stellungen, **Autostart** mit Windows (im Tray), **Updates** in der App mit Signaturprüfung.
-- **Eigene Farben:** Akzent- und Signalfarbe frei wählbar, hell oder dunkel.
+- **Windows-Sound aus einer Hand:** Standardgeräte für Wiedergabe, Aufnahme und Anrufe sowie die Lautstärke pro Gerät.
+- **Presets, Autostart im Tray, Updates in der App** (mit Signaturprüfung) und ein **Stream-Deck-Plugin**.
+- **Eigene Farben:** Akzent- und Signalfarbe frei wählbar, dunkel (OLED-Schwarz) oder hell.
 
 ## Installation
 
-1. Unter [Releases](https://github.com/Niklas970/faderust/releases/latest) die Datei `Faderust_*_x64-setup.exe` laden und starten. Das Setup braucht keine Admin-Rechte und spricht Deutsch oder Englisch, je nach Windows-Sprache.
-2. Das Setup ist nicht signiert, deshalb warnt Windows SmartScreen. Klicke auf „Weitere Informationen“ und dann auf „Trotzdem ausführen“.
-3. Faderust aus dem Startmenü öffnen. Neue Versionen meldet die App selbst oben in der Titelleiste („Update auf …“), ein Klick auf die Versionsnummer sucht sofort danach.
+1. Unter [Releases](https://github.com/Niklas970/faderust/releases/latest) die Datei `Faderust_*_x64-setup.exe` laden und starten. Das Setup braucht keine Admin-Rechte und spricht Deutsch oder Englisch.
+2. Das Setup ist nicht signiert, deshalb warnt Windows SmartScreen: „Weitere Informationen“ → „Trotzdem ausführen“.
+3. Faderust aus dem Startmenü öffnen. Neue Versionen meldet die App oben in der Titelleiste, ein Klick auf die Versionsnummer sucht sofort danach.
 
-Voraussetzung ist Windows 10 oder 11. WebView2 ist dort meist schon da, sonst lädt das Setup es nach.
+Voraussetzung: Windows 10 (ab Version 2004) oder Windows 11.
 
 ## Erste Schritte
 
-1. **Geräte** öffnen und die Eingänge (Mikrofon, Line-In, virtuelles Kabel) und Ausgänge (Kopfhörer, Lautsprecher …) anlegen. Mit den Pfeilen lässt sich die Reihenfolge ändern.
-2. Für Bluetooth-Ausgänge den Puffer höher stellen (80 ms oder mehr), für USB reichen meist 30 bis 60 ms. Zählt ein Ausgang immer wieder Aussetzer, den Puffer erhöhen.
-3. Fader bedienen: ziehen, auf die Bahn klicken, Mausrad (mit Shift feiner), Doppelklick setzt auf 0 dB. Der Bereich geht von −∞ bis +12 dB.
-4. Ein Klick auf einen Eingang oben in der Leiste öffnet seine Effekte.
+1. **Geräte** öffnen und Eingänge (Mikrofon, Line-In, virtuelles Kabel) und Ausgänge (Kopfhörer, Lautsprecher, Stream) anlegen. Bluetooth braucht etwa 80 ms Puffer, USB meist 30 bis 60 ms.
+2. Im **Pult** mit A1–A3 wählen, wohin ein Eingang spielt. Der Fader regelt alle eingeschalteten Ausgänge gemeinsam.
+3. Fader bedienen: ziehen, Mausrad (mit Shift feiner), Doppelklick auf 0 dB, oder auf die dB-Zahl darunter klicken und einen Wert eintippen.
+4. **Effekte** unter einem Streifen öffnet Low-Cut, EQ und Gate.
+5. Unter **Design** zwischen Pult und Matrix wechseln, die Seite der Ausgänge und die Farben wählen.
 
-### Programme als eigene Eingänge
+### Programme
 
-Unter **Programme** nimmt **+ Eingang** ein Programm direkt auf (Windows-Prozess-Loopback, ab Windows 10 Version 2004). Das Programm bekommt dann in jeder Ausgangsspalte einen Fader und eigene Effekte wie EQ und Gate, ganz ohne ein Kabel pro Programm. Es erscheint, sobald das Programm Ton abspielt, und verbindet sich nach einem Neustart des Programms von selbst neu.
+**+ Programm** im Pult zeigt alle Programme, die gerade Ton abspielen. **+ Eingang** nimmt eines direkt auf. Damit du es nicht doppelt hörst, stellt Faderust das Programm zuerst auf ein freies virtuelles Kabel, das du nicht hörst (falls eins da ist), und nimmt es dann auf.
 
-Das Programm spielt weiter auch auf seinem eigenen Gerät. Damit du es nicht doppelt hörst, stellt Faderust es dabei auf ein freies virtuelles Kabel, das du nicht hörst (falls eins da ist). Hörst du ein Programm doppelt, zeigt der Dialog das und bietet die Lösung mit einem Klick.
+Ohne Prozess-Aufnahme geht es auch klassisch über [VB-Cable](https://vb-audio.com/Cable/): Programm auf „CABLE Input“ stellen und „CABLE Output“ als Eingang anlegen. Windows merkt sich das Gerät pro Programm.
 
 ### Mikrofon für Discord, Teams & Co.
 
-Unter **Geräte** legt **+ Programm-Mikro** einen Ausgang auf einem freien virtuellen Kabel an. Dort ist nur das Mikrofon an, mit seinen Effekten. Im Programm wählst du dann die andere Seite des Kabels als Mikrofon (z. B. „CABLE Output“). Faderust kann sie auch gleich als Windows-Mikrofon für Anrufe setzen.
-
-Spielt ein Ausgang auf das Kabel, von dem ein Eingang kommt, wäre das eine Rückkopplung. Faderust schaltet diese Verbindung stumm und zeigt „Schleife“ am Fader.
-
-### Programme über ein virtuelles Kabel
-
-Damit ein Programm (Spotify, Discord, Browser …) in der Mischung landet, spielt es auf ein virtuelles Kabel, und Faderust nimmt die andere Seite des Kabels als Eingang:
-
-1. [VB-Cable](https://vb-audio.com/Cable/) installieren (kostenlos, wird nicht mitgeliefert, „Virtuelles Kabel einrichten“ in Faderust öffnet die Seite) und Windows neu starten.
-2. In Faderust unter **Programme** bei „CABLE Output … ist noch kein Eingang“ auf **Als Eingang anlegen** klicken.
-3. Im selben Dialog das Programm auf **CABLE Input** stellen.
-
-Windows merkt sich das Gerät pro Programm. Für mehrere getrennte Programm-Fader braucht es mehrere Kabel (VB-Cable A+B).
+Unter **Geräte** legt **+ Programm-Mikro** einen Ausgang auf einem freien virtuellen Kabel an, auf dem nur das Mikrofon mit seinen Effekten liegt. Im Programm wählst du die andere Seite des Kabels als Mikrofon. Rückkopplungen (ein Ausgang spielt auf das Kabel, von dem ein Eingang kommt) schaltet Faderust stumm und zeigt „Schleife“.
 
 ## Grenzen
 
-- Faderust bringt keinen eigenen Treiber mit. Virtuelle Geräte kommen von VB-Cable.
-- Windows liefert den Ton pro Programm, nicht pro Browser-Tab. Alle Tabs eines Browsers laufen über denselben Audio-Prozess und lassen sich deshalb nicht einzeln trennen.
-- Die Zuordnung „Programm → Gerät“ nutzt dieselbe nicht dokumentierte Windows-Schnittstelle wie der Lautstärkemixer in den Einstellungen. Ein großes Windows-Update könnte sie ändern.
+- Kein eigener Treiber. Virtuelle Geräte kommen von VB-Cable.
+- Windows liefert den Ton pro Programm, nicht pro Browser-Tab oder Web-App. Alles aus einem Browser läuft über denselben Audio-Prozess.
+- Bluetooth braucht nach einer Freigabe etwa eine Sekunde, bis wieder Ton kommt. Wer das nicht will, stellt den Ausgang auf „Nie frei“.
+- Die Zuordnung „Programm → Gerät“ nutzt dieselbe nicht dokumentierte Windows-Schnittstelle wie der Lautstärkemixer in den Einstellungen.
 
-Die Einstellungen liegen in `%APPDATA%\io.github.niklas970.faderust\config.toml`, daneben ein Protokoll `faderust.log`, das bei Fehlermeldungen hilft.
+Einstellungen: `%APPDATA%\io.github.niklas970.faderust\config.toml`, daneben das Protokoll `faderust.log`, das bei Fehlern hilft.
 
 ## Entwicklung
 
-Faderust ist in Rust geschrieben, die Oberfläche in Svelte mit Tauri 2. Planung und Fahrplan stehen in [`docs/PLAN.md`](docs/PLAN.md).
+Rust für den Audio-Kern, Svelte 5 mit Tauri 2 für die Oberfläche.
 
 | Pfad | Inhalt |
 |---|---|
-| `crates/engine` | Audio-Kern: Geräte (WASAPI über cpal), Ringpuffer, Drift-Ausgleich, Mix-Matrix, Effekte, Programm-Steuerung |
+| `crates/engine` | Audio-Kern: Geräte (WASAPI über cpal), Ringpuffer, Drift-Ausgleich, Mix-Matrix, Effekte, Programm-Aufnahme |
 | `crates/app` | Tauri-App: Befehle, Konfiguration, Tray, Updater |
-| `crates/app/ui` | Oberfläche in Svelte 5 |
+| `crates/app/ui` | Oberfläche |
 | `streamdeck` | Stream-Deck-Plugin |
 
 Voraussetzungen: Rust (stable), Node.js 22, unter Windows WebView2.
 
 ```sh
-cargo test                             # Engine und App
+cargo test
 cd crates/app/ui && npm ci && npm run build && cd ../../..
-cargo run --release -p faderust        # App starten
+cargo run --release -p faderust
 ```
 
-- `npm run dev` in `crates/app/ui` zeigt die Oberfläche im Browser mit simulierten Geräten. Parallel `cargo run -p faderust` lädt sie mit Live-Neuladen in die App.
-- Setup bauen: in `crates/app` den Befehl `ui/node_modules/.bin/tauri build` ausführen, das Ergebnis liegt unter `target/release/bundle/nsis/`. Releases entstehen über den Workflow „Release“.
-- Engine ohne Oberfläche ausprobieren:
+- `npm run dev` in `crates/app/ui` zeigt die Oberfläche im Browser mit simulierten Geräten.
+- Setup bauen: in `crates/app` `ui/node_modules/.bin/tauri build`, Ergebnis unter `target/release/bundle/nsis/`. Releases entstehen über den Workflow „Release“.
+- Engine ohne Oberfläche: `cargo run --release -p faderust-engine --example mixer -- --list`
 
-  ```sh
-  cargo run --release -p faderust-engine --example mixer -- --list
-  cargo run --release -p faderust-engine --example mixer -- \
-      --input "USB" --input "CABLE Output" --output "PS5:30" --output "Buds:80" --gain 1:0:-6
-  ```
-
-  `--output NAME:MS` setzt den Puffer pro Ausgang, `--gain I:O:DB` und `--mute I:O` stellen die Matrix ein. Geräte werden über Teile des Namens gefunden.
-
-Vor einem Commit laufen `cargo fmt`, `cargo clippy -- -D warnings` und `cargo test`. Neue Abhängigkeiten brauchen eine freizügige Lizenz (`cargo deny check`).
+Vor einem Commit: `cargo fmt`, `cargo clippy -- -D warnings`, `cargo test`. Neue Abhängigkeiten brauchen eine freizügige Lizenz (`cargo deny check`).
 
 ## Stream Deck
 
-Das Plugin in [`streamdeck/`](streamdeck/README.md) steuert Faderust vom Elgato Stream Deck: Fader per Drehregler (Stream Deck+) oder Taste, Stummschalten, Presets laden und Windows-Standardgerät wechseln. Installieren: `com.niklas970.faderust.streamDeckPlugin` aus den [Releases](https://github.com/Niklas970/faderust/releases) doppelklicken. Braucht Stream Deck 7.1 oder neuer.
+Das Plugin in [`streamdeck/`](streamdeck/README.md) steuert Faderust vom Elgato Stream Deck: Fader per Drehregler oder Taste, Stummschalten, Presets und Windows-Standardgerät. `com.niklas970.faderust.streamDeckPlugin` aus den [Releases](https://github.com/Niklas970/faderust/releases) doppelklicken (Stream Deck 7.1 oder neuer).
 
 ## Lizenz
 
