@@ -1,5 +1,6 @@
 <script>
   import Meter from "./Meter.svelte";
+  import { DB, OFF } from "./scale.js";
 
   /**
    * A desk fader with scale, mute and an optional meter. `unit` "db" is an
@@ -19,45 +20,13 @@
     // Silenced by Faderust (a feedback loop): shown, but plays nothing.
     blocked = false,
     noteTitle = "",
+    showMute = true,
+    // The level already includes this fader (an output's master).
+    postFader = false,
     onChange,
     onMute,
   } = $props();
 
-  const OFF = -120;
-  const DB = {
-    // Most of the travel for the useful range, the bottom 5 % is off.
-    toPos(d) {
-      if (d <= -60) return 0;
-      if (d < -24) return 0.05 + ((d + 60) / 36) * 0.2;
-      return 0.25 + ((Math.min(d, 12) + 24) / 36) * 0.75;
-    },
-    fromPos(p) {
-      if (p <= 0.05) return OFF;
-      if (p < 0.25) return -60 + ((p - 0.05) / 0.2) * 36;
-      return -24 + ((Math.min(p, 1) - 0.25) / 0.75) * 36;
-    },
-    clamp: (d) => (d <= -60 ? OFF : Math.min(12, Math.round(d * 2) / 2)),
-    // From off, the first step up lands at -59 dB.
-    nudge: (d, delta) => (d <= OFF ? (delta > 0 ? -59 : OFF) : d + delta),
-    format: (d) => (d <= OFF ? "−∞" : `${d > 0 ? "+" : ""}${d.toFixed(1)}`),
-    ticks: [
-      [12, "+12"],
-      [6, "+6"],
-      [0, "0"],
-      [-6, "-6"],
-      [-12, "-12"],
-      [-24, "-24"],
-      [-48, "-48"],
-      [OFF, "−∞"],
-    ],
-    step: 1,
-    fine: 0.5,
-    page: 6,
-    home: 0,
-    min: -60,
-    max: 12,
-    aria: (d) => (d <= OFF ? "aus" : `${d.toFixed(1)} dB`),
-  };
   const PCT = {
     toPos: (v) => v / 100,
     fromPos: (p) => p * 100,
@@ -151,7 +120,7 @@
   });
 
   const meterDb = $derived(
-    levelDb == null || !connected || muted || blocked ? OFF : levelDb + (unit === "db" ? Math.max(local, OFF) : 0),
+    levelDb == null || !connected || muted || blocked ? OFF : levelDb + (unit === "db" && !postFader ? Math.max(local, OFF) : 0),
   );
 </script>
 
@@ -192,9 +161,11 @@
     {#if levelDb != null}<Meter db={meterDb} />{/if}
   </div>
   <div class="readout" class:off={isOff || muted}>{scale.format(local)} {unit === "pct" ? "%" : "dB"}</div>
-  <button class="mute" class:on={muted} aria-pressed={muted} aria-label={`${label} stumm`} onclick={() => onMute(!muted)}
-    >Mute</button
-  >
+  {#if showMute}
+    <button class="mute" class:on={muted} aria-pressed={muted} aria-label={`${label} stumm`} onclick={() => onMute(!muted)}
+      >Mute</button
+    >
+  {/if}
 </div>
 
 <style>

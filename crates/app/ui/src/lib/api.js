@@ -174,6 +174,17 @@ export async function setMuted(input, output, muted) {
   return (await tauri()).invoke("set_muted", { input, output, muted });
 }
 
+/** Master fader of a whole output. */
+export async function setMasterGain(output, db) {
+  if (!inTauri) return mock.setMaster(output, { db });
+  return (await tauri()).invoke("set_master_gain", { output, db });
+}
+
+export async function setMasterMuted(output, muted) {
+  if (!inTauri) return mock.setMaster(output, { muted });
+  return (await tauri()).invoke("set_master_muted", { output, muted });
+}
+
 /** Changes an input's effects live. */
 export async function setFx(input, fx) {
   if (!inTauri) return void (mock.config.inputs[input].fx = { ...fx });
@@ -461,6 +472,10 @@ const mock = {
   setMuted(i, o, muted) {
     this.gains[i][o].muted = muted;
   },
+  setMaster(o, patch) {
+    const out = this.config.outputs[o];
+    out.master = { db: 0, muted: false, ...out.master, ...patch };
+  },
   subscribe(cb) {
     this.resize();
     let t = 0;
@@ -479,6 +494,7 @@ const mock = {
         })),
         outputs: outputs.map((c, o) => ({
           ...c,
+          master: c.master ?? { db: 0, muted: false },
           // The second Bluetooth device is released now and then.
           connected: !(o === 2 && Math.sin(t / 4) > 0.6),
           released: o === 2 && Math.sin(t / 4) > 0.6,

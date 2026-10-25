@@ -1,10 +1,10 @@
 <script>
   import { onMount } from "svelte";
-  import OutputColumn from "./lib/OutputColumn.svelte";
+  import StripView from "./lib/StripView.svelte";
+  import MatrixView from "./lib/MatrixView.svelte";
   import Settings from "./lib/Settings.svelte";
   import Apps from "./lib/Apps.svelte";
   import WindowsAudio from "./lib/WindowsAudio.svelte";
-  import ProgramColumn from "./lib/ProgramColumn.svelte";
   import FxDialog from "./lib/FxDialog.svelte";
   import Presets from "./lib/Presets.svelte";
   import Notices from "./lib/Notices.svelte";
@@ -12,12 +12,13 @@
   import {
     checkUpdate,
     installUpdate,
-    fxActive,
     getConfig,
     getVersion,
     onState,
     saveConfig,
     setGain,
+    setMasterGain,
+    setMasterMuted,
     setMuted,
     windowAction,
   } from "./lib/api.js";
@@ -32,6 +33,43 @@
   // Index of the input whose effects are open.
   let fxOpen = $state(null);
   let error = $state("");
+
+  // "strips" (Voicemeeter-style desk) or "matrix", remembered per machine.
+  const VIEW_KEY = "faderust.view";
+  let view = $state(readView());
+  function readView() {
+    try {
+      return localStorage.getItem(VIEW_KEY) === "matrix" ? "matrix" : "strips";
+    } catch {
+      return "strips";
+    }
+  }
+  function setView(v) {
+    view = v;
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // Remembered for this session only.
+    }
+  }
+  // Where the desk shows the outputs: "left" (default) or "right".
+  const SIDE_KEY = "faderust.outputs";
+  let side = $state(readSide());
+  function readSide() {
+    try {
+      return localStorage.getItem(SIDE_KEY) === "right" ? "right" : "left";
+    } catch {
+      return "left";
+    }
+  }
+  function setSide(v) {
+    side = v;
+    try {
+      localStorage.setItem(SIDE_KEY, v);
+    } catch {
+      // Remembered for this session only.
+    }
+  }
   let version = $state("");
   getVersion().then((v) => (version = v));
 
@@ -158,34 +196,12 @@
       {/if}
     </div>
 
-    <div class="inputs" data-tauri-drag-region>
-      {#each state?.inputs ?? [] as input, i}
-        <button
-          class="chip"
-          class:off={!input.connected}
-          title={`${input.deviceName ?? input.device} · Effekte`}
-          onclick={() => (fxOpen = i)}
-        >
-          <span class="dot"></span>{input.label}
-          {#if fxActive(input.fx)}<span class="fx">FX</span>{/if}
-        </button>
-      {/each}
-    </div>
+    <div class="spacer" data-tauri-drag-region></div>
+
 
     <nav class="nav">
       <button onclick={() => (presetsOpen = true)} class:active={presetsOpen}>
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" /></svg>Presets
-      </button>
-      <button onclick={openApps} class:active={appsOpen}>
-        <svg viewBox="0 0 16 16" aria-hidden="true"
-          ><rect x="2" y="2" width="5" height="5" rx="1" /><rect x="9" y="2" width="5" height="5" rx="1" /><rect
-            x="2"
-            y="9"
-            width="5"
-            height="5"
-            rx="1"
-          /><rect x="9" y="9" width="5" height="5" rx="1" /></svg
-        >Programme
       </button>
       <button onclick={() => (windowsOpen = true)} class:active={windowsOpen}>
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l4-3v10l-4-3H2z" /><path d="M11.5 5.5a3.5 3.5 0 0 1 0 5M13.5 3.5a6.3 6.3 0 0 1 0 9" /></svg
@@ -230,18 +246,32 @@
 
   {#if state && state.outputs.length && state.inputs.length}
     <main>
-      {#each state.outputs as output, o}
-        <OutputColumn
-          {output}
-          index={o}
+      {#if view === "matrix"}
+        <MatrixView
           inputs={state.inputs}
+          outputs={state.outputs}
           gains={state.gains}
           lanes={state.lanes}
           onGain={setGain}
           onMute={setMuted}
+          onFx={(i) => (fxOpen = i)}
+          onPrograms={openApps}
         />
-      {/each}
-      <ProgramColumn inputs={config?.inputs ?? []} onRouting={openApps} />
+      {:else}
+        <StripView
+          {side}
+          inputs={state.inputs}
+          outputs={state.outputs}
+          gains={state.gains}
+          lanes={state.lanes}
+          onGain={setGain}
+          onMute={setMuted}
+          onMaster={setMasterGain}
+          onMasterMute={setMasterMuted}
+          onFx={(i) => (fxOpen = i)}
+          onPrograms={openApps}
+        />
+      {/if}
     </main>
   {:else if state}
     <div class="empty">
@@ -266,7 +296,7 @@
 {/if}
 
 {#if themeOpen}
-  <Theme onClose={() => (themeOpen = false)} />
+  <Theme {view} onView={setView} {side} onSide={setSide} onClose={() => (themeOpen = false)} />
 {/if}
 
 {#if windowsOpen}
@@ -408,51 +438,9 @@
     stroke: currentColor;
     stroke-width: 1.1;
   }
-  .inputs {
-    display: flex;
-    align-self: stretch;
-    align-items: center;
-    gap: 6px;
+  .spacer {
     flex: 1;
-    overflow: hidden;
-    margin-left: 8px;
-  }
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 8px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-  .chip {
-    background: none;
-    cursor: pointer;
-  }
-  .chip:hover {
-    border-color: var(--accent);
-  }
-  .chip .fx {
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--accent);
-  }
-  .chip .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 1px;
-    background: var(--signal);
-  }
-  .chip.off {
-    color: var(--muted);
-  }
-  .chip.off .dot {
-    background: var(--border);
+    align-self: stretch;
   }
   button {
     padding: 6px 14px;

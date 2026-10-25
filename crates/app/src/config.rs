@@ -79,6 +79,9 @@ pub struct OutputEntry {
     pub device: String,
     #[serde(default = "default_buffer_ms")]
     pub buffer_ms: u32,
+    /// Master fader of the whole output.
+    #[serde(default)]
+    pub master: Gain,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -213,11 +216,13 @@ mod tests {
                     label: "PS5".into(),
                     device: "USB Sound".into(),
                     buffer_ms: 30,
+                    master: Default::default(),
                 },
                 OutputEntry {
                     label: "Kopfhörer".into(),
                     device: "Buds".into(),
                     buffer_ms: 80,
+                    master: Default::default(),
                 },
             ],
             gains: vec![],

@@ -1,5 +1,14 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.4.4:
+
+- Neues **Pult** im Stil von Voicemeeter: ein Streifen pro Gerät und pro Programm (z. B. Discord, Brave), jeweils mit einem Fader und Knöpfen A1, A2, A3 für die Ausgänge. Der Fader verschiebt alle eingeschalteten Ausgänge gemeinsam, ihr Abstand bleibt erhalten
+- **Master-Fader pro Ausgang:** Links im Pult hat jeder Ausgang einen eigenen Streifen mit senkrechtem Gesamtregler und Stumm-Knopf (unter „Design“ auch rechts möglich)
+- Neue Ansicht **Matrix**: alle Ein- und Ausgänge als Tabelle, jeder Pegel einzeln einstellbar. Umschalten unter „Design“
+- „+ Programm“ sitzt jetzt direkt im Pult und in der Matrix, der Knopf „Programme“ oben entfällt, ebenso die Windows-Lautstärke-Leiste für Programme
+- Neue Standardfarben: dunkle Darstellung und grüne Pegel (eigene Einstellungen bleiben erhalten)
+- Bleibt auch mit drei oder mehr Ausgängen übersichtlich, kein seitliches Scrollen mehr
+
 Neu in 0.4.3:
 
 - Programm-Eingänge (z. B. Brave) werden nicht mehr grau, wenn das Programm eine Weile still ist. Sie bleiben verbunden, bis das Programm beendet wird, und spielen sofort weiter

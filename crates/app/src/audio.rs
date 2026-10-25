@@ -34,6 +34,9 @@ pub enum Command {
     /// Moves a fader by a dB step (Stream Deck dials and keys).
     AddGain(usize, usize, f32),
     ToggleMuted(usize, usize),
+    /// Master fader of an output.
+    SetMasterGain(usize, f32),
+    SetMasterMuted(usize, bool),
     SetFx(usize, Fx),
     /// The gains in the config changed as a whole (preset loaded).
     ApplyGains,
@@ -74,6 +77,9 @@ struct UiDevice {
     /// Inputs only.
     #[serde(skip_serializing_if = "Option::is_none")]
     fx: Option<Fx>,
+    /// Outputs only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    master: Option<crate::config::Gain>,
 }
 
 #[derive(Serialize, Clone, Default)]
@@ -156,6 +162,10 @@ fn apply_gains(engine: &Engine<CpalBackend>, config: &Config) {
             engine.matrix.set_gain_db(i, o, g.db);
             engine.matrix.set_muted(i, o, g.muted);
         }
+    }
+    for (o, out) in config.outputs.iter().enumerate() {
+        engine.matrix.set_master_db(o, out.master.db);
+        engine.matrix.set_master_muted(o, out.master.muted);
     }
 }
 
@@ -323,6 +333,26 @@ fn run(
                                 dirty_since.get_or_insert_with(Instant::now);
                             }
                         }
+                        Command::SetMasterGain(o, db) => {
+                            let mut c = config.lock().unwrap_or_else(|e| e.into_inner());
+                            if let Some(out) = c.outputs.get_mut(o) {
+                                out.master.db = clamp_db(db);
+                                if let Some(e) = &engine {
+                                    e.matrix.set_master_db(o, out.master.db);
+                                }
+                                dirty_since.get_or_insert_with(Instant::now);
+                            }
+                        }
+                        Command::SetMasterMuted(o, muted) => {
+                            let mut c = config.lock().unwrap_or_else(|e| e.into_inner());
+                            if let Some(out) = c.outputs.get_mut(o) {
+                                out.master.muted = muted;
+                                if let Some(e) = &engine {
+                                    e.matrix.set_master_muted(o, muted);
+                                }
+                                dirty_since.get_or_insert_with(Instant::now);
+                            }
+                        }
                         Command::ToggleMuted(i, o) => {
                             if let Some(g) = gain_mut(&config, i, o, |g| g.muted = !g.muted) {
                                 if let Some(e) = &engine {
@@ -431,12 +461,16 @@ fn gain_mut(
     let mut c = config.lock().unwrap_or_else(|e| e.into_inner());
     let g = c.gains.get_mut(i)?.get_mut(o)?;
     f(g);
-    g.db = if g.db.is_finite() {
-        g.db.clamp(-120.0, 12.0)
+    g.db = clamp_db(g.db);
+    Some(*g)
+}
+
+fn clamp_db(db: f32) -> f32 {
+    if db.is_finite() {
+        db.clamp(-120.0, 12.0)
     } else {
         -120.0
-    };
-    Some(*g)
+    }
 }
 
 fn device(
@@ -462,6 +496,7 @@ fn device(
         buffer_ms,
         released: false,
         fx: None,
+        master: None,
     }
 }
 
@@ -486,6 +521,7 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
         .enumerate()
         .map(|(o, c)| UiDevice {
             released: engine.is_some_and(|e| e.is_released(o)),
+            master: Some(c.master),
             ..device(
                 &c.label,
                 &c.device,

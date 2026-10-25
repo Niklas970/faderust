@@ -1,8 +1,18 @@
 <script>
   import { ACCENTS, DEFAULT_THEME, MODES, SIGNALS, loadTheme, saveTheme } from "./theme.js";
 
-  /** Colours and light/dark; every change shows right away. */
-  let { onClose } = $props();
+  /** Layout, colours and light/dark; every change shows right away. */
+  let { view, onView, side, onSide, onClose } = $props();
+
+  const SIDES = [
+    { value: "left", name: "Links" },
+    { value: "right", name: "Rechts" },
+  ];
+
+  const VIEWS = [
+    { value: "strips", name: "Pult", hint: "Ein Streifen pro Eingang" },
+    { value: "matrix", name: "Matrix", hint: "Alle Ein- und Ausgänge als Tabelle" },
+  ];
 
   let theme = $state(loadTheme());
 
@@ -25,6 +35,28 @@
 <div class="backdrop" role="presentation" onclick={onClose}></div>
 <div class="dialog" role="dialog" aria-modal="true" aria-label="Design">
   <h2>Design</h2>
+
+  <section>
+    <h3>Ansicht</h3>
+    <div class="modes" role="radiogroup" aria-label="Ansicht">
+      {#each VIEWS as v}
+        <button class:on={view === v.value} role="radio" aria-checked={view === v.value} title={v.hint} onclick={() => onView(v.value)}
+          >{v.name}</button
+        >
+      {/each}
+    </div>
+  </section>
+
+  {#if view === "strips"}
+    <section>
+      <h3>Ausgänge im Pult</h3>
+      <div class="modes" role="radiogroup" aria-label="Ausgänge im Pult">
+        {#each SIDES as v}
+          <button class:on={side === v.value} role="radio" aria-checked={side === v.value} onclick={() => onSide(v.value)}>{v.name}</button>
+        {/each}
+      </div>
+    </section>
+  {/if}
 
   {#each groups as g}
     {@const custom = !g.list.some((c) => c.color === theme[g.key])}

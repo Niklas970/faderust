@@ -14,8 +14,8 @@ export const ACCENTS = [
 ];
 
 export const SIGNALS = [
-  { name: "Türkis", color: "#3fc8b4" },
   { name: "Grün", color: "#5ccf6a" },
+  { name: "Türkis", color: "#3fc8b4" },
   { name: "Blau", color: "#4fb3e8" },
   { name: "Gelb", color: "#e6d04a" },
   { name: "Weiß", color: "#d8dde3" },
@@ -30,7 +30,7 @@ export const MODES = [
 export const DEFAULT_THEME = {
   accent: ACCENTS[0].color,
   signal: SIGNALS[0].color,
-  mode: "system",
+  mode: "dark",
 };
 
 const KEY = "faderust.theme";
