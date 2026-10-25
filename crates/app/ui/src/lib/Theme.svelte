@@ -2,7 +2,12 @@
   import { ACCENTS, DEFAULT_THEME, MODES, SIGNALS, loadTheme, saveTheme } from "./theme.js";
 
   /** Layout, colours and light/dark; every change shows right away. */
-  let { view, onView, onClose } = $props();
+  let { view, onView, side, onSide, onClose } = $props();
+
+  const SIDES = [
+    { value: "left", name: "Links" },
+    { value: "right", name: "Rechts" },
+  ];
 
   const VIEWS = [
     { value: "strips", name: "Pult", hint: "Ein Streifen pro Eingang" },
@@ -41,6 +46,17 @@
       {/each}
     </div>
   </section>
+
+  {#if view === "strips"}
+    <section>
+      <h3>Ausgänge im Pult</h3>
+      <div class="modes" role="radiogroup" aria-label="Ausgänge im Pult">
+        {#each SIDES as v}
+          <button class:on={side === v.value} role="radio" aria-checked={side === v.value} onclick={() => onSide(v.value)}>{v.name}</button>
+        {/each}
+      </div>
+    </section>
+  {/if}
 
   {#each groups as g}
     {@const custom = !g.list.some((c) => c.color === theme[g.key])}

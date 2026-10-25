@@ -52,6 +52,24 @@
       // Remembered for this session only.
     }
   }
+  // Where the desk shows the outputs: "left" (default) or "right".
+  const SIDE_KEY = "faderust.outputs";
+  let side = $state(readSide());
+  function readSide() {
+    try {
+      return localStorage.getItem(SIDE_KEY) === "right" ? "right" : "left";
+    } catch {
+      return "left";
+    }
+  }
+  function setSide(v) {
+    side = v;
+    try {
+      localStorage.setItem(SIDE_KEY, v);
+    } catch {
+      // Remembered for this session only.
+    }
+  }
   let version = $state("");
   getVersion().then((v) => (version = v));
 
@@ -241,6 +259,7 @@
         />
       {:else}
         <StripView
+          {side}
           inputs={state.inputs}
           outputs={state.outputs}
           gains={state.gains}
@@ -277,7 +296,7 @@
 {/if}
 
 {#if themeOpen}
-  <Theme {view} onView={setView} onClose={() => (themeOpen = false)} />
+  <Theme {view} onView={setView} {side} onSide={setSide} onClose={() => (themeOpen = false)} />
 {/if}
 
 {#if windowsOpen}

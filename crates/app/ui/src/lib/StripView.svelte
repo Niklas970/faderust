@@ -7,10 +7,11 @@
 
   /**
    * Voicemeeter-style desk: one strip per input with buttons for the outputs
-   * it plays on, devices first, then programs. The outputs sit on the right
-   * with a master fader each. Per-output levels live in the matrix.
+   * it plays on, devices first, then programs. The outputs sit at the side
+   * (left unless set otherwise) with a master fader each. Per-output levels
+   * live in the matrix.
    */
-  let { inputs, outputs, gains, lanes, onGain, onMute, onMaster, onMasterMute, onFx, onPrograms } = $props();
+  let { side = "left", inputs, outputs, gains, lanes, onGain, onMute, onMaster, onMasterMute, onFx, onPrograms } = $props();
 
   const isProgram = (input) => input.device.startsWith("app:");
   const devices = $derived(inputs.map((input, i) => ({ input, i })).filter(({ input }) => !isProgram(input)));
@@ -89,7 +90,7 @@
     </div>
   </div>
 
-  <aside class="side panel">
+  <aside class="side panel" class:left={side === "left"}>
     <h2>Ausgänge</h2>
     {#each outputs as output, o}
       {@const m = output.master ?? { db: 0, muted: false }}
@@ -230,6 +231,9 @@
     margin: 0;
     font-size: 12px;
     color: var(--muted);
+  }
+  .side.left {
+    order: -1;
   }
   .side {
     flex: none;
