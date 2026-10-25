@@ -167,7 +167,7 @@ const DEVICE_INVALIDATED: &str = "-2004287484";
 /// The cause of a failed connection in words a user can act on.
 fn explain(error: &str) -> String {
     if error.contains(DEVICE_IN_USE) {
-        "Ein anderes Programm hält das Gerät exklusiv fest, oft Voicemeeter, eine DAW oder ein ASIO-Treiber. Beende es, Faderust verbindet dann von selbst.".into()
+        "Das Gerät ist belegt. Bei Bluetooth-Kopfhörern nutzt meist ein Programm (z. B. Discord) ihr Headset-Mikro und schaltet sie in den Freisprechmodus: dort ein anderes Mikro wählen. Sonst hält ein Programm das Gerät exklusiv fest, etwa Voicemeeter, eine DAW oder ein ASIO-Treiber. Faderust verbindet von selbst, sobald es frei ist.".into()
     } else if error.contains(DEVICE_INVALIDATED) {
         "Das Gerät wurde gerade umgestellt oder entfernt. Faderust versucht es weiter.".into()
     } else {
@@ -531,7 +531,7 @@ mod tests {
     #[test]
     fn explains_a_device_held_by_another_program() {
         let error = "Failed to initialize audio client: OS Error -2004287478 (FormatMessageW() returned error 317) (os error -2004287478)";
-        assert!(explain(error).contains("Voicemeeter"));
+        assert!(explain(error).contains("Headset-Mikro"));
         assert!(explain("something else").starts_with("something else."));
     }
 

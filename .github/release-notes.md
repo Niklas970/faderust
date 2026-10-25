@@ -2,7 +2,7 @@ Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler s
 
 Neu in 0.4.3:
 
-- Hält ein anderes Programm ein Gerät exklusiv fest (z. B. Voicemeeter, eine DAW oder ein ASIO-Treiber), sagt Faderust das jetzt in klaren Worten
+- Ist ein Gerät belegt, sagt Faderust jetzt warum: Bei Bluetooth-Kopfhörern nutzt meist ein Programm wie Discord ihr Headset-Mikro (Freisprechmodus, dann ist der Stereo-Ausgang gesperrt). Sonst hält ein Programm das Gerät exklusiv fest, etwa eine DAW oder ein ASIO-Treiber
 - Das Protokoll wiederholt einen solchen Fehler nicht mehr jede Sekunde
 
 Neu in 0.4.2:
