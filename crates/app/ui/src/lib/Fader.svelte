@@ -21,6 +21,8 @@
     blocked = false,
     noteTitle = "",
     showMute = true,
+    // The level already includes this fader (an output's master).
+    postFader = false,
     onChange,
     onMute,
   } = $props();
@@ -118,7 +120,7 @@
   });
 
   const meterDb = $derived(
-    levelDb == null || !connected || muted || blocked ? OFF : levelDb + (unit === "db" ? Math.max(local, OFF) : 0),
+    levelDb == null || !connected || muted || blocked ? OFF : levelDb + (unit === "db" && !postFader ? Math.max(local, OFF) : 0),
   );
 </script>
 

@@ -1,9 +1,8 @@
 <script>
   import Fader from "./Fader.svelte";
-  import HFader from "./HFader.svelte";
   import Meter from "./Meter.svelte";
   import { fxActive } from "./api.js";
-  import { DB, stripChanges, stripValue, OFF } from "./scale.js";
+  import { stripChanges, stripValue, OFF } from "./scale.js";
 
   /**
    * Voicemeeter-style desk: one strip per input with buttons for the outputs
@@ -70,6 +69,32 @@
 
 <div class="desk">
   <div class="strips">
+    <div class="group outs" class:left={side === "left"}>
+      <h2>Ausgänge</h2>
+      <div class="row">
+        {#each outputs as output, o}
+          {@const m = output.master ?? { db: 0, muted: false }}
+          <section class="strip panel">
+            <span class="tag">A{o + 1}</span>
+            <div class="grow">
+              <Fader
+                label={output.label}
+                note={output.connected ? output.deviceName : output.released ? "Freigegeben" : "Wartet auf Gerät"}
+                noteOn={output.connected}
+                noteTitle={output.released ? "Freigegeben, kommt mit Ton zurück" : (output.deviceName ?? "")}
+                value={m.db}
+                muted={m.muted}
+                levelDb={output.levelDb}
+                connected={output.connected || output.released}
+                postFader
+                onChange={(db) => onMaster(o, db)}
+                onMute={(v) => onMasterMute(o, v)}
+              />
+            </div>
+          </section>
+        {/each}
+      </div>
+    </div>
     {#if devices.length}
       <div class="group">
         <h2>Geräte</h2>
@@ -90,35 +115,6 @@
     </div>
   </div>
 
-  <aside class="side panel" class:left={side === "left"}>
-    <h2>Ausgänge</h2>
-    {#each outputs as output, o}
-      {@const m = output.master ?? { db: 0, muted: false }}
-      <div class="output" class:offline={!output.connected && !output.released}>
-        <div class="line">
-          <span class="tag">A{o + 1}</span>
-          <div class="titles">
-            <div class="label">{output.label}</div>
-            <div class="device">
-              {output.connected ? output.deviceName : output.released ? "Freigegeben, kommt mit Ton zurück" : "Wartet auf Gerät …"}
-            </div>
-          </div>
-          <span class="value" class:off={m.muted}>{DB.format(m.db)}</span>
-          <button
-            class="mute"
-            class:on={m.muted}
-            aria-pressed={m.muted}
-            aria-label={`${output.label} stumm`}
-            onclick={() => onMasterMute(o, !m.muted)}>M</button
-          >
-        </div>
-        <div class="master">
-          <HFader value={m.db} label={`${output.label} Gesamt`} dim={m.muted} onChange={(db) => onMaster(o, db)} />
-        </div>
-        <Meter vertical={false} db={output.connected ? output.levelDb : -120} />
-      </div>
-    {/each}
-  </aside>
 </div>
 
 <style>
@@ -150,6 +146,16 @@
   .group + .group {
     padding-left: 14px;
     border-left: 2px solid var(--border);
+  }
+  /* Outputs come first in the markup; on the right they move to the end. */
+  .outs:not(.left) {
+    order: 1;
+    padding-left: 14px;
+    border-left: 2px solid var(--border);
+  }
+  .outs:not(.left) + .group {
+    padding-left: 0;
+    border-left: none;
   }
   .row {
     flex: 1;
@@ -232,83 +238,30 @@
     font-size: 12px;
     color: var(--muted);
   }
-  .side.left {
-    order: -1;
-  }
-  .side {
-    flex: none;
-    width: 300px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 12px;
-    overflow-x: hidden;
-    overflow-y: auto;
-  }
-  .output {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-    padding: 8px 10px;
-    background: var(--panel-2);
-    border-radius: var(--radius-sm);
-  }
-  .line {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  .master :global(.track) {
-    margin: 0 11px;
-  }
   .offline {
     opacity: 0.5;
   }
+  /* The device name sits over the scale, so the faders stay level. */
+  .outs :global(.note) {
+    position: absolute;
+    top: 25px;
+    left: 0;
+    right: 0;
+    margin: 0;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .tag {
-    padding: 2px 6px;
+    align-self: center;
+    padding: 3px 7px;
+    border: 1px solid var(--accent);
     font-family: var(--mono);
     font-size: 12px;
     font-weight: 700;
     color: #fff;
     background: var(--accent);
     border-radius: var(--radius-sm);
-  }
-  .titles {
-    flex: 1;
-    min-width: 0;
-  }
-  .label {
-    font-size: 13px;
-    font-weight: 700;
-  }
-  .device {
-    font-size: 11px;
-    color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .value {
-    font-family: var(--mono);
-    font-size: 12px;
-    line-height: 22px;
-    color: var(--accent);
-  }
-  .value.off {
-    color: var(--muted);
-  }
-  .mute {
-    padding: 2px 8px;
-    font-family: var(--mono);
-    font-size: 12px;
-    font-weight: 700;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: var(--panel);
-  }
-  .mute.on {
-    color: #fff;
-    background: var(--danger);
-    border-color: var(--danger);
   }
 </style>
