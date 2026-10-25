@@ -3,10 +3,27 @@
  * crates/app/src/remote.rs). Reconnects on its own while Faderust is closed.
  */
 import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import WebSocket from "ws";
 
 export const PORT = 47811;
 const RETRY_MS = 2000;
+
+/**
+ * The secret Faderust writes to its config folder, which only programs of
+ * this Windows user can read. `FADERUST_TOKEN_FILE` is for tests.
+ */
+export function readToken(): string {
+  const file =
+    process.env.FADERUST_TOKEN_FILE ||
+    join(process.env.APPDATA ?? "", "io.github.niklas970.faderust", "remote.token");
+  try {
+    return readFileSync(file, "utf8").trim();
+  } catch {
+    return "";
+  }
+}
 
 export type Gain = { db: number; muted: boolean };
 
@@ -54,6 +71,8 @@ export class Faderust extends EventEmitter<{ change: []; error: [string] }> {
   #ws: WebSocket | null = null;
   #timer: NodeJS.Timeout | null = null;
   readonly url: string;
+  /** Plugin version, told to Faderust on connecting so the app can offer updates. */
+  version: string | null = null;
 
   constructor(url = `ws://127.0.0.1:${PORT}`) {
     super();
@@ -67,6 +86,10 @@ export class Faderust extends EventEmitter<{ change: []; error: [string] }> {
   connect(): void {
     const ws = new WebSocket(this.url);
     this.#ws = ws;
+    ws.on("open", () => {
+      // Faderust takes nothing from a client that has not said hello first.
+      ws.send(JSON.stringify({ type: "hello", plugin: this.version ?? "", token: readToken() }));
+    });
     ws.on("message", (data) => this.#receive(data.toString()));
     ws.on("close", () => {
       if (this.#ws !== ws) return;

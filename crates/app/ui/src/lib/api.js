@@ -29,6 +29,30 @@ export async function windowAction(action) {
   if (action === "close") return w.close();
 }
 
+/** Keeps the window above all others (or not). */
+export async function setAlwaysOnTop(on) {
+  if (!inTauri) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  return getCurrentWindow().setAlwaysOnTop(on);
+}
+
+/**
+ * Sets the window's width (CSS pixels) to fit its content, within the
+ * screen; height stays. Does nothing while maximized.
+ */
+export async function fitWindowWidth(width) {
+  const w = Math.round(Math.min(Math.max(width, 480), screen.availWidth));
+  if (!inTauri) return;
+  const { getCurrentWindow, LogicalSize } =
+    await import("@tauri-apps/api/window");
+  const win = getCurrentWindow();
+  if (await win.isMaximized()) return;
+  const scale = await win.scaleFactor();
+  const size = (await win.innerSize()).toLogical(scale);
+  if (Math.abs(size.width - w) < 2) return;
+  await win.setSize(new LogicalSize(w, size.height));
+}
+
 let pendingUpdate = null;
 
 /** A newer release, as `{ version }`, or null. Checked against GitHub. */
@@ -140,6 +164,28 @@ export async function openCablePage() {
   return (await tauri()).invoke("open_cable_page");
 }
 
+/** Tells the Rust side the interface language, for the messages it sends. */
+export async function setBackendLanguage(code) {
+  if (!inTauri) return;
+  return (await tauri()).invoke("set_language", { code });
+}
+
+/**
+ * The self-test: `[{ status, title, detail }]`, status "ok", "warn", "fail"
+ * or "info".
+ */
+export async function runSelftest() {
+  if (!inTauri)
+    return [
+      { status: "ok", title: "Konfiguration", detail: "Datei lesbar" },
+      { status: "ok", title: "Eingang „Mikro“", detail: "Verbunden" },
+      { status: "warn", title: "Puffer „Kopfhörer“", detail: "60 ms: 3 Aussetzer. Den Puffer erhöhen." },
+      { status: "fail", title: "Ausgang „Box“", detail: "Gerät ist da, lässt sich aber nicht öffnen." },
+      { status: "info", title: "Stream Deck", detail: "Kein Plugin verbunden" },
+    ];
+  return (await tauri()).invoke("run_selftest");
+}
+
 /** Whether Faderust starts with Windows (into the tray). */
 export async function getAutostart() {
   if (!inTauri) return mock.autostart;
@@ -149,6 +195,22 @@ export async function getAutostart() {
 export async function setAutostart(enabled) {
   if (!inTauri) return void (mock.autostart = enabled);
   return (await tauri()).invoke("set_autostart", { enabled });
+}
+
+/**
+ * The Stream Deck plugin: `{ bundled, connected, installed, update, refused }`
+ * (versions as text or null, see get_streamdeck in main.rs).
+ */
+export async function getStreamDeck() {
+  if (!inTauri)
+    return { bundled: "0.3.1.0", connected: true, installed: "0.3.0.0", update: true, refused: false };
+  return (await tauri()).invoke("get_streamdeck");
+}
+
+/** Opens the shipped plugin in the Stream Deck software, which asks to install it. */
+export async function installStreamDeck() {
+  if (!inTauri) return;
+  return (await tauri()).invoke("install_streamdeck");
 }
 
 export async function getConfig() {
@@ -231,6 +293,7 @@ export async function onState(cb) {
 /** Effects that change nothing; mirrors `FxSettings::default()`. */
 export function defaultFx() {
   return {
+    denoise: false,
     lowCutHz: 0,
     lowDb: 0,
     midDb: 0,
@@ -244,7 +307,8 @@ export function defaultFx() {
 export function fxActive(fx) {
   return (
     !!fx &&
-    (fx.lowCutHz > 0 ||
+    (fx.denoise ||
+      fx.lowCutHz > 0 ||
       fx.lowDb !== 0 ||
       fx.midDb !== 0 ||
       fx.highDb !== 0 ||
@@ -274,6 +338,7 @@ const mock = {
         label: "Mikro",
         device: "Mikrofon",
         fx: {
+          denoise: false,
           lowCutHz: 80,
           lowDb: 0,
           midDb: 2,

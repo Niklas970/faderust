@@ -1,7 +1,9 @@
 <script>
   import Fader from "./Fader.svelte";
   import Meter from "./Meter.svelte";
-  import { fxActive } from "./api.js";
+  import { tick } from "svelte";
+  import { fitWindowWidth, fxActive } from "./api.js";
+  import { t } from "./i18n.svelte.js";
   import { stripChanges, stripValue, OFF } from "./scale.js";
 
   /**
@@ -10,7 +12,7 @@
    * (left unless set otherwise) with a master fader each. Per-output levels
    * live in the matrix.
    */
-  let { side = "left", hideAfter = 120, inputs, outputs, gains, lanes, onGain, onMute, onMaster, onMasterMute, onInputMute, onFx, onPrograms } = $props();
+  let { compact = false, side = "left", hideAfter = 120, inputs, outputs, gains, lanes, onGain, onMute, onMaster, onMasterMute, onInputMute, onFx, onPrograms } = $props();
 
   const isProgram = (input) => input.device.startsWith("app:");
   const devices = $derived(inputs.map((input, i) => ({ input, i })).filter(({ input }) => !isProgram(input)));
@@ -32,6 +34,21 @@
 
   const row = (i) => outputs.map((_, o) => gains[i]?.[o] ?? { db: 0, muted: true });
 
+  // The window follows the strips: wider for each new one, narrower when
+  // one goes. Measured after the DOM has the new strips.
+  let stripsEl = $state();
+  $effect(() => {
+    const key = `${outputs.length}/${devices.length}/${programs.length}/${side}/${compact}`;
+    if (!stripsEl || !key) return;
+    tick().then(() => {
+      if (!stripsEl) return;
+      const groups = [...stripsEl.children];
+      const gap = parseFloat(getComputedStyle(stripsEl).columnGap) || 0;
+      const content = groups.reduce((w, g) => w + g.offsetWidth, 0) + gap * Math.max(0, groups.length - 1);
+      fitWindowWidth(content + window.innerWidth - stripsEl.clientWidth);
+    });
+  });
+
   function move(i, db) {
     for (const [o, v] of stripChanges(row(i), db)) onGain(i, o, v);
   }
@@ -48,9 +65,9 @@
   }
 </script>
 
-{#snippet strip(input, i)}
+{#snippet strip(input, i, narrow = false)}
   {@const r = row(i)}
-  <section class="strip panel">
+  <section class="strip panel" class:narrow>
     <div class="buses">
       {#each outputs as output, o}
         {@const on = !(gains[i]?.[o]?.muted ?? true)}
@@ -60,7 +77,7 @@
           class:on={on && !looped}
           class:looped
           aria-pressed={on}
-          title={looped ? `Schleife: ${output.label} spielt auf das Kabel dieses Eingangs` : `${output.label} ${on ? "aus" : "an"}`}
+          title={looped ? t("strip.loopHint", { output: output.label }) : t(on ? "strip.off" : "strip.on", { output: output.label })}
           onclick={() => toggle(i, o)}>A{o + 1}</button
         >
       {/each}
@@ -72,18 +89,19 @@
         muted={input.muted ?? false}
         levelDb={input.levelDb}
         connected={input.connected}
+        {narrow}
         onChange={(db) => move(i, db)}
         onMute={(v) => onInputMute(i, v)}
       />
     </div>
-    <button class="fx" class:on={fxActive(input.fx)} onclick={() => onFx(i)}>Effekte</button>
+    <button class="fx" class:on={fxActive(input.fx)} onclick={() => onFx(i)}>{t("fx.title")}</button>
   </section>
 {/snippet}
 
-<div class="desk">
-  <div class="strips">
+<div class="desk" class:compact>
+  <div class="strips" bind:this={stripsEl}>
     <div class="group outs" class:left={side === "left"}>
-      <h2>Ausgänge</h2>
+      <h2>{t("settings.outputs")}</h2>
       <div class="row">
         {#each outputs as output, o}
           {@const m = output.master ?? { db: 0, muted: false }}
@@ -92,9 +110,9 @@
             <div class="grow">
               <Fader
                 label={output.label}
-                note={output.connected ? output.deviceName : output.released ? "Freigegeben" : "Wartet auf Gerät"}
+                note={output.connected ? output.deviceName : output.released ? t("out.releasedShort") : t("out.waitingShort")}
                 noteOn={output.connected}
-                noteTitle={output.released ? "Freigegeben, kommt mit Ton zurück" : (output.deviceName ?? "")}
+                noteTitle={output.released ? t("out.released") : (output.deviceName ?? "")}
                 value={m.db}
                 muted={m.muted}
                 levelDb={output.levelDb}
@@ -105,32 +123,32 @@
               />
             </div>
             <!-- Keeps the fader level with the inputs' "Effekte" row. -->
-            <span class="fx spacer" aria-hidden="true">Effekte</span>
+            <span class="fx spacer" aria-hidden="true">{t("fx.title")}</span>
           </section>
         {/each}
       </div>
     </div>
     {#if devices.length}
       <div class="group">
-        <h2>Geräte</h2>
+        <h2>{t("settings.title")}</h2>
         <div class="row">
           {#each devices as { input, i } (i)}{@render strip(input, i)}{/each}
         </div>
       </div>
     {/if}
     <div class="group">
-      <h2>Programme <button class="add" onclick={onPrograms} title="Programme als Eingang aufnehmen">+ Programm</button></h2>
+      <h2>{t("programs.title")} <button class="add" onclick={onPrograms} title={t("programs.addHint")}>{t("programs.add")}</button></h2>
       <div class="row">
         {#each programs as { input, i } (i)}
-          {@render strip(input, i)}
+          {@render strip(input, i, true)}
         {:else}
           {#if !allPrograms.length}
-            <p class="hint">Mit „+ Programm“ bekommt z. B. Discord oder Brave einen eigenen Streifen.</p>
+            <p class="hint">{t("strip.programsHint")}</p>
           {/if}
         {/each}
         {#if silent}
           <button class="more" onclick={() => (showAll = !showAll)}
-            >{showAll ? "Stille ausblenden" : `${silent} still, zeigen`}</button
+            >{showAll ? t("strip.hideSilent") : t("strip.showSilent", { count: silent })}</button
           >
         {/if}
       </div>
@@ -204,6 +222,14 @@
     gap: 10px;
     padding: 10px 12px;
   }
+  .strip.narrow {
+    padding: 10px 8px;
+  }
+  .narrow .bus {
+    min-width: 0;
+    padding: 3px 4px;
+    font-size: 11px;
+  }
   .grow {
     flex: 1;
     display: flex;
@@ -271,6 +297,25 @@
     margin: 0;
     font-size: 12px;
     color: var(--muted);
+  }
+  /* Compact: no group headings, tighter strips. */
+  .compact h2 {
+    display: none;
+  }
+  .compact .strip {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+  .compact .strips,
+  .compact .row {
+    gap: 6px;
+  }
+  .compact .group + .group,
+  .compact .outs:not(.left) {
+    padding-left: 8px;
+  }
+  .compact .fx {
+    padding: 2px 6px;
   }
   .offline {
     opacity: 0.5;

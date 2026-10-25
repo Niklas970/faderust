@@ -13,6 +13,7 @@ pub mod drift;
 pub mod engine;
 pub mod fx;
 pub mod lane;
+pub mod lang;
 pub mod matrix;
 pub mod meter;
 pub mod node;

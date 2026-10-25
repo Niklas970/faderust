@@ -1,4 +1,6 @@
 <script>
+  import { t } from "./i18n.svelte.js";
+
   /**
    * Horizontal Windows volume (0…1) with a mute button. Changes go out one
    * at a time: while one is on its way, only the newest value waits.
@@ -58,7 +60,7 @@
 </script>
 
 <div class="volume" class:muted={mute}>
-  <button class="mute" onclick={toggle} aria-pressed={mute} aria-label={`${label} stummschalten`} title="Stumm">
+  <button class="mute" onclick={toggle} aria-pressed={mute} aria-label={t("volume.muteLabel", { label })} title={t("volume.mute")}>
     <svg viewBox="0 0 16 16" aria-hidden="true">
       <path d="M2 6h3l4-3v10l-4-3H2z" />
       {#if mute}<path d="M11 6l4 4M15 6l-4 4" />{:else}<path d="M11.5 5.5a3.5 3.5 0 0 1 0 5" />{/if}
@@ -72,7 +74,7 @@
     value={Math.round(value * 100)}
     bind:this={slider}
     oninput={input}
-    aria-label={`Lautstärke ${label}`}
+    aria-label={t("volume.label", { label })}
     style={`--pct:${value * 100}%`}
   />
   <span class="pct">{Math.round(value * 100)}</span>

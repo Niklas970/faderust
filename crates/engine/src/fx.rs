@@ -1,5 +1,5 @@
-//! Input effects: low cut, three-band EQ and noise gate, mainly for the
-//! microphone.
+//! Input effects: noise suppression, low cut, three-band EQ and noise gate,
+//! mainly for the microphone.
 //!
 //! Settings live in [`InputFx`] (atomics, shared with the control thread);
 //! [`FxChain`] runs inside the input callback and picks up changes without
@@ -8,9 +8,13 @@
 use std::f32::consts::PI;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
+use nnnoiseless::DenoiseState;
+
 /// Effect settings of one input. The default does nothing.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FxSettings {
+    /// RNNoise noise suppression (keyboard, fans). Only at 48 kHz.
+    pub denoise: bool,
     /// High-pass corner in Hz, 0 = off.
     pub low_cut_hz: f32,
     /// Shelf at 120 Hz, dB.
@@ -27,6 +31,7 @@ pub struct FxSettings {
 impl Default for FxSettings {
     fn default() -> Self {
         Self {
+            denoise: false,
             low_cut_hz: 0.0,
             low_db: 0.0,
             mid_db: 0.0,
@@ -49,6 +54,7 @@ impl FxSettings {
             }
         };
         Self {
+            denoise: self.denoise,
             low_cut_hz: clamp(self.low_cut_hz, d.low_cut_hz, 0.0, 400.0),
             low_db: clamp(self.low_db, 0.0, -12.0, 12.0),
             mid_db: clamp(self.mid_db, 0.0, -12.0, 12.0),
@@ -62,6 +68,7 @@ impl FxSettings {
 /// Settings shared between the control thread and an input callback.
 #[derive(Debug)]
 pub struct InputFx {
+    denoise: AtomicBool,
     low_cut_hz: AtomicU32,
     low_db: AtomicU32,
     mid_db: AtomicU32,
@@ -75,6 +82,7 @@ pub struct InputFx {
 impl Default for InputFx {
     fn default() -> Self {
         let fx = Self {
+            denoise: AtomicBool::new(false),
             low_cut_hz: AtomicU32::new(0),
             low_db: AtomicU32::new(0),
             mid_db: AtomicU32::new(0),
@@ -96,6 +104,7 @@ impl InputFx {
     pub fn set(&self, s: FxSettings) {
         let s = s.sanitized();
         let r = Ordering::Relaxed;
+        self.denoise.store(s.denoise, r);
         self.low_cut_hz.store(s.low_cut_hz.to_bits(), r);
         self.low_db.store(s.low_db.to_bits(), r);
         self.mid_db.store(s.mid_db.to_bits(), r);
@@ -109,6 +118,7 @@ impl InputFx {
         let r = Ordering::Relaxed;
         let f = |a: &AtomicU32| f32::from_bits(a.load(r));
         FxSettings {
+            denoise: self.denoise.load(r),
             low_cut_hz: f(&self.low_cut_hz),
             low_db: f(&self.low_db),
             mid_db: f(&self.mid_db),
@@ -274,8 +284,59 @@ impl Gate {
     }
 }
 
+/// RNNoise works on 480 samples (10 ms) at 48 kHz.
+const RNN_FRAME: usize = DenoiseState::FRAME_SIZE;
+const RNN_RATE: u32 = 48_000;
+/// RNNoise expects 16-bit sized values instead of -1…1.
+const RNN_SCALE: f32 = 32768.0;
+
+/// One channel of RNNoise. Collects a frame, then plays the frame it
+/// processed before: 10 ms of delay, no allocation while running.
+struct Denoiser {
+    state: Box<DenoiseState<'static>>,
+    input: [f32; RNN_FRAME],
+    output: [f32; RNN_FRAME],
+    pos: usize,
+}
+
+impl Denoiser {
+    fn new() -> Self {
+        Self {
+            state: DenoiseState::new(),
+            input: [0.0; RNN_FRAME],
+            output: [0.0; RNN_FRAME],
+            pos: 0,
+        }
+    }
+
+    /// Starts over, so nothing stale plays when the effect is switched on.
+    fn clear(&mut self) {
+        self.input.fill(0.0);
+        self.output.fill(0.0);
+        self.pos = 0;
+    }
+
+    #[inline]
+    fn run(&mut self, x: f32) -> f32 {
+        let y = self.output[self.pos];
+        self.input[self.pos] = x * RNN_SCALE;
+        self.pos += 1;
+        if self.pos == RNN_FRAME {
+            self.pos = 0;
+            self.state.process_frame(&mut self.output, &self.input);
+            for v in &mut self.output {
+                *v = (*v / RNN_SCALE).clamp(-1.0, 1.0);
+            }
+        }
+        y
+    }
+}
+
 /// The effects of one input, run in its callback. Real-time safe.
 pub struct FxChain {
+    /// Left and right; only at [`RNN_RATE`].
+    denoise: Option<[Denoiser; 2]>,
+    denoising: bool,
     rate: f32,
     seen: Option<u32>,
     settings: FxSettings,
@@ -296,6 +357,8 @@ impl FxChain {
     pub fn new(sample_rate: u32) -> Self {
         let rate = sample_rate.max(1) as f32;
         Self {
+            denoise: (sample_rate == RNN_RATE).then(|| [Denoiser::new(), Denoiser::new()]),
+            denoising: false,
             rate,
             seen: None,
             settings: FxSettings::default(),
@@ -330,6 +393,20 @@ impl FxChain {
             self.reload(fx.get());
         }
         let s = self.settings;
+        let denoise = s.denoise.then_some(self.denoise.as_mut()).flatten();
+        if let Some([left, right]) = denoise {
+            if !self.denoising {
+                left.clear();
+                right.clear();
+            }
+            for frame in frames.chunks_exact_mut(2) {
+                frame[0] = left.run(frame[0]);
+                frame[1] = right.run(frame[1]);
+            }
+            self.denoising = true;
+        } else {
+            self.denoising = false;
+        }
         let filters = [
             (s.low_cut_hz > 0.0, &mut self.low_cut),
             (s.low_db != 0.0, &mut self.low),
@@ -389,6 +466,84 @@ mod tests {
     fn default_is_transparent() {
         let input = sine(440.0, 0.5, 4800);
         assert_eq!(run(FxSettings::default(), input.clone()), input);
+    }
+
+    /// Steady noise from a fixed sequence, on both sides.
+    fn noise(amp: f32, frames: usize) -> Vec<f32> {
+        let mut x: u32 = 12345;
+        (0..frames)
+            .flat_map(|_| {
+                x = x.wrapping_mul(1664525).wrapping_add(1013904223);
+                let v = amp * ((x >> 8) as f32 / (1u32 << 23) as f32 - 1.0);
+                [v, v]
+            })
+            .collect()
+    }
+
+    fn rms(buf: &[f32]) -> f32 {
+        (buf.iter().map(|v| v * v).sum::<f32>() / buf.len() as f32).sqrt()
+    }
+
+    /// What RNNoise does to real noise needs a listen (it is trained on
+    /// speech and everyday noise, not synthetic signals); here it must not
+    /// damage a clean signal or overshoot.
+    #[test]
+    fn denoise_passes_a_clean_tone_without_overshoot() {
+        let input = sine(440.0, 0.5, 48_000);
+        let s = FxSettings {
+            denoise: true,
+            ..Default::default()
+        };
+        let out = run(s, input.clone());
+        let (before, after) = (rms(&input[48_000..]), rms(&out[48_000..]));
+        assert!(
+            (after / before - 1.0).abs() < 0.1,
+            "tone {before} -> {after}"
+        );
+        assert!(out.iter().all(|v| v.abs() <= 1.0));
+    }
+
+    #[test]
+    fn denoise_delays_by_one_frame_and_starts_silent() {
+        let s = FxSettings {
+            denoise: true,
+            ..Default::default()
+        };
+        let out = run(s, sine(440.0, 0.5, 4800));
+        assert!(out[..RNN_FRAME * 2].iter().all(|v| *v == 0.0));
+    }
+
+    #[test]
+    fn denoise_is_skipped_off_48_khz() {
+        let fx = InputFx::new();
+        fx.set(FxSettings {
+            denoise: true,
+            ..Default::default()
+        });
+        let input = sine(440.0, 0.5, 4410);
+        let mut out = input.clone();
+        let mut chain = FxChain::new(44_100);
+        for block in out.chunks_mut(128) {
+            chain.process(&fx, block);
+        }
+        assert_eq!(out, input);
+    }
+
+    #[test]
+    fn switching_denoise_off_restores_the_plain_signal() {
+        let fx = InputFx::new();
+        let mut chain = FxChain::new(RATE);
+        fx.set(FxSettings {
+            denoise: true,
+            ..Default::default()
+        });
+        let mut buf = noise(0.1, 4800);
+        chain.process(&fx, &mut buf);
+        fx.set(FxSettings::default());
+        let input = sine(440.0, 0.5, 1000);
+        let mut out = input.clone();
+        chain.process(&fx, &mut out);
+        assert_eq!(out, input);
     }
 
     #[test]

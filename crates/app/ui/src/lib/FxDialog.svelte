@@ -1,6 +1,7 @@
 <script>
   import { untrack } from "svelte";
   import { defaultFx, setFx } from "./api.js";
+  import { t } from "./i18n.svelte.js";
 
   /** Effects of one input: low cut, three-band EQ, gate. Changes apply live. */
   let { index, input, onClose } = $props();
@@ -23,9 +24,9 @@
   }
 
   const bands = [
-    { key: "lowDb", label: "Bass", hint: "120 Hz" },
-    { key: "midDb", label: "Präsenz", hint: "2,5 kHz" },
-    { key: "highDb", label: "Höhen", hint: "8 kHz" },
+    { key: "lowDb", label: "fx.bass", hint: "120 Hz" },
+    { key: "midDb", label: "fx.presence", hint: "fx.presenceHz" },
+    { key: "highDb", label: "fx.treble", hint: "8 kHz" },
   ];
   const lowCuts = [0, 80, 120, 160];
   const fmt = (db) => (db > 0 ? `+${db.toFixed(1)}` : db.toFixed(1));
@@ -35,8 +36,15 @@
 </script>
 
 <div class="backdrop" role="presentation" onclick={onClose}></div>
-<div class="dialog" role="dialog" aria-modal="true" aria-label={`Effekte für ${input.label}`}>
-  <h2>Effekte: {input.label}</h2>
+<div class="dialog" role="dialog" aria-modal="true" aria-label={t("fx.for", { name: input.label })}>
+  <h2>{t("fx.heading", { name: input.label })}</h2>
+
+  <h3>{t("fx.denoise")}</h3>
+  <label class="check">
+    <input type="checkbox" bind:checked={fx.denoise} onchange={apply} />
+    {t("fx.denoiseLabel")}
+  </label>
+  <p class="hint">{t("fx.denoiseHint")}</p>
 
   <h3>Low-Cut</h3>
   <div class="segmented" role="radiogroup" aria-label="Low-Cut">
@@ -48,16 +56,16 @@
         onclick={() => {
           fx.lowCutHz = hz;
           apply();
-        }}>{hz ? `${hz} Hz` : "Aus"}</button
+        }}>{hz ? `${hz} Hz` : t("fx.off")}</button
       >
     {/each}
   </div>
-  <p class="hint">Schneidet Brummen und Trittschall unterhalb der Frequenz ab.</p>
+  <p class="hint">{t("fx.lowCutHint")}</p>
 
   <h3>EQ</h3>
   {#each bands as band}
     <label class="band">
-      <span class="name">{band.label} <small>{band.hint}</small></span>
+      <span class="name">{t(band.label)} <small>{t(band.hint)}</small></span>
       <input
         type="range"
         min="-12"
@@ -69,7 +77,7 @@
           fx[band.key] = 0;
           apply();
         }}
-        aria-label={band.label}
+        aria-label={t(band.label)}
       />
       <span class="value">{fmt(fx[band.key])} dB</span>
     </label>
@@ -78,10 +86,10 @@
   <h3>Gate</h3>
   <label class="check">
     <input type="checkbox" bind:checked={fx.gate} onchange={apply} />
-    Stummschalten, wenn es leiser ist als die Schwelle
+    {t("fx.gateLabel")}
   </label>
   <label class="band" class:disabled={!fx.gate}>
-    <span class="name">Schwelle</span>
+    <span class="name">{t("fx.threshold")}</span>
     <input
       type="range"
       min="-90"
@@ -90,21 +98,21 @@
       bind:value={fx.gateDb}
       oninput={apply}
       disabled={!fx.gate}
-      aria-label="Gate-Schwelle"
+      aria-label={t("fx.gateThreshold")}
     />
     <span class="value">{fx.gateDb} dB</span>
   </label>
-  <div class="level" title="Aktueller Pegel und Schwelle">
+  <div class="level" title={t("fx.levelHint")}>
     <div class="bar" style:width={pos(input.levelDb)}></div>
     {#if fx.gate}<div class="mark" style:left={pos(fx.gateDb)}></div>{/if}
   </div>
-  <p class="hint">Schwelle knapp über das Grundrauschen legen, wenn du nicht sprichst.</p>
+  <p class="hint">{t("fx.gateHint")}</p>
 
   {#if error}<p class="error">{error}</p>{/if}
 
   <footer>
-    <button onclick={reset}>Zurücksetzen</button>
-    <button class="primary" onclick={onClose}>Fertig</button>
+    <button onclick={reset}>{t("fx.reset")}</button>
+    <button class="primary" onclick={onClose}>{t("common.done")}</button>
   </footer>
 </div>
 

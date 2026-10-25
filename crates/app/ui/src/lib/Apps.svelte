@@ -1,4 +1,5 @@
 <script>
+  import { t } from "./i18n.svelte.js";
   import { cableCounterpart, getApps, getDevices, isCable, openCablePage, setAppOutput } from "./api.js";
 
   /**
@@ -74,29 +75,28 @@
 </script>
 
 <div class="backdrop" role="presentation" onclick={onClose}></div>
-<div class="dialog" role="dialog" aria-modal="true" aria-label="Programme">
+<div class="dialog" role="dialog" aria-modal="true" aria-label={t("programs.title")}>
   <header>
-    <h2>Programme</h2>
-    <button onclick={refresh}>Aktualisieren</button>
+    <h2>{t("programs.title")}</h2>
+    <button onclick={refresh}>{t("common.refresh")}</button>
   </header>
 
   {#if error}<p class="error">{error}</p>{/if}
 
   {#if data && !data.supported}
-    <p class="note">Ausgabegeräte pro Programm gibt es nur unter Windows.</p>
+    <p class="note">{t("apps.unsupported")}</p>
   {:else if data}
     {#if !hasCable}
       <div class="hint">
-        <strong>Kein virtuelles Kabel gefunden.</strong>
-        Mit „+ Eingang“ nimmt Faderust ein Programm direkt auf. Damit es dann nicht zusätzlich über die Boxen
-        läuft, braucht es ein Gerät, das du nicht hörst: Installiere das kostenlose VB-Cable und starte den PC neu.
-        <button onclick={() => openCablePage()}>Virtuelles Kabel einrichten</button>
+        <strong>{t("apps.noCable")}</strong>
+        {t("apps.noCableText")}
+        <button onclick={() => openCablePage()}>{t("cable.setup")}</button>
       </div>
     {/if}
     {#each unusedCables as cable}
       <div class="hint">
-        <span><strong>{cable.name}</strong> ist noch kein Eingang. Programme, die auf das Kabel spielen, hörst du erst, wenn es einer ist.</span>
-        <button class="primary" onclick={() => onAddInput(cable.name)}>Als Eingang anlegen</button>
+        <span><strong>{cable.name}</strong> {t("apps.cableUnused")}</span>
+        <button class="primary" onclick={() => onAddInput(cable.name)}>{t("apps.makeInput")}</button>
       </div>
     {/each}
 
@@ -108,50 +108,50 @@
             <select
               value={app.device ?? ""}
               onchange={(e) => change(app, e.currentTarget.value)}
-              aria-label={`Ausgabegerät für ${app.name}`}
+              aria-label={t("apps.outputFor", { name: app.name })}
               class:cable={data.devices.find((d) => d.id === app.device)?.cable}
             >
-              <option value="">Windows-Standard</option>
+              <option value="">{t("apps.winDefault")}</option>
               {#each data.devices as d}
-                <option value={d.id}>{d.cable ? `${d.name} · Kabel` : d.name}</option>
+                <option value={d.id}>{d.cable ? t("apps.cableSuffix", { name: d.name }) : d.name}</option>
               {/each}
               {#if app.device && !data.devices.some((d) => d.id === app.device)}
-                <option value={app.device}>Gerät nicht verbunden</option>
+                <option value={app.device}>{t("apps.disconnected")}</option>
               {/if}
             </select>
             {#if isInput(app)}
-              <span class="is-input" title="Faderust nimmt das Programm als eigenen Eingang auf">Eingang</span>
+              <span class="is-input" title={t("apps.isInputHint")}>{t("apps.isInput")}</span>
             {:else}
               <button
                 title={quietCable
-                  ? `Programm als eigenen Eingang aufnehmen und auf ${quietCable.name} stellen, damit du es nicht doppelt hörst`
-                  : "Programm als eigenen Eingang mit Fader und Effekten aufnehmen"}
-                onclick={() => addAsInput(app)}>+ Eingang</button
+                  ? t("apps.addParked", { name: quietCable.name })
+                  : t("apps.add")}
+                onclick={() => addAsInput(app)}>{t("apps.addButton")}</button
               >
             {/if}
           </li>
           {#if doubled(app)}
             <li class="double">
-              <span>Du hörst {app.name} doppelt: einmal über den Fader, einmal über sein eigenes Gerät.</span>
+              <span>{t("apps.doubled", { name: app.name })}</span>
               {#if quietCable}
-                <button class="primary" onclick={() => change(app, quietCable.id)}>Auf {quietCable.name} stellen</button>
+                <button class="primary" onclick={() => change(app, quietCable.id)}>{t("apps.moveTo", { name: quietCable.name })}</button>
               {:else}
-                <button onclick={() => openCablePage()}>Virtuelles Kabel einrichten</button>
+                <button onclick={() => openCablePage()}>{t("cable.setup")}</button>
               {/if}
             </li>
           {/if}
         {/each}
       </ul>
     {:else}
-      <p class="note">Gerade spielt kein Programm Ton ab. Starte die Wiedergabe und tippe auf „Aktualisieren“.</p>
+      <p class="note">{t("apps.none")}</p>
     {/if}
     <p class="note small">
-      Windows merkt sich die Zuordnung pro Programm. Manche Programme übernehmen sie erst nach einem Neustart.
+      {t("apps.note")}
     </p>
   {/if}
 
   <footer>
-    <button onclick={onClose}>Schließen</button>
+    <button onclick={onClose}>{t("common.close")}</button>
   </footer>
 </div>
 

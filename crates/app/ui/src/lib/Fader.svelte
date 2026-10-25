@@ -1,5 +1,6 @@
 <script>
   import Meter from "./Meter.svelte";
+  import { t } from "./i18n.svelte.js";
   import { DB, OFF } from "./scale.js";
 
   /**
@@ -23,6 +24,8 @@
     showMute = true,
     // The level already includes this fader (an output's master).
     postFader = false,
+    // Without the scale, for the narrower program strips.
+    narrow = false,
     onChange,
     onMute,
   } = $props();
@@ -144,7 +147,7 @@
   );
 </script>
 
-<div class="strip" class:offline={!connected || blocked}>
+<div class="strip" class:narrow class:offline={!connected || blocked}>
   <div class="label" title={label}>{label}</div>
   {#if note}<div class="note" class:on={noteOn} class:warn={blocked} title={noteTitle}>{note}</div>{/if}
   <div class="body">
@@ -154,7 +157,7 @@
       bind:this={track}
       role="slider"
       tabindex="0"
-      aria-label={`${label} Pegel`}
+      aria-label={t("fader.level", { label })}
       aria-valuemin={scale.min}
       aria-valuemax={scale.max}
       aria-valuenow={isOff ? scale.min : local}
@@ -185,7 +188,7 @@
       class="readout edit"
       bind:value={draft}
       use:focus
-      aria-label={`${label} Wert`}
+      aria-label={t("fader.value", { label })}
       onblur={commit}
       onkeydown={(e) => {
         if (e.key === "Enter") commit();
@@ -193,18 +196,34 @@
       }}
     />
   {:else}
-    <button class="readout" class:off={isOff || muted} title="Klicken und Wert eintippen" onclick={edit}
+    <button class="readout" class:off={isOff || muted} title={t("fader.type")} onclick={edit}
       >{scale.format(local)} {unit === "pct" ? "%" : "dB"}</button
     >
   {/if}
   {#if showMute}
-    <button class="mute" class:on={muted} aria-pressed={muted} aria-label={`${label} stumm`} onclick={() => onMute(!muted)}
-      >Mute</button
+    <button class="mute" class:on={muted} aria-pressed={muted} aria-label={t("fader.muted", { label })} onclick={() => onMute(!muted)}
+      >{t("fader.mute")}</button
     >
   {/if}
 </div>
 
 <style>
+  /* Narrow: no scale, the cap and slot move left (58 px track). */
+  .strip.narrow {
+    width: 84px;
+  }
+  .narrow .track {
+    width: 58px;
+  }
+  .narrow .scale {
+    display: none;
+  }
+  .narrow .slot {
+    left: 24px;
+  }
+  .narrow .cap {
+    left: 0;
+  }
   .strip {
     position: relative;
     display: flex;

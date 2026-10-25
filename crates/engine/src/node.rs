@@ -406,6 +406,66 @@ mod tests {
     }
 
     #[test]
+    fn compensates_slow_input_clock() {
+        let mut s = sim(48_000, 48_000, 40);
+        let in_rate = 48_000.0 * 0.9995;
+        run(&mut s, in_rate, 48_000.0, 120.0);
+        let underruns = s.stats.underruns.load(Relaxed);
+        run(&mut s, in_rate, 48_000.0, 60.0);
+        assert_eq!(s.stats.underruns.load(Relaxed), underruns);
+        assert_eq!(s.stats.dropped_frames.load(Relaxed), 0);
+        let ppm = s.stats.correction_ppm.load(Relaxed) as f64;
+        assert!((ppm - 500.0).abs() < 150.0, "correction {ppm} ppm");
+    }
+
+    #[test]
+    fn recovers_after_input_stalls() {
+        let mut s = sim(48_000, 48_000, 40);
+        run(&mut s, 48_000.0, 48_000.0, 2.0);
+        assert_eq!(s.stats.underruns.load(Relaxed), 0);
+
+        // The input stops delivering (device busy) while the output plays on.
+        let mut block = vec![1.0f32; 960];
+        for _ in 0..100 {
+            s.output.render(&mut block, 2);
+        }
+        assert!(s.stats.underruns.load(Relaxed) > 0);
+        assert!(block.iter().all(|v| *v == 0.0), "must play silence");
+
+        // Back again: the lane refills to its target and plays the signal.
+        let out = run(&mut s, 48_000.0, 48_000.0, 3.0);
+        for v in &out {
+            assert!((v - 0.5).abs() < 1e-2, "got {v}");
+        }
+    }
+
+    #[test]
+    fn drops_input_while_output_stalls() {
+        let mut s = sim(48_000, 48_000, 40);
+        run(&mut s, 48_000.0, 48_000.0, 2.0);
+
+        // The output stops pulling (device busy); the ring buffer fills up.
+        let block = vec![0.5f32; 480];
+        for _ in 0..300 {
+            s.input.process(&block, 1);
+        }
+        let dropped = s.stats.dropped_frames.load(Relaxed);
+        assert!(dropped > 0, "overflow must be counted");
+
+        let out = run(&mut s, 48_000.0, 48_000.0, 5.0);
+        for v in &out {
+            assert!((v - 0.5).abs() < 1e-2, "got {v}");
+        }
+        // The backlog is cut, not played with half a second of delay.
+        let fill = s.stats.fill_frames.load(Relaxed) as f64;
+        assert!((fill - 48_000.0 * 0.040).abs() < 800.0, "fill {fill}");
+        // Once caught up, playing must not keep losing input.
+        let dropped = s.stats.dropped_frames.load(Relaxed);
+        run(&mut s, 48_000.0, 48_000.0, 5.0);
+        assert_eq!(s.stats.dropped_frames.load(Relaxed), dropped);
+    }
+
+    #[test]
     fn converts_sample_rate() {
         let mut s = sim(44_100, 48_000, 40);
         let out = run(&mut s, 44_100.0, 48_000.0, 5.0);

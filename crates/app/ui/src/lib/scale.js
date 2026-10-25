@@ -34,7 +34,7 @@ export const DB = {
   home: 0,
   min: -60,
   max: 12,
-  aria: (d) => (d <= OFF ? "aus" : `${d.toFixed(1)} dB`),
+  aria: (d) => (d <= OFF ? "−∞" : `${d.toFixed(1)} dB`),
 };
 
 /**

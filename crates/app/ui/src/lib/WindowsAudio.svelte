@@ -1,6 +1,7 @@
 <script>
   import { getWindowsAudio, setDefaultDevice, setDeviceVolume } from "./api.js";
   import Volume from "./Volume.svelte";
+  import { t } from "./i18n.svelte.js";
 
   /** The Windows sound settings: default devices and device volumes. */
   let { onClose } = $props();
@@ -36,45 +37,45 @@
   }
 
   const sections = [
-    { key: "playback", title: "Wiedergabe" },
-    { key: "recording", title: "Aufnahme" },
+    { key: "playback", title: "win.playback" },
+    { key: "recording", title: "win.recording" },
   ];
 </script>
 
 <div class="backdrop" role="presentation" onclick={onClose}></div>
-<div class="dialog" role="dialog" aria-modal="true" aria-label="Windows-Sound">
+<div class="dialog" role="dialog" aria-modal="true" aria-label={t("win.title")}>
   <header>
-    <h2>Windows-Sound</h2>
-    <button onclick={refresh}>Aktualisieren</button>
+    <h2>{t("win.title")}</h2>
+    <button onclick={refresh}>{t("common.refresh")}</button>
   </header>
 
   {#if error}<p class="error">{error}</p>{/if}
 
   {#if data && !data.supported}
-    <p class="note">Die Windows-Soundeinstellungen gibt es nur unter Windows.</p>
+    <p class="note">{t("win.unsupported")}</p>
   {:else if data}
     {#each sections as s}
       {@const list = data[s.key]}
       <section>
-        <h3>{s.title}</h3>
+        <h3>{t(s.title)}</h3>
         <div class="defaults">
           <label>
-            <span>Standardgerät</span>
+            <span>{t("win.defaultDevice")}</span>
             <select
               value={list.find((d) => d.isDefault)?.id ?? ""}
               onchange={(e) => makeDefault(e.currentTarget.value, false)}
             >
-              {#if !list.some((d) => d.isDefault)}<option value="">Keins</option>{/if}
+              {#if !list.some((d) => d.isDefault)}<option value="">{t("win.none")}</option>{/if}
               {#each list as d}<option value={d.id}>{d.name}</option>{/each}
             </select>
           </label>
           <label>
-            <span>Für Anrufe</span>
+            <span>{t("win.forCalls")}</span>
             <select
               value={list.find((d) => d.isDefaultCommunications)?.id ?? ""}
               onchange={(e) => makeDefault(e.currentTarget.value, true)}
             >
-              {#if !list.some((d) => d.isDefaultCommunications)}<option value="">Keins</option>{/if}
+              {#if !list.some((d) => d.isDefaultCommunications)}<option value="">{t("win.none")}</option>{/if}
               {#each list as d}<option value={d.id}>{d.name}</option>{/each}
             </select>
           </label>
@@ -84,8 +85,8 @@
             <li>
               <span class="name" title={d.name}>
                 {d.name}
-                {#if d.isDefault}<em>Standard</em>{/if}
-                {#if d.isDefaultCommunications && !d.isDefault}<em>Anrufe</em>{/if}
+                {#if d.isDefault}<em>{t("win.badgeDefault")}</em>{/if}
+                {#if d.isDefaultCommunications && !d.isDefault}<em>{t("win.badgeCalls")}</em>{/if}
               </span>
               <Volume
                 volume={d.volume}
@@ -99,13 +100,12 @@
       </section>
     {/each}
     <p class="note small">
-      Faderust nimmt Geräte direkt ab. Der Windows-Standard bestimmt nur, wohin Programme ohne eigene Zuordnung
-      spielen und welches Mikrofon sie nutzen.
+      {t("win.note")}
     </p>
   {/if}
 
   <footer>
-    <button onclick={onClose}>Schließen</button>
+    <button onclick={onClose}>{t("common.close")}</button>
   </footer>
 </div>
 

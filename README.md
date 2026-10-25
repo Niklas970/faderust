@@ -24,10 +24,26 @@
 - **Programme direkt aufnehmen.** Discord, Spotify oder der Browser bekommen einen eigenen Streifen mit Effekten, ganz ohne virtuelles Kabel pro Programm. Stille Programme blendet Faderust nach einer einstellbaren Zeit aus.
 - **Geräte kommen und gehen.** Bluetooth-Kopfhörer aus- und wieder einschalten, USB-Gerät abziehen: Faderust verbindet neu, ohne die anderen Geräte zu unterbrechen.
 - **Multipoint-freundlich.** Bluetooth-Ausgänge gibt Faderust bei Stille frei (nach 30 s, pro Ausgang einstellbar), damit die Kopfhörer zum Handy wechseln können. Kommt wieder Ton, öffnen sie sich von selbst.
-- **Effekte pro Eingang:** Low-Cut, Drei-Band-EQ und Gate, zum Beispiel gegen Tastaturgeräusche am Mikro.
+- **Effekte pro Eingang:** Rauschunterdrückung ([RNNoise](https://jmvalin.ca/demo/rnnoise/), gegen Tastatur und Lüfter), Low-Cut, Drei-Band-EQ und Gate. Die Rauschunterdrückung läuft bei Geräten mit 48 kHz und verzögert den Ton um 10 ms.
+- **Deutsch und Englisch.** Die Sprache folgt Windows und lässt sich unter „Design“ umstellen.
+- **Selbsttest.** Unter „Geräte“ prüft Faderust Geräte, Puffer, Rückkopplung, Fernsteuerung und Stream-Deck-Plugin und zeigt, was in Ordnung ist und was nicht. Der Bericht lässt sich für ein Issue kopieren.
 - **Windows-Sound aus einer Hand:** Standardgeräte für Wiedergabe, Aufnahme und Anrufe sowie die Lautstärke pro Gerät.
 - **Presets, Autostart im Tray, Updates in der App** (mit Signaturprüfung) und ein **Stream-Deck-Plugin**.
+- **Kompakt und im Vordergrund.** Zwei Knöpfe in der Titelleiste: schmale Ansicht ohne Beschriftungen und „Immer im Vordergrund“, z. B. neben einem Spiel. Beides bleibt gespeichert.
 - **Eigene Farben:** Akzent- und Signalfarbe frei wählbar, dunkel (OLED-Schwarz) oder hell.
+
+## Ansichten
+
+<table>
+  <tr>
+    <td width="68%"><img src="assets/matrix.png" alt="Matrix: jeder Eingang auf jedem Ausgang einzeln geregelt"></td>
+    <td><img src="assets/design.png" alt="Design-Dialog mit Ansicht, Farben und Darstellung"></td>
+  </tr>
+  <tr>
+    <td><b>Matrix:</b> jeder Eingang auf jedem Ausgang einzeln, z. B. das Mikro leiser auf dem Kopfhörer als im Stream.</td>
+    <td><b>Design:</b> Pult oder Matrix, Seite der Ausgänge, Farben, dunkel oder hell.</td>
+  </tr>
+</table>
 
 ## Installation
 
@@ -57,6 +73,7 @@ Unter **Geräte** legt **+ Programm-Mikro** einen Ausgang auf einem freien virtu
 
 ## Grenzen
 
+- Programme merken sich Fader, Ausgänge und Effekte, solange ihr Streifen im Pult bleibt: Startet Discord neu, kommt es mit seinen alten Einstellungen zurück. Entfernst du den Streifen unter „Geräte“, sind sie weg.
 - Kein eigener Treiber. Virtuelle Geräte kommen von VB-Cable.
 - Windows liefert den Ton pro Programm, nicht pro Browser-Tab oder Web-App. Alles aus einem Browser läuft über denselben Audio-Prozess.
 - Bluetooth braucht nach einer Freigabe etwa eine Sekunde, bis wieder Ton kommt. Wer das nicht will, stellt den Ausgang auf „Nie frei“.
@@ -91,7 +108,7 @@ Vor einem Commit: `cargo fmt`, `cargo clippy -- -D warnings`, `cargo test`. Neue
 
 ## Stream Deck
 
-Das Plugin in [`streamdeck/`](streamdeck/README.md) steuert Faderust vom Elgato Stream Deck: Fader per Drehregler oder Taste, Stummschalten, Presets und Windows-Standardgerät. `com.niklas970.faderust.streamDeckPlugin` aus den [Releases](https://github.com/Niklas970/faderust/releases) doppelklicken (Stream Deck 7.1 oder neuer).
+Das Plugin in [`streamdeck/`](streamdeck/README.md) steuert Faderust vom Elgato Stream Deck: Fader per Drehregler oder Taste, Stummschalten, Presets und Windows-Standardgerät. `com.niklas970.faderust.streamDeckPlugin` aus den [Releases](https://github.com/Niklas970/faderust/releases) doppelklicken (Stream Deck 7.1 oder neuer). Ab da liefert das Setup das Plugin mit: unter „Geräte“ zeigt Faderust, ob eine neuere Plugin-Version bereitliegt, und öffnet sie mit einem Klick in der Stream-Deck-Software, die dann nur noch um Bestätigung bittet.
 
 ## Lizenz
 

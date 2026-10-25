@@ -8,6 +8,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use faderust_engine::backend::cpal::CpalBackend;
+use faderust_engine::lang::tr;
 use faderust_engine::meter::to_db;
 use faderust_engine::{
     Direction, Engine, EngineConfig, EngineEvent, InputConfig, LostReason, OutputConfig, SlotState,
@@ -53,26 +54,26 @@ struct Notice {
 /// Snapshot sent to the UI as the `state` event.
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct UiState {
-    inputs: Vec<UiDevice>,
-    outputs: Vec<UiDevice>,
+pub(crate) struct UiState {
+    pub(crate) inputs: Vec<UiDevice>,
+    pub(crate) outputs: Vec<UiDevice>,
     gains: Vec<Vec<crate::config::Gain>>,
-    lanes: Vec<Vec<UiLane>>,
+    pub(crate) lanes: Vec<Vec<UiLane>>,
 }
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct UiDevice {
-    label: String,
-    device: String,
-    connected: bool,
+pub(crate) struct UiDevice {
+    pub(crate) label: String,
+    pub(crate) device: String,
+    pub(crate) connected: bool,
     device_name: Option<String>,
     level_db: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
-    buffer_ms: Option<u32>,
+    pub(crate) buffer_ms: Option<u32>,
     /// Outputs only: closed while nothing plays for them.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
-    released: bool,
+    pub(crate) released: bool,
     /// Inputs only.
     #[serde(skip_serializing_if = "Option::is_none")]
     fx: Option<Fx>,
@@ -86,12 +87,14 @@ struct UiDevice {
 
 #[derive(Serialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
-struct UiLane {
+pub(crate) struct UiLane {
     fill_ms: f32,
     correction_ppm: i32,
-    underruns: u64,
+    pub(crate) underruns: u64,
+    /// Input frames lost because the output did not take them in time.
+    pub(crate) dropped_frames: u64,
     /// Silenced because the output feeds back into the input.
-    looped: bool,
+    pub(crate) looped: bool,
 }
 
 /// Starts the audio thread. `config` is shared with the UI commands; the
@@ -183,11 +186,23 @@ const DEVICE_INVALIDATED: &str = "-2004287484";
 /// The cause of a failed connection in words a user can act on.
 fn explain(error: &str) -> String {
     if error.contains(DEVICE_IN_USE) {
-        "Das Gerät ist belegt. Bei Bluetooth-Kopfhörern nutzt meist ein Programm (z. B. Discord) ihr Headset-Mikro und schaltet sie in den Freisprechmodus: dort ein anderes Mikro wählen. Sonst hält ein Programm das Gerät exklusiv fest, etwa Voicemeeter, eine DAW oder ein ASIO-Treiber. Faderust verbindet von selbst, sobald es frei ist.".into()
+        tr(
+            "Das Gerät ist belegt. Bei Bluetooth-Kopfhörern nutzt meist ein Programm (z. B. Discord) ihr Headset-Mikro und schaltet sie in den Freisprechmodus: dort ein anderes Mikro wählen. Sonst hält ein Programm das Gerät exklusiv fest, etwa Voicemeeter, eine DAW oder ein ASIO-Treiber. Faderust verbindet von selbst, sobald es frei ist.",
+            "The device is in use. With Bluetooth headphones, a program (e.g. Discord) usually uses their headset microphone and switches them to hands-free mode: pick another microphone there. Otherwise a program holds the device exclusively, such as Voicemeeter, a DAW or an ASIO driver. Faderust reconnects by itself as soon as it is free.",
+        )
     } else if error.contains(DEVICE_INVALIDATED) {
-        "Das Gerät wurde gerade umgestellt oder entfernt. Faderust versucht es weiter.".into()
+        tr(
+            "Das Gerät wurde gerade umgestellt oder entfernt. Faderust versucht es weiter.",
+            "The device was just changed or removed. Faderust keeps trying.",
+        )
     } else {
-        format!("{error}. Nutzt ein anderes Programm das Gerät im Exklusivmodus?")
+        format!(
+            "{error}. {}",
+            tr(
+                "Nutzt ein anderes Programm das Gerät im Exklusivmodus?",
+                "Is another program using the device in exclusive mode?"
+            )
+        )
     }
 }
 
@@ -220,21 +235,26 @@ impl Notices {
                 let resumed = *dir == Direction::Output && self.released.remove(slot);
                 ((!quiet && !resumed) || was_failing).then(|| Notice {
                     level: "info",
-                    text: format!("„{}“ verbunden: {}", label(dir, *slot), device.name),
+                    text: format!(
+                        "{}: {}",
+                        tr("„{}“ verbunden", "“{}” connected").replace("{}", &label(dir, *slot)),
+                        device.name
+                    ),
                 })
             }
             EngineEvent::Lost { dir, slot, reason } => Some(Notice {
                 level: "warn",
                 text: match reason {
-                    LostReason::Removed => {
-                        format!("„{}“ getrennt. Faderust verbindet neu, sobald das Gerät wieder da ist.", label(dir, *slot))
-                    }
-                    LostReason::StreamError => {
-                        format!(
-                            "„{}“ meldet einen Fehler und wird neu verbunden.",
-                            label(dir, *slot)
-                        )
-                    }
+                    LostReason::Removed => tr(
+                        "„{}“ getrennt. Faderust verbindet neu, sobald das Gerät wieder da ist.",
+                        "“{}” disconnected. Faderust reconnects as soon as the device is back.",
+                    )
+                    .replace("{}", &label(dir, *slot)),
+                    LostReason::StreamError => tr(
+                        "„{}“ meldet einen Fehler und wird neu verbunden.",
+                        "“{}” reports an error and is being reconnected.",
+                    )
+                    .replace("{}", &label(dir, *slot)),
                 },
             }),
             EngineEvent::Released { slot } => {
@@ -246,8 +266,9 @@ impl Notices {
                 (previous.as_ref() != Some(error)).then(|| Notice {
                     level: "error",
                     text: format!(
-                        "„{}“ lässt sich nicht öffnen: {}",
-                        label(dir, *slot),
+                        "{} {}",
+                        tr("„{}“ lässt sich nicht öffnen:", "“{}” cannot be opened:")
+                            .replace("{}", &label(dir, *slot)),
                         explain(error)
                     ),
                 })
@@ -417,9 +438,11 @@ fn run(
                     "notice",
                     Notice {
                         level: "error",
-                        text: format!(
-                            "Die Aufnahme von {exe} hat Faderust beim letzten Mal zum Absturz gebracht. Sie bleibt bis zum nächsten Start aus. Details stehen in faderust.log."
-                        ),
+                        text: tr(
+                            "Die Aufnahme von {exe} hat Faderust beim letzten Mal zum Absturz gebracht. Sie bleibt bis zum nächsten Start aus. Details stehen in faderust.log.",
+                            "Recording {exe} crashed Faderust last time. It stays off until the next start. Details are in faderust.log.",
+                        )
+                        .replace("{exe}", exe),
                     },
                 );
                 skip_notice = None;
@@ -437,6 +460,9 @@ fn run(
                 &config.lock().unwrap_or_else(|e| e.into_inner()),
                 engine.as_ref(),
             );
+            if let Some(shared) = app.try_state::<crate::AppState>() {
+                *shared.last_state.lock().unwrap_or_else(|e| e.into_inner()) = Some(state.clone());
+            }
             let _ = app.emit("state", state);
             last_emit = Instant::now();
         }
@@ -564,6 +590,7 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
                         fill_ms: s.fill_frames.load(Relaxed) as f32 * 1000.0 / rate as f32,
                         correction_ppm: s.correction_ppm.load(Relaxed),
                         underruns: s.underruns.load(Relaxed),
+                        dropped_frames: s.dropped_frames.load(Relaxed),
                         looped: e.is_loop(i, o),
                     }
                 })

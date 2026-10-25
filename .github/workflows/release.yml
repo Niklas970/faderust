@@ -21,7 +21,7 @@ on:
       - crates/app/tauri.conf.json
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -47,6 +47,16 @@ jobs:
         working-directory: crates/app/ui
       - run: npm run build
         working-directory: crates/app/ui
+      # Stream Deck runs the plugin on its own Node 24; building works here.
+      # The setup ships the plugin too (so the app can update it), which puts
+      # it under the updater's signature: build it before the setup.
+      - run: npm ci && npm run build && npm run pack
+        working-directory: streamdeck
+      - name: Ship the plugin with the app
+        run: |
+          cp streamdeck/dist/*.streamDeckPlugin crates/app/resources/
+          jq -r .Version streamdeck/com.niklas970.faderust.sdPlugin/manifest.json \
+            > crates/app/resources/streamdeck-plugin.version
       # The Tauri CLI downloads NSIS itself. The installer follows the
       # Windows display language (English or German). With the signing key
       # it also writes the setup's signature for the in-app updater; without
@@ -54,7 +64,8 @@ jobs:
       - name: Build setup
         working-directory: crates/app
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # Not handed to pull request runs: they only need to prove the build.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ github.event_name != 'pull_request' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: |
           if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
@@ -68,17 +79,40 @@ jobs:
           name: faderust-setup
           path: target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
-      # Stream Deck runs the plugin on its own Node 24; building works here.
-      - run: npm ci && npm run build && npm run pack
-        working-directory: streamdeck
-      - name: Create release
+      # Everything the release job publishes, in one place.
+      - name: Collect release files
         if: github.event_name != 'pull_request'
+        run: |
+          mkdir release
+          cp target/release/bundle/nsis/*-setup.exe target/release/bundle/nsis/*-setup.exe.sig release/
+          cp streamdeck/dist/*.streamDeckPlugin release/
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: release-files
+          path: release/*
+          if-no-files-found: error
+
+  # Separate job so only it can write to the repository.
+  release:
+    needs: installer
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: release
+      - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag || github.ref_name }}
           TITLE: ${{ inputs.title || github.ref_name }}
         run: |
-          cd target/release/bundle/nsis
+          cd release
           setup=$(ls *-setup.exe)
           [ -f "$setup.sig" ] || { echo "Signing key missing: no updater signature"; exit 1; }
           # Manifest the in-app updater reads from the latest release.
@@ -91,7 +125,7 @@ jobs:
             > latest.json
           # Not a prerelease: the updater only sees the latest full release.
           gh release create "$TAG" "$setup" "$setup.sig" latest.json \
-            "$GITHUB_WORKSPACE"/streamdeck/dist/*.streamDeckPlugin \
+            *.streamDeckPlugin \
             --title "$TITLE" \
             --notes-file "$GITHUB_WORKSPACE/.github/release-notes.md" \
             --target "$GITHUB_SHA" \

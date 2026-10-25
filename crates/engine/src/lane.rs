@@ -17,6 +17,9 @@ use crate::BUS_CHANNELS;
 const CHUNK_FRAMES: usize = 128;
 /// Time constant of the gain smoothing that avoids clicks on fader moves.
 const GAIN_SMOOTHING_S: f32 = 0.01;
+/// Fill beyond this many targets is a backlog (e.g. after the output stalled)
+/// that drift control would take minutes to work off: it is cut instead.
+const BACKLOG_TARGETS: usize = 3;
 /// Below this applied gain a muted lane counts as silent.
 const SILENT_GAIN: f32 = 1e-5;
 
@@ -169,6 +172,15 @@ impl Lane {
         self.out_pos = self.out_len;
     }
 
+    /// Drops the oldest input beyond the target fill.
+    fn trim_to_target(&mut self, fill: usize) {
+        let excess = fill - self.target_frames;
+        if let Ok(chunk) = self.consumer.read_chunk(excess * BUS_CHANNELS) {
+            chunk.commit_all();
+            self.stats.dropped_frames.fetch_add(excess as u64, Relaxed);
+        }
+    }
+
     fn silence(&mut self) {
         self.out_buf[..CHUNK_FRAMES * BUS_CHANNELS].fill(0.0);
         self.out_pos = 0;
@@ -176,7 +188,12 @@ impl Lane {
     }
 
     fn next_chunk(&mut self) {
-        let fill = self.consumer.slots() / BUS_CHANNELS;
+        let mut fill = self.consumer.slots() / BUS_CHANNELS;
+        if fill > self.target_frames * BACKLOG_TARGETS {
+            self.trim_to_target(fill);
+            fill = self.target_frames;
+            self.controller.reset();
+        }
         self.stats.fill_frames.store(fill as u64, Relaxed);
 
         if !self.primed {

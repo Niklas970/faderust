@@ -21,3 +21,7 @@ Thumbs.db
 # Local tool state
 .claude/
 CLAUDE.md
+
+# Stream Deck plugin copied in by the release workflow
+crates/app/resources/*.streamDeckPlugin
+crates/app/resources/*.version

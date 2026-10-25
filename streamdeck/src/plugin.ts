@@ -13,5 +13,6 @@ streamDeck.actions.registerAction(new Mute());
 streamDeck.actions.registerAction(new Preset());
 streamDeck.actions.registerAction(new Device());
 
+faderust.version = streamDeck.info.plugin.version;
 faderust.connect();
 streamDeck.connect();
