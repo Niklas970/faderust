@@ -16,6 +16,7 @@ cpal = ["dep:cpal"]
 [dependencies]
 audioadapter-buffers = "5.1"
 cpal = { version = "0.18", optional = true }
+nnnoiseless = { version = "0.5.2", default-features = false }
 rtrb = "0.4"
 rubato = { version = "5.0", default-features = false }
 

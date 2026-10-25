@@ -334,8 +334,10 @@ fn refuse(
     let _ = send(
         ws,
         &Push::Error {
-            message: "Nicht angemeldet. Das Plugin in Faderust unter „Geräte“ aktualisieren."
-                .into(),
+            message: faderust_engine::lang::tr(
+                "Nicht angemeldet. Das Plugin in Faderust unter „Geräte“ aktualisieren.",
+                "Not signed in. Update the plugin in Faderust under “Devices”.",
+            ),
         },
     );
     let _ = ws.close(None);

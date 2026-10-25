@@ -3,28 +3,28 @@
 // first frame and need nothing from the backend.
 
 export const ACCENTS = [
-  { name: "Kupfer", color: "#d9834f" },
-  { name: "Bernstein", color: "#e0a43a" },
-  { name: "Rot", color: "#e0605a" },
-  { name: "Magenta", color: "#d9609e" },
-  { name: "Violett", color: "#9b7ce8" },
-  { name: "Blau", color: "#4f9bd9" },
-  { name: "Grün", color: "#5fb56a" },
-  { name: "Silber", color: "#a7b0ba" },
+  { name: "color.copper", color: "#d9834f" },
+  { name: "color.amber", color: "#e0a43a" },
+  { name: "color.red", color: "#e0605a" },
+  { name: "color.magenta", color: "#d9609e" },
+  { name: "color.violet", color: "#9b7ce8" },
+  { name: "color.blue", color: "#4f9bd9" },
+  { name: "color.green", color: "#5fb56a" },
+  { name: "color.silver", color: "#a7b0ba" },
 ];
 
 export const SIGNALS = [
-  { name: "Grün", color: "#5ccf6a" },
-  { name: "Türkis", color: "#3fc8b4" },
-  { name: "Blau", color: "#4fb3e8" },
-  { name: "Gelb", color: "#e6d04a" },
-  { name: "Weiß", color: "#d8dde3" },
+  { name: "color.green", color: "#5ccf6a" },
+  { name: "color.teal", color: "#3fc8b4" },
+  { name: "color.blue", color: "#4fb3e8" },
+  { name: "color.yellow", color: "#e6d04a" },
+  { name: "color.white", color: "#d8dde3" },
 ];
 
 export const MODES = [
-  { value: "system", name: "Wie Windows" },
-  { value: "dark", name: "Dunkel" },
-  { value: "light", name: "Hell" },
+  { value: "system", name: "mode.system" },
+  { value: "dark", name: "mode.dark" },
+  { value: "light", name: "mode.light" },
 ];
 
 export const DEFAULT_THEME = {

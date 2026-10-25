@@ -2,6 +2,7 @@
   import HFader from "./HFader.svelte";
   import Meter from "./Meter.svelte";
   import { DB } from "./scale.js";
+  import { t } from "./i18n.svelte.js";
 
   /** Every input on every output at a glance: rows are inputs, columns outputs. */
   let { inputs, outputs, gains, lanes, onGain, onMute, onFx, onPrograms } = $props();
@@ -15,7 +16,7 @@
       <div class="titles">
         <h2>{output.label}</h2>
         <div class="device">
-          {output.connected ? output.deviceName : output.released ? "Freigegeben, kommt mit Ton zurück" : "Wartet auf Gerät …"}
+          {output.connected ? output.deviceName : output.released ? t("out.released") : t("out.waiting")}
         </div>
         <Meter vertical={false} db={output.connected ? output.levelDb : -120} />
       </div>
@@ -23,7 +24,7 @@
   {/each}
 
   {#each inputs as input, i}
-    <button class="input" class:offline={!input.connected} onclick={() => onFx(i)} title="Effekte">
+    <button class="input" class:offline={!input.connected} onclick={() => onFx(i)} title={t("fx.title")}>
       <span class="name">{input.label}</span>
       <Meter vertical={false} db={input.connected ? input.levelDb : -120} />
     </button>
@@ -33,16 +34,16 @@
       <div class="cell" class:off={g.muted || looped}>
         <HFader
           value={g.db}
-          label={`${input.label} auf A${o + 1}`}
+          label={t("matrix.cell", { input: input.label, n: o + 1 })}
           dim={g.muted || looped}
           onChange={(db) => onGain(i, o, db)}
         />
-        <span class="value">{looped ? "Schleife" : DB.format(g.db)}</span>
+        <span class="value">{looped ? t("matrix.loop") : DB.format(g.db)}</span>
         <button
           class="mute"
           class:on={g.muted}
           aria-pressed={g.muted}
-          aria-label={`${input.label} auf A${o + 1} stumm`}
+          aria-label={t("matrix.cellMute", { input: input.label, n: o + 1 })}
           disabled={looped}
           onclick={() => onMute(i, o, !g.muted)}>M</button
         >
@@ -50,7 +51,7 @@
     {/each}
   {/each}
 
-  <button class="add" onclick={onPrograms} title="Programme als Eingang aufnehmen">+ Programm</button>
+  <button class="add" onclick={onPrograms} title={t("programs.addHint")}>{t("programs.add")}</button>
 </section>
 
 <style>

@@ -1,5 +1,6 @@
 <script>
   import { onMount, untrack } from "svelte";
+  import { t } from "./i18n.svelte.js";
   import {
     cableCounterpart,
     getAutostart,
@@ -41,10 +42,10 @@
   }
   const deckLabel = $derived.by(() => {
     if (!deck?.bundled) return "";
-    if (deck.refused) return "Das Plugin ist zu alt und darf sich nicht mehr verbinden. Bitte aktualisieren:";
-    if (!deck.connected) return "Stream Deck nicht verbunden. Plugin einrichten oder neu installieren:";
-    if (deck.update) return `Plugin ${deck.installed ?? "(alt)"} → ${deck.bundled} verfügbar`;
-    return `Plugin ${deck.installed} ist aktuell`;
+    if (deck.refused) return t("deck.refused");
+    if (!deck.connected) return t("deck.disconnected");
+    if (deck.update) return t("deck.available", { from: deck.installed ?? t("deck.old"), to: deck.bundled });
+    return t("deck.current", { version: deck.installed });
   });
 
   // Applies right away, independent of Save.
@@ -76,7 +77,7 @@
   const swap = (list, a, b) => ([list[a], list[b]] = [list[b], list[a]]);
 
   function addInput() {
-    draft.inputs.push({ label: `Eingang ${draft.inputs.length + 1}`, device: devices.inputs[0].name });
+    draft.inputs.push({ label: t("settings.newInput", { n: draft.inputs.length + 1 }), device: devices.inputs[0].name });
     for (const m of matrices()) m.push(draft.outputs.map(() => ({ db: 0, muted: false })));
   }
   function removeInput(i) {
@@ -88,7 +89,7 @@
     for (const m of matrices()) if (m[i] && m[i + by]) swap(m, i, i + by);
   }
   function addOutput() {
-    draft.outputs.push({ label: `Ausgang ${draft.outputs.length + 1}`, device: devices.outputs[0].name, bufferMs: 60, releaseSecs: 30 });
+    draft.outputs.push({ label: t("settings.newOutput", { n: draft.outputs.length + 1 }), device: devices.outputs[0].name, bufferMs: 60, releaseSecs: 30 });
     for (const m of matrices()) for (const row of m) row.push({ db: 0, muted: false });
   }
   function removeOutput(o) {
@@ -123,7 +124,7 @@
   function addProgramMic() {
     // Read before the push: afterwards the cable is taken and `micCable` moves on.
     const cable = micCable.name;
-    draft.outputs.push({ label: "Programm-Mikro", device: cable, bufferMs: 30, releaseSecs: 30 });
+    draft.outputs.push({ label: t("settings.programMic"), device: cable, bufferMs: 30, releaseSecs: 30 });
     // The first input (usually the microphone) at 0 dB, everything else muted.
     for (const m of matrices()) m.forEach((row, i) => row.push({ db: 0, muted: i !== 0 }));
     micDevice = cableCounterpart(cable);
@@ -135,7 +136,7 @@
         const rec = (await getWindowsAudio()).recording?.find((d) => d.name === micDevice);
         if (rec) await setDefaultDevice(rec.id, true);
       } catch (e) {
-        micError = `Standardgerät nicht gesetzt: ${e}`;
+        micError = t("settings.defaultFailed", { error: e });
       }
     }
     onSave($state.snapshot(draft));
@@ -151,41 +152,41 @@
 
   // Release of Bluetooth outputs while silent (wired ones stay open anyway).
   const RELEASE = [
-    { secs: 0, name: "Nie frei" },
-    { secs: 5, name: "Frei nach 5 s" },
-    { secs: 30, name: "Frei nach 30 s" },
-    { secs: 120, name: "Frei nach 2 min" },
+    { secs: 0, name: () => t("release.never") },
+    { secs: 5, name: () => t("release.5") },
+    { secs: 30, name: () => t("release.30") },
+    { secs: 120, name: () => t("release.120") },
   ];
 </script>
 
 <div class="backdrop" role="presentation" onclick={onClose}></div>
-<div class="dialog" role="dialog" aria-modal="true" aria-label="Geräte">
-  <h2>Geräte</h2>
+<div class="dialog" role="dialog" aria-modal="true" aria-label={t("settings.title")}>
+  <h2>{t("settings.title")}</h2>
 
-  <h3>Eingänge</h3>
+  <h3>{t("settings.inputs")}</h3>
   {#each draft.inputs as input, i}
     <div class="row">
-      <input class="name" bind:value={input.label} aria-label="Name" />
+      <input class="name" bind:value={input.label} aria-label={t("settings.name")} />
       <select
         value={selected(devices.inputs, input.device)}
         onchange={(e) => (input.device = e.currentTarget.value)}
-        aria-label="Gerät"
+        aria-label={t("settings.device")}
       >
         {#each options(devices.inputs, input.device) as name}<option>{name}</option>{/each}
       </select>
       <span class="order">
-        <button class="icon" title="Nach oben" aria-label="Nach oben" disabled={i === 0} onclick={() => moveInput(i, -1)}
+        <button class="icon" title={t("settings.up")} aria-label={t("settings.up")} disabled={i === 0} onclick={() => moveInput(i, -1)}
           >↑</button
         >
         <button
           class="icon"
-          title="Nach unten"
-          aria-label="Nach unten"
+          title={t("settings.down")}
+          aria-label={t("settings.down")}
           disabled={i === draft.inputs.length - 1}
           onclick={() => moveInput(i, 1)}>↓</button
         >
       </span>
-      <button class="icon" title="Entfernen" onclick={() => removeInput(i)}>✕</button>
+      <button class="icon" title={t("settings.remove")} onclick={() => removeInput(i)}>✕</button>
     </div>
   {/each}
   <button
@@ -193,21 +194,21 @@
     disabled={!devices.inputs.length}
     onclick={addInput}
   >
-    + Eingang
+    {t("settings.addInput")}
   </button>
 
-  <h3>Ausgänge</h3>
+  <h3>{t("settings.outputs")}</h3>
   {#each draft.outputs as output, o}
     <div class="row">
-      <input class="name" bind:value={output.label} aria-label="Name" />
+      <input class="name" bind:value={output.label} aria-label={t("settings.name")} />
       <select
         value={selected(devices.outputs, output.device)}
         onchange={(e) => (output.device = e.currentTarget.value)}
-        aria-label="Gerät"
+        aria-label={t("settings.device")}
       >
         {#each options(devices.outputs, output.device) as name}<option>{name}</option>{/each}
       </select>
-      <label class="buffer" title="Puffer: Bluetooth braucht mehr als USB">
+      <label class="buffer" title={t("settings.buffer")}>
         <input type="number" min="10" max="500" step="10" bind:value={output.bufferMs} />
         ms
       </label>
@@ -215,24 +216,24 @@
         class="release"
         value={output.releaseSecs ?? 30}
         onchange={(e) => (output.releaseSecs = Number(e.currentTarget.value))}
-        aria-label="Bluetooth bei Stille freigeben"
-        title="Bluetooth-Kopfhörer bei Stille freigeben, damit sie zum Handy wechseln können (Multipoint). Beim Wiederstart braucht Bluetooth etwa 1 s."
+        aria-label={t("settings.releaseLabel")}
+        title={t("settings.releaseHint")}
       >
-        {#each RELEASE as r}<option value={r.secs}>{r.name}</option>{/each}
+        {#each RELEASE as r}<option value={r.secs}>{r.name()}</option>{/each}
       </select>
       <span class="order">
-        <button class="icon" title="Nach links" aria-label="Nach links" disabled={o === 0} onclick={() => moveOutput(o, -1)}
+        <button class="icon" title={t("settings.left")} aria-label={t("settings.left")} disabled={o === 0} onclick={() => moveOutput(o, -1)}
           >←</button
         >
         <button
           class="icon"
-          title="Nach rechts"
-          aria-label="Nach rechts"
+          title={t("settings.right")}
+          aria-label={t("settings.right")}
           disabled={o === draft.outputs.length - 1}
           onclick={() => moveOutput(o, 1)}>→</button
         >
       </span>
-      <button class="icon" title="Entfernen" onclick={() => removeOutput(o)}>✕</button>
+      <button class="icon" title={t("settings.remove")} onclick={() => removeOutput(o)}>✕</button>
     </div>
   {/each}
   <button
@@ -240,37 +241,37 @@
     disabled={!devices.outputs.length}
     onclick={addOutput}
   >
-    + Ausgang
+    {t("settings.addOutput")}
   </button>
   {#if micDevice}
     <div class="hint">
       <p>
-        <strong>Programm-Mikro angelegt.</strong> Wähle in Discord, Teams usw. als Mikrofon
-        <strong>{micDevice}</strong>. Die Spalte „Programm-Mikro“ bestimmt, was dort ankommt.
+        <strong>{t("settings.micCreated")}</strong>
+        {t("settings.micUse", { device: micDevice })}
       </p>
       <label class="check">
         <input type="checkbox" bind:checked={micDefault} />
-        Als Windows-Mikrofon für Anrufe setzen
+        {t("settings.micDefault")}
       </label>
     </div>
   {:else if micCable}
-    <button class="add" onclick={addProgramMic} title="Ausgang auf einem virtuellen Kabel, den Programme als Mikrofon nutzen">
-      + Programm-Mikro
+    <button class="add" onclick={addProgramMic} title={t("settings.micAddHint")}>
+      {t("settings.micAdd")}
     </button>
   {:else}
     <div class="hint">
       <p>
         {hasCable
-          ? "Für ein Programm-Mikro (Discord, Teams …) braucht es ein freies virtuelles Kabel. Alle Kabel sind schon belegt."
-          : "Für ein Programm-Mikro (Discord, Teams …) braucht es ein virtuelles Kabel."}
-        Installiere das kostenlose VB-Cable (für ein zweites Kabel VB-Cable A+B) und starte den PC neu.
+          ? t("settings.micNoFreeCable")
+          : t("settings.micNoCable")}
+        {t("settings.micInstall")}
       </p>
-      <button onclick={() => openCablePage()}>Virtuelles Kabel einrichten</button>
+      <button onclick={() => openCablePage()}>{t("cable.setup")}</button>
     </div>
   {/if}
   {#if micError}<p class="error">{micError}</p>{/if}
 
-  <h3>Start</h3>
+  <h3>{t("settings.start")}</h3>
   <label class="check">
     <input
       type="checkbox"
@@ -278,7 +279,7 @@
       disabled={autostart === null}
       onchange={(e) => toggleAutostart(e.currentTarget.checked)}
     />
-    Mit Windows starten (im Tray, ohne Fenster)
+    {t("settings.autostart")}
   </label>
   {#if autostartError}<p class="error">{autostartError}</p>{/if}
 
@@ -286,14 +287,14 @@
     <h3>Stream Deck</h3>
     <div class="deck">
       <span>{deckLabel}</span>
-      <button class:primary={deck.update} onclick={updateDeck}>{deck.connected || deck.refused ? "Plugin aktualisieren" : "Plugin installieren"}</button>
+      <button class:primary={deck.update} onclick={updateDeck}>{deck.connected || deck.refused ? t("deck.update") : t("deck.install")}</button>
     </div>
     {#if deckError}<p class="error">{deckError}</p>{/if}
   {/if}
 
   <footer>
-    <button onclick={onClose}>Abbrechen</button>
-    <button class="primary" onclick={save}>Speichern</button>
+    <button onclick={onClose}>{t("common.cancel")}</button>
+    <button class="primary" onclick={save}>{t("common.save")}</button>
   </footer>
 </div>
 

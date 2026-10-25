@@ -1,24 +1,25 @@
 <script>
+  import { t, getLang, setLang, LANGUAGES } from "./i18n.svelte.js";
   import { ACCENTS, DEFAULT_THEME, MODES, SIGNALS, loadTheme, saveTheme } from "./theme.js";
 
   /** Layout, colours and light/dark; every change shows right away. */
   let { view, onView, side, onSide, hideAfter, onHide, onClose } = $props();
 
   const HIDES = [
-    { value: 0, name: "Nie" },
+    { value: 0, name: "hide.never" },
     { value: 30, name: "30 s" },
     { value: 120, name: "2 min" },
     { value: 600, name: "10 min" },
   ];
 
   const SIDES = [
-    { value: "left", name: "Links" },
-    { value: "right", name: "Rechts" },
+    { value: "left", name: "side.left" },
+    { value: "right", name: "side.right" },
   ];
 
   const VIEWS = [
-    { value: "strips", name: "Pult", hint: "Ein Streifen pro Eingang" },
-    { value: "matrix", name: "Matrix", hint: "Alle Ein- und Ausgänge als Tabelle" },
+    { value: "strips", name: "view.strips", hint: "view.stripsHint" },
+    { value: "matrix", name: "view.matrix", hint: "view.matrixHint" },
   ];
 
   let theme = $state(loadTheme());
@@ -34,21 +35,21 @@
   }
 
   const groups = [
-    { key: "accent", title: "Akzent", hint: "Regler, Knöpfe, Kappen", list: ACCENTS },
-    { key: "signal", title: "Signal", hint: "Pegelanzeigen, Status", list: SIGNALS },
+    { key: "accent", title: "theme.accent", hint: "theme.accentHint", list: ACCENTS },
+    { key: "signal", title: "theme.signal", hint: "theme.signalHint", list: SIGNALS },
   ];
 </script>
 
 <div class="backdrop" role="presentation" onclick={onClose}></div>
-<div class="dialog" role="dialog" aria-modal="true" aria-label="Design">
-  <h2>Design</h2>
+<div class="dialog" role="dialog" aria-modal="true" aria-label={t("nav.design")}>
+  <h2>{t("nav.design")}</h2>
 
   <section>
-    <h3>Ansicht</h3>
-    <div class="modes" role="radiogroup" aria-label="Ansicht">
+    <h3>{t("theme.view")}</h3>
+    <div class="modes" role="radiogroup" aria-label={t("theme.view")}>
       {#each VIEWS as v}
-        <button class:on={view === v.value} role="radio" aria-checked={view === v.value} title={v.hint} onclick={() => onView(v.value)}
-          >{v.name}</button
+        <button class:on={view === v.value} role="radio" aria-checked={view === v.value} title={t(v.hint)} onclick={() => onView(v.value)}
+          >{t(v.name)}</button
         >
       {/each}
     </div>
@@ -56,19 +57,19 @@
 
   {#if view === "strips"}
     <section>
-      <h3>Ausgänge im Pult</h3>
-      <div class="modes" role="radiogroup" aria-label="Ausgänge im Pult">
+      <h3>{t("theme.outputs")}</h3>
+      <div class="modes" role="radiogroup" aria-label={t("theme.outputs")}>
         {#each SIDES as v}
-          <button class:on={side === v.value} role="radio" aria-checked={side === v.value} onclick={() => onSide(v.value)}>{v.name}</button>
+          <button class:on={side === v.value} role="radio" aria-checked={side === v.value} onclick={() => onSide(v.value)}>{t(v.name)}</button>
         {/each}
       </div>
     </section>
     <section>
-      <h3>Stille Programme ausblenden <span>nach so langer Stille</span></h3>
-      <div class="modes" role="radiogroup" aria-label="Stille Programme ausblenden">
+      <h3>{t("theme.hideSilent")} <span>{t("theme.hideSilentHint")}</span></h3>
+      <div class="modes" role="radiogroup" aria-label={t("theme.hideSilent")}>
         {#each HIDES as v}
           <button class:on={hideAfter === v.value} role="radio" aria-checked={hideAfter === v.value} onclick={() => onHide(v.value)}
-            >{v.name}</button
+            >{t(v.name)}</button
           >
         {/each}
       </div>
@@ -78,8 +79,8 @@
   {#each groups as g}
     {@const custom = !g.list.some((c) => c.color === theme[g.key])}
     <section>
-      <h3>{g.title} <span>{g.hint}</span></h3>
-      <div class="swatches" role="radiogroup" aria-label={g.title}>
+      <h3>{t(g.title)} <span>{t(g.hint)}</span></h3>
+      <div class="swatches" role="radiogroup" aria-label={t(g.title)}>
         {#each g.list as c}
           <button
             class="swatch"
@@ -87,17 +88,17 @@
             style:--c={c.color}
             role="radio"
             aria-checked={theme[g.key] === c.color}
-            title={c.name}
-            aria-label={c.name}
+            title={t(c.name)}
+            aria-label={t(c.name)}
             onclick={() => set(g.key, c.color)}
           ></button>
         {/each}
-        <label class="swatch picker" class:on={custom} style:--c={theme[g.key]} title="Eigene Farbe">
+        <label class="swatch picker" class:on={custom} style:--c={theme[g.key]} title={t("theme.custom")}>
           <input
             type="color"
             value={theme[g.key]}
             oninput={(e) => set(g.key, e.currentTarget.value)}
-            aria-label={`${g.title}: eigene Farbe`}
+            aria-label={t("theme.customLabel", { title: t(g.title) })}
           />
         </label>
       </div>
@@ -105,15 +106,24 @@
   {/each}
 
   <section>
-    <h3>Darstellung</h3>
-    <div class="modes" role="radiogroup" aria-label="Darstellung">
+    <h3>{t("theme.appearance")}</h3>
+    <div class="modes" role="radiogroup" aria-label={t("theme.appearance")}>
       {#each MODES as m}
         <button
           class:on={theme.mode === m.value}
           role="radio"
           aria-checked={theme.mode === m.value}
-          onclick={() => set("mode", m.value)}>{m.name}</button
+          onclick={() => set("mode", m.value)}>{t(m.name)}</button
         >
+      {/each}
+    </div>
+  </section>
+
+  <section>
+    <h3>{t("theme.language")}</h3>
+    <div class="modes" role="radiogroup" aria-label={t("theme.language")}>
+      {#each LANGUAGES as l}
+        <button class:on={getLang() === l.value} role="radio" aria-checked={getLang() === l.value} onclick={() => setLang(l.value)}>{l.name}</button>
       {/each}
     </div>
   </section>
@@ -125,8 +135,8 @@
   </div>
 
   <footer>
-    <button onclick={reset}>Standard</button>
-    <button class="primary" onclick={onClose}>Fertig</button>
+    <button onclick={reset}>{t("theme.default")}</button>
+    <button class="primary" onclick={onClose}>{t("common.done")}</button>
   </footer>
 </div>
 

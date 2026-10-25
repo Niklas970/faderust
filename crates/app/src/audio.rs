@@ -8,6 +8,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use faderust_engine::backend::cpal::CpalBackend;
+use faderust_engine::lang::tr;
 use faderust_engine::meter::to_db;
 use faderust_engine::{
     Direction, Engine, EngineConfig, EngineEvent, InputConfig, LostReason, OutputConfig, SlotState,
@@ -183,11 +184,23 @@ const DEVICE_INVALIDATED: &str = "-2004287484";
 /// The cause of a failed connection in words a user can act on.
 fn explain(error: &str) -> String {
     if error.contains(DEVICE_IN_USE) {
-        "Das Gerät ist belegt. Bei Bluetooth-Kopfhörern nutzt meist ein Programm (z. B. Discord) ihr Headset-Mikro und schaltet sie in den Freisprechmodus: dort ein anderes Mikro wählen. Sonst hält ein Programm das Gerät exklusiv fest, etwa Voicemeeter, eine DAW oder ein ASIO-Treiber. Faderust verbindet von selbst, sobald es frei ist.".into()
+        tr(
+            "Das Gerät ist belegt. Bei Bluetooth-Kopfhörern nutzt meist ein Programm (z. B. Discord) ihr Headset-Mikro und schaltet sie in den Freisprechmodus: dort ein anderes Mikro wählen. Sonst hält ein Programm das Gerät exklusiv fest, etwa Voicemeeter, eine DAW oder ein ASIO-Treiber. Faderust verbindet von selbst, sobald es frei ist.",
+            "The device is in use. With Bluetooth headphones, a program (e.g. Discord) usually uses their headset microphone and switches them to hands-free mode: pick another microphone there. Otherwise a program holds the device exclusively, such as Voicemeeter, a DAW or an ASIO driver. Faderust reconnects by itself as soon as it is free.",
+        )
     } else if error.contains(DEVICE_INVALIDATED) {
-        "Das Gerät wurde gerade umgestellt oder entfernt. Faderust versucht es weiter.".into()
+        tr(
+            "Das Gerät wurde gerade umgestellt oder entfernt. Faderust versucht es weiter.",
+            "The device was just changed or removed. Faderust keeps trying.",
+        )
     } else {
-        format!("{error}. Nutzt ein anderes Programm das Gerät im Exklusivmodus?")
+        format!(
+            "{error}. {}",
+            tr(
+                "Nutzt ein anderes Programm das Gerät im Exklusivmodus?",
+                "Is another program using the device in exclusive mode?"
+            )
+        )
     }
 }
 
@@ -220,21 +233,26 @@ impl Notices {
                 let resumed = *dir == Direction::Output && self.released.remove(slot);
                 ((!quiet && !resumed) || was_failing).then(|| Notice {
                     level: "info",
-                    text: format!("„{}“ verbunden: {}", label(dir, *slot), device.name),
+                    text: format!(
+                        "{}: {}",
+                        tr("„{}“ verbunden", "“{}” connected").replace("{}", &label(dir, *slot)),
+                        device.name
+                    ),
                 })
             }
             EngineEvent::Lost { dir, slot, reason } => Some(Notice {
                 level: "warn",
                 text: match reason {
-                    LostReason::Removed => {
-                        format!("„{}“ getrennt. Faderust verbindet neu, sobald das Gerät wieder da ist.", label(dir, *slot))
-                    }
-                    LostReason::StreamError => {
-                        format!(
-                            "„{}“ meldet einen Fehler und wird neu verbunden.",
-                            label(dir, *slot)
-                        )
-                    }
+                    LostReason::Removed => tr(
+                        "„{}“ getrennt. Faderust verbindet neu, sobald das Gerät wieder da ist.",
+                        "“{}” disconnected. Faderust reconnects as soon as the device is back.",
+                    )
+                    .replace("{}", &label(dir, *slot)),
+                    LostReason::StreamError => tr(
+                        "„{}“ meldet einen Fehler und wird neu verbunden.",
+                        "“{}” reports an error and is being reconnected.",
+                    )
+                    .replace("{}", &label(dir, *slot)),
                 },
             }),
             EngineEvent::Released { slot } => {
@@ -246,8 +264,9 @@ impl Notices {
                 (previous.as_ref() != Some(error)).then(|| Notice {
                     level: "error",
                     text: format!(
-                        "„{}“ lässt sich nicht öffnen: {}",
-                        label(dir, *slot),
+                        "{} {}",
+                        tr("„{}“ lässt sich nicht öffnen:", "“{}” cannot be opened:")
+                            .replace("{}", &label(dir, *slot)),
                         explain(error)
                     ),
                 })
@@ -417,9 +436,11 @@ fn run(
                     "notice",
                     Notice {
                         level: "error",
-                        text: format!(
-                            "Die Aufnahme von {exe} hat Faderust beim letzten Mal zum Absturz gebracht. Sie bleibt bis zum nächsten Start aus. Details stehen in faderust.log."
-                        ),
+                        text: tr(
+                            "Die Aufnahme von {exe} hat Faderust beim letzten Mal zum Absturz gebracht. Sie bleibt bis zum nächsten Start aus. Details stehen in faderust.log.",
+                            "Recording {exe} crashed Faderust last time. It stays off until the next start. Details are in faderust.log.",
+                        )
+                        .replace("{exe}", exe),
                     },
                 );
                 skip_notice = None;

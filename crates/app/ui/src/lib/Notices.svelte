@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import { onNotice } from "./api.js";
+  import { t } from "./i18n.svelte.js";
 
   /** Device changes and errors from the engine, fading out on their own. */
   let items = $state([]);
@@ -25,7 +26,7 @@
   {#each items as n (n.id)}
     <div class="notice {n.level}">
       <span>{n.text}</span>
-      <button title="Schließen" onclick={() => dismiss(n.id)}>✕</button>
+      <button title={t("common.close")} onclick={() => dismiss(n.id)}>✕</button>
     </div>
   {/each}
 </div>

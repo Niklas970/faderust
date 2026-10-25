@@ -147,7 +147,9 @@ async fn get_apps() -> Result<Apps, String> {
 /// Points a program at a playback device, `None` for the system default.
 #[tauri::command]
 async fn set_app_output(pids: Vec<u32>, device: Option<String>) -> Result<(), String> {
-    let router = router().ok_or("Nur unter Windows verfügbar")?;
+    let router = router().ok_or_else(|| {
+        faderust_engine::lang::tr("Nur unter Windows verfügbar", "Only available on Windows")
+    })?;
     router
         .set_output(&pids, device.as_deref())
         .map_err(|e| e.to_string())
@@ -160,7 +162,9 @@ async fn set_app_volume(
     volume: Option<f32>,
     muted: Option<bool>,
 ) -> Result<(), String> {
-    let router = router().ok_or("Nur unter Windows verfügbar")?;
+    let router = router().ok_or_else(|| {
+        faderust_engine::lang::tr("Nur unter Windows verfügbar", "Only available on Windows")
+    })?;
     router
         .set_app_volume(&pids, volume.map(|v| v.clamp(0.0, 1.0)), muted)
         .map_err(|e| e.to_string())
@@ -265,7 +269,9 @@ async fn set_default_device(id: String, communications: bool) -> Result<(), Stri
 }
 
 fn set_default(id: &str, communications: bool) -> Result<(), String> {
-    let sys = system_audio().ok_or("Nur unter Windows verfügbar")?;
+    let sys = system_audio().ok_or_else(|| {
+        faderust_engine::lang::tr("Nur unter Windows verfügbar", "Only available on Windows")
+    })?;
     let role = if communications {
         Role::Communications
     } else {
@@ -281,7 +287,9 @@ async fn set_device_volume(
     volume: Option<f32>,
     muted: Option<bool>,
 ) -> Result<(), String> {
-    let sys = system_audio().ok_or("Nur unter Windows verfügbar")?;
+    let sys = system_audio().ok_or_else(|| {
+        faderust_engine::lang::tr("Nur unter Windows verfügbar", "Only available on Windows")
+    })?;
     sys.set_endpoint_volume(&id, volume.map(|v| v.clamp(0.0, 1.0)), muted)
         .map_err(|e| e.to_string())
 }
@@ -300,7 +308,10 @@ fn open_cable_page() -> Result<(), String> {
             .map(|_| ())
             .map_err(|e| e.to_string())
     } else {
-        Err(format!("Bitte {CABLE_PAGE} im Browser öffnen"))
+        Err(format!(
+            "{} {CABLE_PAGE}",
+            faderust_engine::lang::tr("Bitte im Browser öffnen:", "Please open in your browser:")
+        ))
     }
 }
 
@@ -369,12 +380,21 @@ fn plugin_status(bundled: Option<String>, link: remote::Link) -> StreamDeckStatu
 /// to install it (a plugin of the same name is replaced).
 #[tauri::command]
 fn install_streamdeck(app: AppHandle) -> Result<(), String> {
-    let source =
-        resource(&app, PLUGIN_FILE).ok_or("Dieses Faderust enthält kein Stream-Deck-Plugin.")?;
+    let source = resource(&app, PLUGIN_FILE).ok_or_else(|| {
+        faderust_engine::lang::tr(
+            "Dieses Faderust enthält kein Stream-Deck-Plugin.",
+            "This Faderust does not include the Stream Deck plugin.",
+        )
+    })?;
     let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let target = dir.join(PLUGIN_FILE);
-    std::fs::copy(&source, &target).map_err(|e| format!("Plugin nicht kopiert: {e}"))?;
+    std::fs::copy(&source, &target).map_err(|e| {
+        format!(
+            "{}: {e}",
+            faderust_engine::lang::tr("Plugin nicht kopiert", "Plugin not copied")
+        )
+    })?;
     if cfg!(windows) {
         std::process::Command::new("explorer")
             .arg(&target)
@@ -382,8 +402,18 @@ fn install_streamdeck(app: AppHandle) -> Result<(), String> {
             .map(|_| ())
             .map_err(|e| e.to_string())
     } else {
-        Err(format!("Bitte {} öffnen", target.display()))
+        Err(format!(
+            "{} {}",
+            faderust_engine::lang::tr("Bitte öffnen:", "Please open:"),
+            target.display()
+        ))
     }
+}
+
+/// The interface language ("de" or "en"), for the messages Rust sends.
+#[tauri::command]
+fn set_language(code: String) {
+    faderust_engine::lang::set(&code);
 }
 
 #[tauri::command]
@@ -399,7 +429,12 @@ fn set_autostart(enabled: bool, app: AppHandle) -> Result<(), String> {
     } else {
         autostart.disable()
     }
-    .map_err(|e| format!("Autostart nicht geändert: {e}"))
+    .map_err(|e| {
+        format!(
+            "{}: {e}",
+            faderust_engine::lang::tr("Autostart nicht geändert", "Autostart not changed")
+        )
+    })
 }
 
 #[tauri::command]
@@ -414,9 +449,12 @@ fn get_config(state: State<AppState>) -> Config {
 #[tauri::command]
 fn save_config(config: Config, state: State<AppState>) -> Result<(), String> {
     let config = config.normalized();
-    config
-        .save(&state.path)
-        .map_err(|e| format!("Konfiguration nicht gespeichert: {e}"))?;
+    config.save(&state.path).map_err(|e| {
+        format!(
+            "{}: {e}",
+            faderust_engine::lang::tr("Konfiguration nicht gespeichert", "Configuration not saved")
+        )
+    })?;
     *state.config.lock().unwrap_or_else(|e| e.into_inner()) = config;
     send(&state, Command::Reconfigure)
 }
@@ -461,9 +499,12 @@ fn set_fx(input: usize, fx: Fx, state: State<AppState>) -> Result<(), String> {
 fn edit_presets(state: &AppState, f: impl FnOnce(&mut Config) -> bool) -> Result<bool, String> {
     let mut config = state.config.lock().unwrap_or_else(|e| e.into_inner());
     let changed = f(&mut config);
-    config
-        .save(&state.path)
-        .map_err(|e| format!("Konfiguration nicht gespeichert: {e}"))?;
+    config.save(&state.path).map_err(|e| {
+        format!(
+            "{}: {e}",
+            faderust_engine::lang::tr("Konfiguration nicht gespeichert", "Configuration not saved")
+        )
+    })?;
     Ok(changed)
 }
 
@@ -471,7 +512,10 @@ fn edit_presets(state: &AppState, f: impl FnOnce(&mut Config) -> bool) -> Result
 fn save_preset(name: String, state: State<AppState>) -> Result<(), String> {
     let name = name.trim();
     if name.is_empty() {
-        return Err("Das Preset braucht einen Namen".into());
+        return Err(faderust_engine::lang::tr(
+            "Das Preset braucht einen Namen",
+            "The preset needs a name",
+        ));
     }
     edit_presets(&state, |c| {
         c.save_preset(name);
@@ -487,7 +531,10 @@ fn load_preset(name: String, state: State<AppState>) -> Result<(), String> {
 
 fn apply_preset(state: &AppState, name: &str) -> Result<(), String> {
     if !edit_presets(state, |c| c.load_preset(name))? {
-        return Err(format!("Preset „{name}“ gibt es nicht"));
+        return Err(format!(
+            "{} {name}",
+            faderust_engine::lang::tr("Preset gibt es nicht:", "Preset does not exist:")
+        ));
     }
     send(state, Command::ApplyGains)
 }
@@ -502,12 +549,12 @@ fn delete_preset(name: String, state: State<AppState>) -> Result<(), String> {
 }
 
 fn send(state: &AppState, cmd: Command) -> Result<(), String> {
-    state
-        .audio
-        .lock()
-        .unwrap()
-        .send(cmd)
-        .map_err(|_| "Audio-Engine läuft nicht".to_string())
+    state.audio.lock().unwrap().send(cmd).map_err(|_| {
+        faderust_engine::lang::tr(
+            "Audio-Engine läuft nicht",
+            "The audio engine is not running",
+        )
+    })
 }
 
 /// First start: the system default devices, one mix.
@@ -662,6 +709,7 @@ fn main() {
             set_device_volume,
             get_streamdeck,
             install_streamdeck,
+            set_language,
             get_autostart,
             set_autostart,
             open_cable_page,

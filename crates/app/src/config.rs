@@ -24,6 +24,8 @@ pub struct InputEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Fx {
+    /// RNNoise noise suppression (48 kHz devices only).
+    pub denoise: bool,
     /// High-pass corner in Hz, 0 = off.
     pub low_cut_hz: f32,
     pub low_db: f32,
@@ -42,6 +44,7 @@ impl Default for Fx {
 impl From<FxSettings> for Fx {
     fn from(s: FxSettings) -> Self {
         Self {
+            denoise: s.denoise,
             low_cut_hz: s.low_cut_hz,
             low_db: s.low_db,
             mid_db: s.mid_db,
@@ -55,6 +58,7 @@ impl From<FxSettings> for Fx {
 impl From<Fx> for FxSettings {
     fn from(f: Fx) -> Self {
         Self {
+            denoise: f.denoise,
             low_cut_hz: f.low_cut_hz,
             low_db: f.low_db,
             mid_db: f.mid_db,
@@ -277,6 +281,43 @@ mod tests {
     }
 
     #[test]
+    fn a_program_keeps_its_fader_routing_and_effects_while_closed() {
+        // A program is an input like any other: its strip lives in the file,
+        // so a restarted Discord comes back with what it had.
+        let dir = std::env::temp_dir().join(format!("faderust-test3-{}", std::process::id()));
+        let path = dir.join("config.toml");
+        let mut c = sample();
+        c.inputs.push(InputEntry {
+            label: "Discord".into(),
+            device: "app:discord.exe".into(),
+            fx: Fx {
+                denoise: true,
+                ..Fx::default()
+            },
+            muted: true,
+        });
+        let c = c.normalized();
+        let row = c.inputs.len() - 1;
+        let mut c = c;
+        c.gains[row][0] = Gain {
+            db: -9.0,
+            muted: false,
+        };
+        c.gains[row][1] = Gain {
+            db: 0.0,
+            muted: true,
+        };
+        c.save(&path).unwrap();
+
+        let back = Config::load(&path).unwrap().unwrap();
+        assert_eq!(back.inputs[row].device, "app:discord.exe");
+        assert!(back.inputs[row].muted && back.inputs[row].fx.denoise);
+        assert_eq!(back.gains[row][0].db, -9.0);
+        assert!(back.gains[row][1].muted);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn missing_file_is_none_and_garbage_is_error() {
         let dir = std::env::temp_dir().join(format!("faderust-test2-{}", std::process::id()));
         let path = dir.join("config.toml");
@@ -320,6 +361,8 @@ mod tests {
                 .unwrap();
         assert!(c.inputs[0].fx.gate);
         assert_eq!(c.inputs[0].fx.gate_db, -45.0);
+        // Files from before the noise suppression have none.
+        assert!(!c.inputs[0].fx.denoise);
         // 0.3.8 had a per-output setting; old files still load.
         let c: Config =
             toml::from_str("[[outputs]]\nlabel = \"A\"\ndevice = \"x\"\nreleaseAfterS = 30\n")

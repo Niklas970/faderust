@@ -1,5 +1,6 @@
 <script>
   import Meter from "./Meter.svelte";
+  import { t } from "./i18n.svelte.js";
   import { DB, OFF } from "./scale.js";
 
   /**
@@ -154,7 +155,7 @@
       bind:this={track}
       role="slider"
       tabindex="0"
-      aria-label={`${label} Pegel`}
+      aria-label={t("fader.level", { label })}
       aria-valuemin={scale.min}
       aria-valuemax={scale.max}
       aria-valuenow={isOff ? scale.min : local}
@@ -185,7 +186,7 @@
       class="readout edit"
       bind:value={draft}
       use:focus
-      aria-label={`${label} Wert`}
+      aria-label={t("fader.value", { label })}
       onblur={commit}
       onkeydown={(e) => {
         if (e.key === "Enter") commit();
@@ -193,13 +194,13 @@
       }}
     />
   {:else}
-    <button class="readout" class:off={isOff || muted} title="Klicken und Wert eintippen" onclick={edit}
+    <button class="readout" class:off={isOff || muted} title={t("fader.type")} onclick={edit}
       >{scale.format(local)} {unit === "pct" ? "%" : "dB"}</button
     >
   {/if}
   {#if showMute}
-    <button class="mute" class:on={muted} aria-pressed={muted} aria-label={`${label} stumm`} onclick={() => onMute(!muted)}
-      >Mute</button
+    <button class="mute" class:on={muted} aria-pressed={muted} aria-label={t("fader.muted", { label })} onclick={() => onMute(!muted)}
+      >{t("fader.mute")}</button
     >
   {/if}
 </div>

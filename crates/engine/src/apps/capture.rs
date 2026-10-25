@@ -174,18 +174,33 @@ pub fn open(
     mut error: ErrorCallback,
 ) -> Result<ProgramCapture, CaptureError> {
     if let Some(left) = backoff(exe) {
-        return Err(CaptureError(format!(
-            "Aufnahme von {exe} ist eben fehlgeschlagen, neuer Versuch in {} s",
-            left.as_secs().max(1)
-        )));
+        return Err(CaptureError(
+            crate::lang::tr(
+                "Aufnahme von {exe} ist eben fehlgeschlagen, neuer Versuch in {s} s",
+                "Recording {exe} just failed, trying again in {s} s",
+            )
+            .replace("{exe}", exe)
+            .replace("{s}", &left.as_secs().max(1).to_string()),
+        ));
     }
     let app = programs()?
         .into_iter()
         .find(|a| a.exe.eq_ignore_ascii_case(exe))
-        .ok_or_else(|| CaptureError(format!("{exe} spielt gerade keinen Ton ab")))?;
+        .ok_or_else(|| {
+            CaptureError(
+                crate::lang::tr(
+                    "{exe} spielt gerade keinen Ton ab",
+                    "{exe} is not playing sound right now",
+                )
+                .replace("{exe}", exe),
+            )
+        })?;
     let roots = capture_roots(&app.pids, &processes()?);
     if roots.is_empty() {
-        return Err(CaptureError(format!("{exe} läuft nicht mehr")));
+        return Err(CaptureError(
+            crate::lang::tr("{exe} läuft nicht mehr", "{exe} is no longer running")
+                .replace("{exe}", exe),
+        ));
     }
 
     mark_starting(exe);
@@ -470,16 +485,21 @@ fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
         .map_err(err)?;
         if unsafe { WaitForSingleObject(done, ACTIVATE_TIMEOUT_MS) } != WAIT_OBJECT_0 {
             // The handler may still fire later: leave the event open for it.
-            return Err(CaptureError(
-                "Windows hat die Aufnahme nicht gestartet".into(),
-            ));
+            return Err(CaptureError(crate::lang::tr(
+                "Windows hat die Aufnahme nicht gestartet",
+                "Windows did not start the recording",
+            )));
         }
         let mut hr = HRESULT(0);
         let mut unknown = None;
         unsafe { operation.GetActivateResult(&mut hr, &mut unknown) }.map_err(err)?;
         hr.ok().map_err(|e| {
             CaptureError(format!(
-                "Programm-Aufnahme nicht möglich (braucht Windows 10 2004 oder neuer): {}",
+                "{}: {}",
+                crate::lang::tr(
+                    "Programm-Aufnahme nicht möglich (braucht Windows 10 2004 oder neuer)",
+                    "Program recording is not possible (needs Windows 10 2004 or newer)"
+                ),
                 e.message()
             ))
         })?;

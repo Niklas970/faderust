@@ -419,9 +419,10 @@ impl Policy {
                 return Ok(Self(unsafe { IUnknown::from_raw(raw) }));
             }
         }
-        Err(RouterError(
-            "Diese Windows-Version erlaubt kein Ausgabegerät pro Programm".into(),
-        ))
+        Err(RouterError(crate::lang::tr(
+            "Diese Windows-Version erlaubt kein Ausgabegerät pro Programm",
+            "This Windows version does not allow an output device per program",
+        )))
     }
 
     fn vtbl(&self) -> &PolicyVtbl {
@@ -492,9 +493,10 @@ impl PolicyConfig {
             .ok()
             .map_err(err)?;
         if raw.is_null() {
-            return Err(RouterError(
-                "Standardgeräte lassen sich hier nicht setzen".into(),
-            ));
+            return Err(RouterError(crate::lang::tr(
+                "Standardgeräte lassen sich hier nicht setzen",
+                "Default devices cannot be set here",
+            )));
         }
         Ok(Self(unsafe { IUnknown::from_raw(raw) }))
     }

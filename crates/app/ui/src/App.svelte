@@ -9,6 +9,7 @@
   import Presets from "./lib/Presets.svelte";
   import Notices from "./lib/Notices.svelte";
   import Theme from "./lib/Theme.svelte";
+  import { t } from "./lib/i18n.svelte.js";
   import {
     checkUpdate,
     installUpdate,
@@ -99,7 +100,7 @@
   function togglePinned() {
     pinned = !pinned;
     writeFlag(PIN_KEY, pinned);
-    setAlwaysOnTop(pinned).catch((e) => (error = `Immer im Vordergrund fehlgeschlagen: ${e}`));
+    setAlwaysOnTop(pinned).catch((e) => (error = t("app.pinFailed", { error: e })));
   }
   onMount(() => {
     if (pinned) setAlwaysOnTop(true).catch(() => {});
@@ -164,15 +165,15 @@
   let checkNote = $state("");
   let noteTimer;
   async function checkNow() {
-    if (updating !== null || checkNote === "Suche …") return;
-    checkNote = "Suche …";
+    if (updating !== null || checkNote === "update.searching") return;
+    checkNote = "update.searching";
     lastCheck = Date.now();
     try {
       update = (await checkUpdate()) ?? null;
-      checkNote = update ? "" : "Aktuell";
+      checkNote = update ? "" : "update.current";
     } catch (e) {
-      checkNote = "Keine Verbindung";
-      error = `Update-Suche fehlgeschlagen: ${e}`;
+      checkNote = "update.offline";
+      error = t("update.searchFailed", { error: e });
     }
     clearTimeout(noteTimer);
     if (checkNote) noteTimer = setTimeout(() => (checkNote = ""), 3000);
@@ -183,7 +184,7 @@
     try {
       await installUpdate((p) => (updating = p));
     } catch (e) {
-      error = `Update fehlgeschlagen: ${e}`;
+      error = t("update.failed", { error: e });
       updating = null;
     }
   }
@@ -239,13 +240,13 @@
       <img src="/logo.svg" alt="" width="22" height="22" data-tauri-drag-region />
       <span class="name" data-tauri-drag-region>Faderust</span>
       {#if version}
-        <button class="version" onclick={checkNow} title="Nach Updates suchen">
-          v{version}{#if checkNote}<span class="check-note">· {checkNote}</span>{/if}
+        <button class="version" onclick={checkNow} title={t("update.check")}>
+          v{version}{#if checkNote}<span class="check-note">· {t(checkNote)}</span>{/if}
         </button>
       {/if}
       {#if update}
-        <button class="update" onclick={runUpdate} disabled={updating !== null} title="Herunterladen und installieren">
-          {updating === null ? `Update auf ${update.version}` : `Lädt … ${Math.round(updating * 100)} %`}
+        <button class="update" onclick={runUpdate} disabled={updating !== null} title={t("update.install")}>
+          {updating === null ? t("update.to", { version: update.version }) : t("update.loading", { percent: Math.round(updating * 100) })}
         </button>
       {/if}
     </div>
@@ -255,11 +256,11 @@
 
     <nav class="nav">
       <button onclick={() => (presetsOpen = true)} class:active={presetsOpen}>
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" /></svg><span class="label">Presets</span>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" /></svg><span class="label">{t("nav.presets")}</span>
       </button>
       <button onclick={() => (windowsOpen = true)} class:active={windowsOpen}>
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l4-3v10l-4-3H2z" /><path d="M11.5 5.5a3.5 3.5 0 0 1 0 5M13.5 3.5a6.3 6.3 0 0 1 0 9" /></svg
-        ><span class="label">Windows</span>
+        ><span class="label">{t("nav.windows")}</span>
       </button>
       <button onclick={openSettings} class:active={settingsOpen}>
         <svg viewBox="0 0 16 16" aria-hidden="true"
@@ -270,16 +271,16 @@
             height="2.5"
             rx=".6"
           /><rect x="10.5" y="10" width="3" height="2.5" rx=".6" /></svg
-        ><span class="label">Geräte</span>
+        ><span class="label">{t("settings.title")}</span>
       </button>
-      <button onclick={() => (themeOpen = true)} class:active={themeOpen} title="Farben und Darstellung">
+      <button onclick={() => (themeOpen = true)} class:active={themeOpen} title={t("nav.designHint")}>
         <svg viewBox="0 0 16 16" aria-hidden="true"
           ><path d="M8 2a6 6 0 1 0 0 12c1 0 1.5-.6 1.5-1.3 0-.9-.8-1.2-.8-2 0-.7.6-1.2 1.4-1.2H12a2 2 0 0 0 2-2C14 4.4 11.3 2 8 2z" /><circle
             cx="5"
             cy="7"
             r=".9"
           /><circle cx="8" cy="5" r=".9" /><circle cx="11" cy="6.5" r=".9" /></svg
-        ><span class="label">Design</span>
+        ><span class="label">{t("nav.design")}</span>
       </button>
     </nav>
 
@@ -287,8 +288,8 @@
       <button
         class="toggle"
         class:on={compact}
-        title={compact ? "Normale Ansicht" : "Kompakte Ansicht"}
-        aria-label="Kompakte Ansicht"
+        title={compact ? t("app.normal") : t("app.compact")}
+        aria-label={t("app.compact")}
         aria-pressed={compact}
         onclick={toggleCompact}
       >
@@ -297,20 +298,20 @@
       <button
         class="toggle"
         class:on={pinned}
-        title={pinned ? "Nicht mehr im Vordergrund halten" : "Immer im Vordergrund"}
-        aria-label="Immer im Vordergrund"
+        title={pinned ? t("app.unpin") : t("app.pin")}
+        aria-label={t("app.pin")}
         aria-pressed={pinned}
         onclick={togglePinned}
       >
         <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 1h3l-.5 3 1.5 2H2.5L4 4zM5 6v3" /></svg>
       </button>
-      <button title="Minimieren" aria-label="Minimieren" onclick={() => windowAction("minimize")}>
+      <button title={t("app.minimize")} aria-label={t("app.minimize")} onclick={() => windowAction("minimize")}>
         <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 5h8" /></svg>
       </button>
-      <button title="Maximieren" aria-label="Maximieren" onclick={() => windowAction("maximize")}>
+      <button title={t("app.maximize")} aria-label={t("app.maximize")} onclick={() => windowAction("maximize")}>
         <svg viewBox="0 0 10 10" aria-hidden="true"><rect x="1" y="1" width="8" height="8" rx="1" /></svg>
       </button>
-      <button class="close" title="In den Tray" aria-label="In den Tray" onclick={() => windowAction("close")}>
+      <button class="close" title={t("app.close")} aria-label={t("app.close")} onclick={() => windowAction("close")}>
         <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" /></svg>
       </button>
     </div>
@@ -352,8 +353,8 @@
     </main>
   {:else if state}
     <div class="empty">
-      <p>Noch keine Geräte eingerichtet.</p>
-      <button class="primary" onclick={openSettings}>Geräte einrichten</button>
+      <p>{t("app.noDevices")}</p>
+      <button class="primary" onclick={openSettings}>{t("app.setupDevices")}</button>
     </div>
   {/if}
 </div>

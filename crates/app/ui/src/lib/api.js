@@ -147,6 +147,12 @@ export async function openCablePage() {
   return (await tauri()).invoke("open_cable_page");
 }
 
+/** Tells the Rust side the interface language, for the messages it sends. */
+export async function setBackendLanguage(code) {
+  if (!inTauri) return;
+  return (await tauri()).invoke("set_language", { code });
+}
+
 /** Whether Faderust starts with Windows (into the tray). */
 export async function getAutostart() {
   if (!inTauri) return mock.autostart;
@@ -254,6 +260,7 @@ export async function onState(cb) {
 /** Effects that change nothing; mirrors `FxSettings::default()`. */
 export function defaultFx() {
   return {
+    denoise: false,
     lowCutHz: 0,
     lowDb: 0,
     midDb: 0,
@@ -267,7 +274,8 @@ export function defaultFx() {
 export function fxActive(fx) {
   return (
     !!fx &&
-    (fx.lowCutHz > 0 ||
+    (fx.denoise ||
+      fx.lowCutHz > 0 ||
       fx.lowDb !== 0 ||
       fx.midDb !== 0 ||
       fx.highDb !== 0 ||
@@ -297,6 +305,7 @@ const mock = {
         label: "Mikro",
         device: "Mikrofon",
         fx: {
+          denoise: false,
           lowCutHz: 80,
           lowDb: 0,
           midDb: 2,

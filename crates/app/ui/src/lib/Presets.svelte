@@ -1,4 +1,5 @@
 <script>
+  import { t } from "./i18n.svelte.js";
   import { deletePreset, getConfig, loadPreset, savePreset } from "./api.js";
 
   /** Menu to store and recall fader positions. */
@@ -33,23 +34,23 @@
 </script>
 
 <div class="backdrop" role="presentation" onclick={onClose}></div>
-<div class="menu" role="dialog" aria-label="Presets">
+<div class="menu" role="dialog" aria-label={t("nav.presets")}>
   {#if presets.length}
     <ul>
       {#each presets as p (p.name)}
         <li>
-          <button class="load" title="Laden" onclick={() => run(() => loadPreset(p.name)).then(onClose)}>{p.name}</button>
-          <button class="icon" title="Überschreiben" onclick={() => run(() => savePreset(p.name))}>⤓</button>
-          <button class="icon" title="Löschen" onclick={() => run(() => deletePreset(p.name))}>✕</button>
+          <button class="load" title={t("presets.load")} onclick={() => run(() => loadPreset(p.name)).then(onClose)}>{p.name}</button>
+          <button class="icon" title={t("presets.overwrite")} onclick={() => run(() => savePreset(p.name))}>⤓</button>
+          <button class="icon" title={t("presets.delete")} onclick={() => run(() => deletePreset(p.name))}>✕</button>
         </li>
       {/each}
     </ul>
   {:else}
-    <p class="empty">Noch keine Presets. Stell die Fader ein und speichere sie unter einem Namen.</p>
+    <p class="empty">{t("presets.empty")}</p>
   {/if}
   <form onsubmit={save}>
-    <input bind:value={name} placeholder="Name, z. B. Zocken" aria-label="Preset-Name" />
-    <button type="submit" class="primary" disabled={!name.trim()}>Speichern</button>
+    <input bind:value={name} placeholder={t("presets.placeholder")} aria-label={t("presets.name")} />
+    <button type="submit" class="primary" disabled={!name.trim()}>{t("common.save")}</button>
   </form>
 </div>
 

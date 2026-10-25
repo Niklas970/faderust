@@ -2,6 +2,7 @@
   import Fader from "./Fader.svelte";
   import Meter from "./Meter.svelte";
   import { fxActive } from "./api.js";
+  import { t } from "./i18n.svelte.js";
   import { stripChanges, stripValue, OFF } from "./scale.js";
 
   /**
@@ -60,7 +61,7 @@
           class:on={on && !looped}
           class:looped
           aria-pressed={on}
-          title={looped ? `Schleife: ${output.label} spielt auf das Kabel dieses Eingangs` : `${output.label} ${on ? "aus" : "an"}`}
+          title={looped ? t("strip.loopHint", { output: output.label }) : t(on ? "strip.off" : "strip.on", { output: output.label })}
           onclick={() => toggle(i, o)}>A{o + 1}</button
         >
       {/each}
@@ -76,14 +77,14 @@
         onMute={(v) => onInputMute(i, v)}
       />
     </div>
-    <button class="fx" class:on={fxActive(input.fx)} onclick={() => onFx(i)}>Effekte</button>
+    <button class="fx" class:on={fxActive(input.fx)} onclick={() => onFx(i)}>{t("fx.title")}</button>
   </section>
 {/snippet}
 
 <div class="desk" class:compact>
   <div class="strips">
     <div class="group outs" class:left={side === "left"}>
-      <h2>Ausgänge</h2>
+      <h2>{t("settings.outputs")}</h2>
       <div class="row">
         {#each outputs as output, o}
           {@const m = output.master ?? { db: 0, muted: false }}
@@ -92,9 +93,9 @@
             <div class="grow">
               <Fader
                 label={output.label}
-                note={output.connected ? output.deviceName : output.released ? "Freigegeben" : "Wartet auf Gerät"}
+                note={output.connected ? output.deviceName : output.released ? t("out.releasedShort") : t("out.waitingShort")}
                 noteOn={output.connected}
-                noteTitle={output.released ? "Freigegeben, kommt mit Ton zurück" : (output.deviceName ?? "")}
+                noteTitle={output.released ? t("out.released") : (output.deviceName ?? "")}
                 value={m.db}
                 muted={m.muted}
                 levelDb={output.levelDb}
@@ -105,32 +106,32 @@
               />
             </div>
             <!-- Keeps the fader level with the inputs' "Effekte" row. -->
-            <span class="fx spacer" aria-hidden="true">Effekte</span>
+            <span class="fx spacer" aria-hidden="true">{t("fx.title")}</span>
           </section>
         {/each}
       </div>
     </div>
     {#if devices.length}
       <div class="group">
-        <h2>Geräte</h2>
+        <h2>{t("settings.title")}</h2>
         <div class="row">
           {#each devices as { input, i } (i)}{@render strip(input, i)}{/each}
         </div>
       </div>
     {/if}
     <div class="group">
-      <h2>Programme <button class="add" onclick={onPrograms} title="Programme als Eingang aufnehmen">+ Programm</button></h2>
+      <h2>{t("programs.title")} <button class="add" onclick={onPrograms} title={t("programs.addHint")}>{t("programs.add")}</button></h2>
       <div class="row">
         {#each programs as { input, i } (i)}
           {@render strip(input, i)}
         {:else}
           {#if !allPrograms.length}
-            <p class="hint">Mit „+ Programm“ bekommt z. B. Discord oder Brave einen eigenen Streifen.</p>
+            <p class="hint">{t("strip.programsHint")}</p>
           {/if}
         {/each}
         {#if silent}
           <button class="more" onclick={() => (showAll = !showAll)}
-            >{showAll ? "Stille ausblenden" : `${silent} still, zeigen`}</button
+            >{showAll ? t("strip.hideSilent") : t("strip.showSilent", { count: silent })}</button
           >
         {/if}
       </div>
