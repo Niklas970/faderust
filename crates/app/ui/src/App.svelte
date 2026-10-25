@@ -1,10 +1,10 @@
 <script>
   import { onMount } from "svelte";
-  import OutputColumn from "./lib/OutputColumn.svelte";
+  import StripView from "./lib/StripView.svelte";
+  import MatrixView from "./lib/MatrixView.svelte";
   import Settings from "./lib/Settings.svelte";
   import Apps from "./lib/Apps.svelte";
   import WindowsAudio from "./lib/WindowsAudio.svelte";
-  import ProgramColumn from "./lib/ProgramColumn.svelte";
   import FxDialog from "./lib/FxDialog.svelte";
   import Presets from "./lib/Presets.svelte";
   import Notices from "./lib/Notices.svelte";
@@ -12,7 +12,6 @@
   import {
     checkUpdate,
     installUpdate,
-    fxActive,
     getConfig,
     getVersion,
     onState,
@@ -32,6 +31,25 @@
   // Index of the input whose effects are open.
   let fxOpen = $state(null);
   let error = $state("");
+
+  // "strips" (Voicemeeter-style desk) or "matrix", remembered per machine.
+  const VIEW_KEY = "faderust.view";
+  let view = $state(readView());
+  function readView() {
+    try {
+      return localStorage.getItem(VIEW_KEY) === "matrix" ? "matrix" : "strips";
+    } catch {
+      return "strips";
+    }
+  }
+  function setView(v) {
+    view = v;
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // Remembered for this session only.
+    }
+  }
   let version = $state("");
   getVersion().then((v) => (version = v));
 
@@ -158,18 +176,15 @@
       {/if}
     </div>
 
-    <div class="inputs" data-tauri-drag-region>
-      {#each state?.inputs ?? [] as input, i}
-        <button
-          class="chip"
-          class:off={!input.connected}
-          title={`${input.deviceName ?? input.device} · Effekte`}
-          onclick={() => (fxOpen = i)}
-        >
-          <span class="dot"></span>{input.label}
-          {#if fxActive(input.fx)}<span class="fx">FX</span>{/if}
-        </button>
-      {/each}
+    <div class="spacer" data-tauri-drag-region></div>
+
+    <div class="views" role="group" aria-label="Ansicht">
+      <button class:active={view === "strips"} aria-pressed={view === "strips"} onclick={() => setView("strips")} title="Ein Streifen pro Eingang"
+        >Pult</button
+      >
+      <button class:active={view === "matrix"} aria-pressed={view === "matrix"} onclick={() => setView("matrix")} title="Alle Ein- und Ausgänge als Tabelle"
+        >Matrix</button
+      >
     </div>
 
     <nav class="nav">
@@ -230,18 +245,28 @@
 
   {#if state && state.outputs.length && state.inputs.length}
     <main>
-      {#each state.outputs as output, o}
-        <OutputColumn
-          {output}
-          index={o}
+      {#if view === "matrix"}
+        <MatrixView
           inputs={state.inputs}
+          outputs={state.outputs}
           gains={state.gains}
           lanes={state.lanes}
           onGain={setGain}
           onMute={setMuted}
+          onFx={(i) => (fxOpen = i)}
         />
-      {/each}
-      <ProgramColumn inputs={config?.inputs ?? []} onRouting={openApps} />
+      {:else}
+        <StripView
+          inputs={state.inputs}
+          outputs={state.outputs}
+          gains={state.gains}
+          lanes={state.lanes}
+          onGain={setGain}
+          onMute={setMuted}
+          onFx={(i) => (fxOpen = i)}
+          onPrograms={openApps}
+        />
+      {/if}
     </main>
   {:else if state}
     <div class="empty">
@@ -408,51 +433,9 @@
     stroke: currentColor;
     stroke-width: 1.1;
   }
-  .inputs {
-    display: flex;
-    align-self: stretch;
-    align-items: center;
-    gap: 6px;
+  .spacer {
     flex: 1;
-    overflow: hidden;
-    margin-left: 8px;
-  }
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 8px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-  .chip {
-    background: none;
-    cursor: pointer;
-  }
-  .chip:hover {
-    border-color: var(--accent);
-  }
-  .chip .fx {
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--accent);
-  }
-  .chip .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 1px;
-    background: var(--signal);
-  }
-  .chip.off {
-    color: var(--muted);
-  }
-  .chip.off .dot {
-    background: var(--border);
+    align-self: stretch;
   }
   button {
     padding: 6px 14px;
@@ -463,6 +446,28 @@
   .primary {
     background: var(--accent);
     border-color: var(--accent);
+    color: #fff;
+  }
+  .views {
+    display: flex;
+    flex: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+  .views button {
+    padding: 5px 12px;
+    border: none;
+    border-radius: 0;
+    background: var(--panel-2);
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .views button + button {
+    border-left: 1px solid var(--border);
+  }
+  .views button.active {
+    background: var(--accent);
     color: #fff;
   }
   main {
