@@ -56,6 +56,61 @@ enum Request {
         #[serde(default)]
         communications: bool,
     },
+    /// Sent once on connecting by plugins from 0.4.6 on.
+    Hello {
+        plugin: String,
+    },
+}
+
+/// Who is connected, for the plugin update in the settings.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Link {
+    pub clients: usize,
+    /// Version from the latest `hello`; `None` for plugins without one.
+    pub version: Option<String>,
+}
+
+/// Counts a client for as long as it lives.
+struct Connected<'a>(&'a AppState);
+
+impl<'a> Connected<'a> {
+    fn new(state: &'a AppState) -> Self {
+        let mut link = state.streamdeck.lock().unwrap_or_else(|e| e.into_inner());
+        link.clients += 1;
+        link.version = None;
+        drop(link);
+        Self(state)
+    }
+}
+
+impl Drop for Connected<'_> {
+    fn drop(&mut self) {
+        let mut link = self.0.streamdeck.lock().unwrap_or_else(|e| e.into_inner());
+        link.clients = link.clients.saturating_sub(1);
+        if link.clients == 0 {
+            link.version = None;
+        }
+    }
+}
+
+/// Whether `bundled` is a newer dotted version than `installed`
+/// ("0.3.0.0" equals "0.3.0"). Anything unparsable counts as not newer.
+pub fn is_newer(bundled: &str, installed: &str) -> bool {
+    fn parts(v: &str) -> Option<Vec<u64>> {
+        let mut parts = v
+            .trim()
+            .split('.')
+            .map(|p| p.parse().ok())
+            .collect::<Option<Vec<u64>>>()?;
+        while parts.last() == Some(&0) {
+            parts.pop();
+        }
+        Some(parts)
+    }
+    match (parts(bundled), parts(installed)) {
+        (Some(b), Some(i)) => b > i,
+        _ => false,
+    }
 }
 
 #[derive(Serialize, PartialEq)]
@@ -140,6 +195,7 @@ fn serve(app: &AppHandle, stream: TcpStream) -> Result<(), Box<dyn std::error::E
     let mut ws = tungstenite::accept_hdr(stream, check_origin)?;
     ws.get_ref().set_read_timeout(Some(POLL))?;
     let state: tauri::State<AppState> = app.state();
+    let _connected = Connected::new(&state);
 
     let mut sent_state = None;
     let mut sent_devices = None;
@@ -209,6 +265,14 @@ fn handle(state: &AppState, req: Request) -> Result<bool, String> {
         Request::SetDefaultDevice { id, communications } => {
             return crate::set_default(&id, communications).map(|_| true)
         }
+        Request::Hello { plugin } => {
+            state
+                .streamdeck
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .version = Some(plugin);
+            return Ok(false);
+        }
     };
     crate::send(state, cmd).map(|_| false)
 }
@@ -241,6 +305,28 @@ mod tests {
             }
         );
         assert!(serde_json::from_str::<Request>(r#"{"type":"format"}"#).is_err());
+    }
+
+    #[test]
+    fn compares_plugin_versions() {
+        assert!(is_newer("0.4.6", "0.4.5"));
+        assert!(is_newer("0.10.0", "0.9.9"));
+        assert!(is_newer("0.3.1.0", "0.3.0.0"));
+        assert!(!is_newer("0.3.0", "0.3.0.0"));
+        assert!(!is_newer("0.3.0", "0.3.1"));
+        assert!(!is_newer("", "0.3.0"));
+        assert!(!is_newer("0.3.0", "dev"));
+    }
+
+    #[test]
+    fn parses_hello() {
+        let hello = serde_json::from_str::<Request>(r#"{"type":"hello","plugin":"0.3.0.0"}"#);
+        assert_eq!(
+            hello.unwrap(),
+            Request::Hello {
+                plugin: "0.3.0.0".into()
+            }
+        );
     }
 
     #[test]

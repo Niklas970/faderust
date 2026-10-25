@@ -54,6 +54,8 @@ export class Faderust extends EventEmitter<{ change: []; error: [string] }> {
   #ws: WebSocket | null = null;
   #timer: NodeJS.Timeout | null = null;
   readonly url: string;
+  /** Plugin version, told to Faderust on connecting so the app can offer updates. */
+  version: string | null = null;
 
   constructor(url = `ws://127.0.0.1:${PORT}`) {
     super();
@@ -67,6 +69,9 @@ export class Faderust extends EventEmitter<{ change: []; error: [string] }> {
   connect(): void {
     const ws = new WebSocket(this.url);
     this.#ws = ws;
+    ws.on("open", () => {
+      if (this.version) ws.send(JSON.stringify({ type: "hello", plugin: this.version }));
+    });
     ws.on("message", (data) => this.#receive(data.toString()));
     ws.on("close", () => {
       if (this.#ws !== ws) return;

@@ -49,6 +49,9 @@
         "displayLanguageSelector": false
       }
     },
+    "resources": [
+      "resources/*"
+    ],
     "createUpdaterArtifacts": true
   },
   "plugins": {

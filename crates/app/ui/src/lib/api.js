@@ -158,6 +158,22 @@ export async function setAutostart(enabled) {
   return (await tauri()).invoke("set_autostart", { enabled });
 }
 
+/**
+ * The Stream Deck plugin: `{ bundled, connected, installed, update }`
+ * (versions as text or null, see get_streamdeck in main.rs).
+ */
+export async function getStreamDeck() {
+  if (!inTauri)
+    return { bundled: "0.3.1.0", connected: true, installed: "0.3.0.0", update: true };
+  return (await tauri()).invoke("get_streamdeck");
+}
+
+/** Opens the shipped plugin in the Stream Deck software, which asks to install it. */
+export async function installStreamDeck() {
+  if (!inTauri) return;
+  return (await tauri()).invoke("install_streamdeck");
+}
+
 export async function getConfig() {
   if (!inTauri) {
     mock.resize();

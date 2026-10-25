@@ -31,6 +31,8 @@ struct AppState {
     config: Arc<Mutex<Config>>,
     path: PathBuf,
     audio: Mutex<Sender<Command>>,
+    /// The connected Stream Deck plugin, see [`remote`].
+    streamdeck: Mutex<remote::Link>,
 }
 
 #[derive(Serialize)]
@@ -299,6 +301,78 @@ fn open_cable_page() -> Result<(), String> {
     }
 }
 
+/// Name of the plugin file in the app's resources (put there by the release).
+const PLUGIN_FILE: &str = "com.niklas970.faderust.streamDeckPlugin";
+const PLUGIN_VERSION_FILE: &str = "streamdeck-plugin.version";
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StreamDeckStatus {
+    /// Version of the plugin shipped with this app; `None` in development builds.
+    bundled: Option<String>,
+    /// A plugin is connected right now.
+    connected: bool,
+    /// Its version; `None` for plugins that predate the hello.
+    installed: Option<String>,
+    /// The shipped plugin is newer than the connected one (or it has no version).
+    update: bool,
+}
+
+fn resource(app: &AppHandle, name: &str) -> Option<PathBuf> {
+    app.path()
+        .resolve(
+            format!("resources/{name}"),
+            tauri::path::BaseDirectory::Resource,
+        )
+        .ok()
+        .filter(|p| p.is_file())
+}
+
+#[tauri::command]
+fn get_streamdeck(app: AppHandle, state: State<AppState>) -> StreamDeckStatus {
+    let bundled = resource(&app, PLUGIN_VERSION_FILE)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    let link = state
+        .streamdeck
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let update = match (&bundled, link.clients > 0, &link.version) {
+        (Some(b), true, Some(v)) => remote::is_newer(b, v),
+        (Some(_), true, None) => true,
+        _ => false,
+    };
+    StreamDeckStatus {
+        bundled,
+        connected: link.clients > 0,
+        installed: link.version,
+        update,
+    }
+}
+
+/// Hands the shipped plugin to the Stream Deck software, which asks the user
+/// to install it (a plugin of the same name is replaced).
+#[tauri::command]
+fn install_streamdeck(app: AppHandle) -> Result<(), String> {
+    let source =
+        resource(&app, PLUGIN_FILE).ok_or("Dieses Faderust enthält kein Stream-Deck-Plugin.")?;
+    let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let target = dir.join(PLUGIN_FILE);
+    std::fs::copy(&source, &target).map_err(|e| format!("Plugin nicht kopiert: {e}"))?;
+    if cfg!(windows) {
+        std::process::Command::new("explorer")
+            .arg(&target)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    } else {
+        Err(format!("Bitte {} öffnen", target.display()))
+    }
+}
+
 #[tauri::command]
 fn get_autostart(app: AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
@@ -506,6 +580,7 @@ fn main() {
                 config,
                 path,
                 audio: Mutex::new(audio),
+                streamdeck: Mutex::default(),
             });
             remote::spawn(app.handle().clone());
 
@@ -559,6 +634,8 @@ fn main() {
             get_windows_audio,
             set_default_device,
             set_device_volume,
+            get_streamdeck,
+            install_streamdeck,
             get_autostart,
             set_autostart,
             open_cable_page,

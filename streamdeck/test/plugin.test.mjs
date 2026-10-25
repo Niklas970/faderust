@@ -98,7 +98,6 @@ before(async () => {
     },
   );
   await sd.next((m) => m.event === "registerPlugin");
-  await fr.next(() => true, 100).catch(() => {});
   // Give the plugin a moment to receive the state.
   await new Promise((r) => setTimeout(r, 300));
 });
@@ -129,6 +128,10 @@ const event = (name, action, context, settings, extra = {}, controller = "Keypad
 
 test("connects to Faderust like a desktop program, without an Origin", () => {
   assert.equal(fr.headers.origin, undefined);
+});
+
+test("tells Faderust its version", async () => {
+  assert.deepEqual(await fr.next((m) => m.type === "hello"), { type: "hello", plugin: "0.3.0.0" });
 });
 
 test("dial shows the fader and turns it", async () => {

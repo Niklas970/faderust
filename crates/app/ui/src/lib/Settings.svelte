@@ -1,9 +1,11 @@
 <script>
-  import { untrack } from "svelte";
+  import { onMount, untrack } from "svelte";
   import {
     cableCounterpart,
     getAutostart,
     getDevices,
+    getStreamDeck,
+    installStreamDeck,
     getWindowsAudio,
     isCable,
     openCablePage,
@@ -18,6 +20,31 @@
   let draft = $state(untrack(() => ({ gains: [], ...$state.snapshot(config) })));
   let devices = $state({ inputs: [], outputs: [] });
   getDevices().then((d) => (devices = d));
+
+  // Stream Deck plugin: looked at while this dialog is open, since the plugin
+  // may connect only now.
+  let deck = $state(null);
+  let deckError = $state("");
+  const lookAtDeck = () => getStreamDeck().then((d) => (deck = d), () => {});
+  lookAtDeck();
+  onMount(() => {
+    const timer = setInterval(lookAtDeck, 3000);
+    return () => clearInterval(timer);
+  });
+  async function updateDeck() {
+    try {
+      await installStreamDeck();
+      deckError = "";
+    } catch (e) {
+      deckError = String(e);
+    }
+  }
+  const deckLabel = $derived.by(() => {
+    if (!deck?.bundled) return "";
+    if (!deck.connected) return "Stream Deck nicht verbunden. Plugin einrichten oder neu installieren:";
+    if (deck.update) return `Plugin ${deck.installed ?? "(alt)"} → ${deck.bundled} verfügbar`;
+    return `Plugin ${deck.installed} ist aktuell`;
+  });
 
   // Applies right away, independent of Save.
   let autostart = $state(null);
@@ -254,6 +281,15 @@
   </label>
   {#if autostartError}<p class="error">{autostartError}</p>{/if}
 
+  {#if deck?.bundled}
+    <h3>Stream Deck</h3>
+    <div class="deck">
+      <span>{deckLabel}</span>
+      <button class:primary={deck.update} onclick={updateDeck}>{deck.connected ? "Plugin aktualisieren" : "Plugin installieren"}</button>
+    </div>
+    {#if deckError}<p class="error">{deckError}</p>{/if}
+  {/if}
+
   <footer>
     <button onclick={onClose}>Abbrechen</button>
     <button class="primary" onclick={save}>Speichern</button>
@@ -368,6 +404,14 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+  .deck {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--muted);
   }
   .error {
     color: var(--danger);
