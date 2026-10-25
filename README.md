@@ -21,7 +21,7 @@
 
 - **Eine Spalte pro Ausgang, ein Fader pro Eingang.** Mikrofon, PC-Ton und Konsole lassen sich für Kopfhörer, Lautsprecher und Stream getrennt mischen.
 - **Geräte kommen und gehen.** Bluetooth-Kopfhörer aus- und wieder einschalten, USB-Gerät abziehen: Faderust verbindet neu, ohne die anderen Geräte zu unterbrechen.
-- **Gibt Geräte frei, wenn nichts läuft.** Nach 5 Sekunden Stille schließt Faderust einen Ausgang, damit Bluetooth-Kopfhörer per Multipoint zum Handy wechseln können. Kommt wieder Ton, öffnet er sich sofort von selbst.
+- **Gibt Bluetooth-Kopfhörer frei, wenn nichts läuft.** Nach 5 Sekunden Stille schließt Faderust einen Bluetooth-Ausgang, damit die Kopfhörer per Multipoint zum Handy wechseln können. Kommt wieder Ton, öffnet er sich sofort von selbst. Kabel- und USB-Geräte bleiben offen und haben so keine Verzögerung.
 - **Effekte pro Eingang:** Low-Cut, Drei-Band-EQ und Gate, zum Beispiel gegen Tastaturgeräusche am Mikro.
 - **Programme auf der Hauptseite:** Lautstärke, Stumm und Pegel für jedes Programm, das gerade Ton abspielt.
 - **Programme als Eingänge:** Faderust nimmt einzelne Programme direkt auf, jedes mit eigenem Fader und EQ. Alternativ geht es über [VB-Cable](https://vb-audio.com/Cable/).

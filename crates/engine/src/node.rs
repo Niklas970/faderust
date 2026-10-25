@@ -361,6 +361,26 @@ mod tests {
     }
 
     #[test]
+    fn muted_lane_stays_in_step() {
+        let mut s = sim(44_100, 48_000, 40);
+        run(&mut s, 44_100.0, 48_000.0, 2.0);
+        s.matrix.set_muted(0, 0, true);
+        // Long enough to overflow the ring buffer if nothing were read.
+        let out = run(&mut s, 44_100.0, 48_000.0, 30.0);
+        assert!(out.iter().all(|v| *v == 0.0));
+        assert_eq!(s.stats.dropped_frames.load(Relaxed), 0);
+        let fill = s.stats.fill_frames.load(Relaxed) as f64;
+        assert!((fill - 44_100.0 * 0.040).abs() < 500.0, "fill {fill}");
+
+        s.matrix.set_muted(0, 0, false);
+        let out = run(&mut s, 44_100.0, 48_000.0, 1.0);
+        for v in &out {
+            assert!((v - 0.5).abs() < 1e-2, "got {v}");
+        }
+        assert_eq!(s.stats.underruns.load(Relaxed), 0);
+    }
+
+    #[test]
     fn compensates_clock_drift() {
         // Input clock 400 ppm fast: without compensation the buffer would
         // grow by 19 frames per second until it overflows.

@@ -17,6 +17,8 @@ use crate::BUS_CHANNELS;
 const CHUNK_FRAMES: usize = 128;
 /// Time constant of the gain smoothing that avoids clicks on fader moves.
 const GAIN_SMOOTHING_S: f32 = 0.01;
+/// Below this applied gain a muted lane counts as silent.
+const SILENT_GAIN: f32 = 1e-5;
 
 /// Counters for one lane, readable from any thread.
 #[derive(Debug, Default)]
@@ -122,6 +124,11 @@ impl Lane {
     /// Mixes the next `out.len() / 2` frames into `out` (interleaved stereo),
     /// moving the applied gain smoothly towards `target_gain`.
     pub fn render_add(&mut self, out: &mut [f32], target_gain: f32) {
+        if target_gain == 0.0 && self.gain < SILENT_GAIN {
+            // Muted or off: skip the resampler, it is most of the cost.
+            self.gain = 0.0;
+            return self.idle();
+        }
         let frames = out.len() / BUS_CHANNELS;
         let mut done = 0;
         while done < frames {
@@ -143,6 +150,23 @@ impl Lane {
             self.out_pos += n;
             done += n;
         }
+    }
+
+    /// Drops input beyond the target fill, so the lane stays in step and
+    /// plays on without delay once it is unmuted.
+    fn idle(&mut self) {
+        let fill = self.consumer.slots() / BUS_CHANNELS;
+        self.stats.fill_frames.store(fill as u64, Relaxed);
+        if fill > self.target_frames {
+            if let Ok(chunk) = self
+                .consumer
+                .read_chunk((fill - self.target_frames) * BUS_CHANNELS)
+            {
+                chunk.commit_all();
+            }
+        }
+        // Whatever was resampled before is stale now.
+        self.out_pos = self.out_len;
     }
 
     fn silence(&mut self) {

@@ -35,6 +35,8 @@
   let error = $state("");
 
   async function refresh() {
+    // Nobody looks: save the work (the list is fetched again on return).
+    if (document.hidden && data) return;
     try {
       data = await getApps();
       error = "";
@@ -47,7 +49,8 @@
   let levels = $state(new Map());
   let polling = false;
   async function poll() {
-    if (polling) return;
+    // Meters only while someone sees them.
+    if (polling || !open || document.hidden) return;
     polling = true;
     try {
       levels = new Map((await getAppLevels()).map((l) => [l.pid, l.db]));
@@ -71,7 +74,10 @@
     refresh();
     const list = setInterval(refresh, 3000);
     const meters = setInterval(poll, 100);
+    const back = () => !document.hidden && refresh();
+    document.addEventListener("visibilitychange", back);
     return () => {
+      document.removeEventListener("visibilitychange", back);
       clearInterval(list);
       clearInterval(meters);
     };

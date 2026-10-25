@@ -13,13 +13,15 @@ use faderust_engine::{
     Direction, Engine, EngineConfig, EngineEvent, InputConfig, LostReason, OutputConfig, SlotState,
 };
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::config::{Config, Fx};
 use crate::log;
 
 const EMIT_EVERY: Duration = Duration::from_millis(50);
 const MAINTAIN_EVERY: Duration = Duration::from_secs(1);
+/// How often to check whether anyone sees the window.
+const VISIBLE_EVERY: Duration = Duration::from_millis(250);
 /// Every output closes after this much silence, so other devices can take
 /// over Bluetooth headphones (multipoint), and reopens with signal.
 const RELEASE_AFTER: Duration = Duration::from_secs(5);
@@ -238,6 +240,8 @@ fn run(
         .map(|exe| (Instant::now() + Duration::from_secs(3), exe.clone()));
     let mut last_maintain: Option<Instant> = None;
     let mut last_emit = Instant::now();
+    let mut last_visible_check = Instant::now();
+    let mut visible = true;
     let mut dirty_since: Option<Instant> = None;
     let mut notices = Notices::default();
     // The first connections after a (re)build are expected, not news.
@@ -353,7 +357,13 @@ fn run(
             }
         }
 
-        if last_emit.elapsed() >= EMIT_EVERY {
+        if last_visible_check.elapsed() >= VISIBLE_EVERY {
+            visible = window_visible(&app);
+            last_visible_check = Instant::now();
+        }
+        // Meters for a hidden window are wasted work, in Faderust and in
+        // the web view drawing them.
+        if visible && last_emit.elapsed() >= EMIT_EVERY {
             let state = snapshot(
                 &config.lock().unwrap_or_else(|e| e.into_inner()),
                 engine.as_ref(),
@@ -369,6 +379,12 @@ fn run(
             dirty_since = None;
         }
     }
+}
+
+/// Whether the main window is on screen (not in the tray, not minimised).
+fn window_visible(app: &AppHandle) -> bool {
+    app.get_webview_window("main")
+        .is_none_or(|w| w.is_visible().unwrap_or(true) && !w.is_minimized().unwrap_or(false))
 }
 
 /// One dial click or key press on a fader, within the UI's range: below

@@ -38,6 +38,10 @@ pub struct OutputConfig {
 const SILENCE: f32 = 0.001;
 /// An input heard this recently still counts as playing.
 const SIGNAL_HOLD: Duration = Duration::from_millis(1500);
+/// How often [`Engine::maintain`] lists the devices while every slot is
+/// connected. Failing streams are noticed at once without a listing; this
+/// only catches devices that vanish silently.
+const RECHECK_EVERY: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Default)]
 pub struct EngineConfig {
@@ -189,6 +193,8 @@ pub struct Engine<B: AudioBackend> {
     idle: Vec<Idle>,
     /// When each input last played above [`SILENCE`].
     heard: Vec<Option<Instant>>,
+    /// When `maintain` last listed the devices.
+    listed: Option<Instant>,
 }
 
 /// Silence tracking of one output, see [`OutputConfig::release_after`].
@@ -198,6 +204,15 @@ struct Idle {
     released: bool,
     /// The device to reopen, kept from before the release.
     device: Option<DeviceInfo>,
+    /// Whether the connected device is worth releasing at all, see
+    /// [`AudioBackend::releasable`].
+    releasable: bool,
+}
+
+/// Whether a slot has no working stream, so `maintain` must look for its
+/// device.
+fn needs_device<S, C>(live: &Option<Live<S, C>>) -> bool {
+    live.as_ref().is_none_or(|l| l.failed.load(Relaxed))
 }
 
 fn slot(pattern: &str) -> SlotState {
@@ -241,6 +256,7 @@ impl<B: AudioBackend> Engine<B> {
             fx: (0..n_in).map(|_| Arc::default()).collect(),
             idle: (0..n_out).map(|_| Idle::default()).collect(),
             heard: vec![None; n_in],
+            listed: None,
             config,
         })
     }
@@ -288,9 +304,25 @@ impl<B: AudioBackend> Engine<B> {
             live.handle.collect_garbage();
         }
 
+        self.release_silent(now, &mut events);
+
+        // Listing devices is the expensive part: only when a slot waits for
+        // its device, and now and then to catch silently vanished ones.
+        let recheck = self
+            .listed
+            .is_none_or(|t| now.duration_since(t) >= RECHECK_EVERY);
+        let want_out = recheck
+            || (0..self.outputs.len())
+                .any(|o| !self.idle[o].released && needs_device(&self.live_out[o]));
+        let want_in = recheck || self.live_in.iter().any(needs_device);
+        if recheck {
+            self.listed = Some(now);
+        }
         // A failed listing must not tear down devices that still work.
-        let in_list = self.backend.input_devices().ok();
-        let out_list = self.backend.output_devices().ok();
+        let in_list = want_in.then(|| self.backend.input_devices().ok()).flatten();
+        let out_list = want_out
+            .then(|| self.backend.output_devices().ok())
+            .flatten();
 
         for o in 0..self.outputs.len() {
             if let Some(reason) = self.lost(Direction::Output, o, out_list.as_deref()) {
@@ -312,8 +344,6 @@ impl<B: AudioBackend> Engine<B> {
                 });
             }
         }
-
-        self.release_silent(now, &mut events);
 
         // Outputs first, so a new input gets lanes to every output at once.
         if let Some(list) = &out_list {
@@ -385,7 +415,7 @@ impl<B: AudioBackend> Engine<B> {
             if self.has_signal(o, now) {
                 self.idle[o].quiet_since = None;
                 self.idle[o].released = false;
-            } else if self.live_out[o].is_some() {
+            } else if self.live_out[o].is_some() && self.idle[o].releasable {
                 let since = *self.idle[o].quiet_since.get_or_insert(now);
                 if now.duration_since(since) >= after {
                     let device = self.outputs[o].device.as_ref().map(|(d, _)| d.clone());
@@ -393,6 +423,7 @@ impl<B: AudioBackend> Engine<B> {
                         quiet_since: None,
                         released: true,
                         device,
+                        releasable: true,
                     };
                     self.disconnect_output(o);
                     events.push(EngineEvent::Released { slot: o });
@@ -516,6 +547,7 @@ impl<B: AudioBackend> Engine<B> {
             handle,
             failed: flag,
         });
+        self.idle[o].releasable = self.backend.releasable(&device.id);
         self.outputs[o].device = Some((device.clone(), format));
         EngineEvent::Connected {
             dir: Direction::Output,
@@ -654,6 +686,8 @@ mod tests {
         outputs: Vec<(DeviceInfo, StreamFormat)>,
         in_streams: BTreeMap<String, (InputCallback, ErrorCallback, StreamFormat)>,
         out_streams: BTreeMap<String, (OutputCallback, ErrorCallback, StreamFormat)>,
+        wired: Vec<String>,
+        listings: u32,
     }
 
     /// Backend whose devices a test plugs in and out and whose callbacks it
@@ -694,6 +728,21 @@ mod tests {
 
         fn plug_output(&self, id: &str, rate: u32, channels: u16) {
             self.0.borrow_mut().outputs.push(dev(id, rate, channels));
+        }
+
+        /// Marks an output as wired: not worth releasing.
+        fn wire(&self, id: &str) {
+            self.0.borrow_mut().wired.push(format!("{{{id}}}"));
+        }
+
+        /// Removes the device without an error from its stream.
+        fn vanish(&self, id: &str) {
+            let id = format!("{{{id}}}");
+            self.0.borrow_mut().outputs.retain(|(d, _)| d.id != id);
+        }
+
+        fn listings(&self) -> u32 {
+            self.0.borrow().listings
         }
 
         /// Removes the device and makes its stream report an error.
@@ -760,6 +809,7 @@ mod tests {
                 .collect())
         }
         fn output_devices(&self) -> Result<Vec<DeviceInfo>, BackendError> {
+            self.0.borrow_mut().listings += 1;
             Ok(self
                 .0
                 .borrow()
@@ -807,6 +857,9 @@ mod tests {
                 id: id.to_string(),
                 state: Rc::clone(&self.0),
             })
+        }
+        fn releasable(&self, id: &str) -> bool {
+            !self.0.borrow().wired.iter().any(|w| w == id)
         }
     }
 
@@ -974,6 +1027,57 @@ mod tests {
         );
         b.pump(100, level);
         assert_eq!(connected(&engine.maintain_at(at(40))), 1);
+    }
+
+    #[test]
+    fn wired_output_stays_open_when_silent() {
+        let b = FakeBackend::default();
+        b.plug_input("mic", 48_000, 1);
+        b.plug_output("speakers", 48_000, 2);
+        b.wire("speakers");
+        let mut cfg = config(&["mic"], &[("speakers", 20)]);
+        cfg.outputs[0].release_after = Some(Duration::from_secs(5));
+        let mut engine = Engine::new(b.clone(), cfg).unwrap();
+        engine.matrix.set_muted(0, 0, true);
+        let t0 = Instant::now();
+        assert_eq!(connected(&engine.maintain_at(t0)), 2);
+        b.pump(100, level);
+        assert!(engine.maintain_at(t0 + Duration::from_secs(60)).is_empty());
+        assert!(!engine.is_released(0));
+        assert!(engine.outputs()[0].device.is_some());
+    }
+
+    #[test]
+    fn lists_devices_only_when_needed() {
+        let b = FakeBackend::default();
+        b.plug_input("mic", 48_000, 1);
+        b.plug_output("usb", 48_000, 2);
+        let mut engine =
+            Engine::new(b.clone(), config(&["mic"], &["usb"].map(|o| (o, 20)))).unwrap();
+        let t0 = Instant::now();
+        let at = |s: u64| t0 + Duration::from_secs(s);
+        assert_eq!(connected(&engine.maintain_at(at(0))), 2);
+        assert_eq!(b.listings(), 1);
+        for s in 1..10 {
+            assert!(engine.maintain_at(at(s)).is_empty());
+        }
+        assert_eq!(b.listings(), 1);
+
+        // A device that vanishes without a stream error turns up on the
+        // next recheck; from then on maintain looks for it every time.
+        b.vanish("usb");
+        assert_eq!(
+            engine.maintain_at(at(10)),
+            vec![EngineEvent::Lost {
+                dir: Direction::Output,
+                slot: 0,
+                reason: LostReason::Removed
+            }]
+        );
+        engine.maintain_at(at(11));
+        assert_eq!(b.listings(), 3);
+        b.plug_output("usb", 48_000, 2);
+        assert_eq!(connected(&engine.maintain_at(at(12))), 1);
     }
 
     #[test]

@@ -68,4 +68,11 @@ pub trait AudioBackend {
         data: OutputCallback,
         error: ErrorCallback,
     ) -> Result<Self::Stream, BackendError>;
+
+    /// Whether closing the output while it is silent frees it for something
+    /// else, e.g. Bluetooth headphones switching to a phone. Reopening costs
+    /// time, so wired devices are better kept open.
+    fn releasable(&self, _id: &str) -> bool {
+        true
+    }
 }
