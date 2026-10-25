@@ -32,6 +32,19 @@
 - **Kompakt und im Vordergrund.** Zwei Knöpfe in der Titelleiste: schmale Ansicht ohne Beschriftungen und „Immer im Vordergrund“, z. B. neben einem Spiel. Beides bleibt gespeichert.
 - **Eigene Farben:** Akzent- und Signalfarbe frei wählbar, dunkel (OLED-Schwarz) oder hell.
 
+## Ansichten
+
+<table>
+  <tr>
+    <td width="68%"><img src="assets/matrix.png" alt="Matrix: jeder Eingang auf jedem Ausgang einzeln geregelt"></td>
+    <td><img src="assets/design.png" alt="Design-Dialog mit Ansicht, Farben und Darstellung"></td>
+  </tr>
+  <tr>
+    <td><b>Matrix:</b> jeder Eingang auf jedem Ausgang einzeln, z. B. das Mikro leiser auf dem Kopfhörer als im Stream.</td>
+    <td><b>Design:</b> Pult oder Matrix, Seite der Ausgänge, Farben, dunkel oder hell.</td>
+  </tr>
+</table>
+
 ## Installation
 
 1. Unter [Releases](https://github.com/Niklas970/faderust/releases/latest) die Datei `Faderust_*_x64-setup.exe` laden und starten. Das Setup braucht keine Admin-Rechte und spricht Deutsch oder Englisch.

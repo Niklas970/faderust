@@ -1,7 +1,8 @@
 <script>
   import Fader from "./Fader.svelte";
   import Meter from "./Meter.svelte";
-  import { fxActive } from "./api.js";
+  import { tick } from "svelte";
+  import { fitWindowWidth, fxActive } from "./api.js";
   import { t } from "./i18n.svelte.js";
   import { stripChanges, stripValue, OFF } from "./scale.js";
 
@@ -33,6 +34,21 @@
 
   const row = (i) => outputs.map((_, o) => gains[i]?.[o] ?? { db: 0, muted: true });
 
+  // The window follows the strips: wider for each new one, narrower when
+  // one goes. Measured after the DOM has the new strips.
+  let stripsEl = $state();
+  $effect(() => {
+    const key = `${outputs.length}/${devices.length}/${programs.length}/${side}/${compact}`;
+    if (!stripsEl || !key) return;
+    tick().then(() => {
+      if (!stripsEl) return;
+      const groups = [...stripsEl.children];
+      const gap = parseFloat(getComputedStyle(stripsEl).columnGap) || 0;
+      const content = groups.reduce((w, g) => w + g.offsetWidth, 0) + gap * Math.max(0, groups.length - 1);
+      fitWindowWidth(content + window.innerWidth - stripsEl.clientWidth);
+    });
+  });
+
   function move(i, db) {
     for (const [o, v] of stripChanges(row(i), db)) onGain(i, o, v);
   }
@@ -49,9 +65,9 @@
   }
 </script>
 
-{#snippet strip(input, i)}
+{#snippet strip(input, i, narrow = false)}
   {@const r = row(i)}
-  <section class="strip panel">
+  <section class="strip panel" class:narrow>
     <div class="buses">
       {#each outputs as output, o}
         {@const on = !(gains[i]?.[o]?.muted ?? true)}
@@ -73,6 +89,7 @@
         muted={input.muted ?? false}
         levelDb={input.levelDb}
         connected={input.connected}
+        {narrow}
         onChange={(db) => move(i, db)}
         onMute={(v) => onInputMute(i, v)}
       />
@@ -82,7 +99,7 @@
 {/snippet}
 
 <div class="desk" class:compact>
-  <div class="strips">
+  <div class="strips" bind:this={stripsEl}>
     <div class="group outs" class:left={side === "left"}>
       <h2>{t("settings.outputs")}</h2>
       <div class="row">
@@ -123,7 +140,7 @@
       <h2>{t("programs.title")} <button class="add" onclick={onPrograms} title={t("programs.addHint")}>{t("programs.add")}</button></h2>
       <div class="row">
         {#each programs as { input, i } (i)}
-          {@render strip(input, i)}
+          {@render strip(input, i, true)}
         {:else}
           {#if !allPrograms.length}
             <p class="hint">{t("strip.programsHint")}</p>
@@ -204,6 +221,14 @@
     align-items: center;
     gap: 10px;
     padding: 10px 12px;
+  }
+  .strip.narrow {
+    padding: 10px 8px;
+  }
+  .narrow .bus {
+    min-width: 0;
+    padding: 3px 4px;
+    font-size: 11px;
   }
   .grow {
     flex: 1;
