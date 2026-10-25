@@ -7,6 +7,7 @@ mod audio;
 mod config;
 mod log;
 mod remote;
+mod selftest;
 
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
@@ -33,6 +34,8 @@ struct AppState {
     audio: Mutex<Sender<Command>>,
     /// The connected Stream Deck plugin, see [`remote`].
     streamdeck: Mutex<remote::Link>,
+    /// The latest snapshot the audio thread sent to the window, for the self-test.
+    last_state: Mutex<Option<audio::UiState>>,
     /// Secret the Stream Deck plugin proves with, see [`remote`]; empty
     /// when the token file could not be written (remote control stays off).
     token: String,
@@ -416,6 +419,84 @@ fn set_language(code: String) {
     faderust_engine::lang::set(&code);
 }
 
+/// Looks at devices, buffers, remote control and plugin, see [`selftest`].
+// Async: lists devices on a worker thread, like `get_devices`.
+#[tauri::command]
+async fn run_selftest(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<selftest::Check>, String> {
+    use selftest::{ConfigFile, Facts, LaneFacts, Slot};
+
+    let backend = CpalBackend::new();
+    let names = |list: Result<Vec<faderust_engine::backend::DeviceInfo>, _>| {
+        list.ok()
+            .map(|l: Vec<faderust_engine::backend::DeviceInfo>| l)
+    };
+    let (inputs_list, outputs_list) = (
+        names(backend.input_devices()),
+        names(backend.output_devices()),
+    );
+    let present = |list: &Option<Vec<faderust_engine::backend::DeviceInfo>>, device: &str| {
+        list.as_ref()
+            .map(|l| faderust_engine::engine::find_device(l, device).is_some())
+    };
+
+    let config = match Config::load(&state.path) {
+        Ok(Some(_)) => ConfigFile::Fine,
+        Ok(None) => ConfigFile::Missing,
+        Err(e) => ConfigFile::Broken(e.to_string()),
+    };
+    let snapshot = state
+        .last_state
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let slots = |devices: Option<&Vec<audio::UiDevice>>, list: &Option<Vec<_>>| -> Vec<Slot> {
+        devices
+            .into_iter()
+            .flatten()
+            .map(|d| Slot {
+                label: d.label.clone(),
+                device: d.device.clone(),
+                connected: d.connected,
+                released: d.released,
+                present: present(list, &d.device),
+                buffer_ms: d.buffer_ms,
+            })
+            .collect()
+    };
+    let facts = Facts {
+        config,
+        inputs: slots(snapshot.as_ref().map(|s| &s.inputs), &inputs_list),
+        outputs: slots(snapshot.as_ref().map(|s| &s.outputs), &outputs_list),
+        lanes: snapshot
+            .iter()
+            .flat_map(|s| s.lanes.iter())
+            .map(|row| {
+                row.iter()
+                    .map(|l| LaneFacts {
+                        underruns: l.underruns,
+                        dropped_frames: l.dropped_frames,
+                        looped: l.looped,
+                    })
+                    .collect()
+            })
+            .collect(),
+        token: !state.token.is_empty(),
+        link: state
+            .streamdeck
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone(),
+        bundled_plugin: resource(&app, PLUGIN_VERSION_FILE)
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty()),
+    };
+    Ok(selftest::evaluate(&facts))
+}
+
 #[tauri::command]
 fn get_autostart(app: AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
@@ -653,6 +734,7 @@ fn main() {
                 path,
                 audio: Mutex::new(audio),
                 streamdeck: Mutex::default(),
+                last_state: Mutex::default(),
                 token,
             });
             remote::spawn(app.handle().clone());
@@ -710,6 +792,7 @@ fn main() {
             get_streamdeck,
             install_streamdeck,
             set_language,
+            run_selftest,
             get_autostart,
             set_autostart,
             open_cable_page,
@@ -769,6 +852,7 @@ mod tests {
             path: path.clone(),
             audio: Mutex::new(tx),
             streamdeck: Mutex::default(),
+            last_state: Mutex::default(),
             token: "secret".into(),
         };
         (state, rx, path)

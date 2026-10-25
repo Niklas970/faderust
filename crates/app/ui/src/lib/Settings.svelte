@@ -1,6 +1,7 @@
 <script>
   import { onMount, untrack } from "svelte";
   import { t } from "./i18n.svelte.js";
+  import Selftest from "./Selftest.svelte";
   import {
     cableCounterpart,
     getAutostart,
@@ -47,6 +48,8 @@
     if (deck.update) return t("deck.available", { from: deck.installed ?? t("deck.old"), to: deck.bundled });
     return t("deck.current", { version: deck.installed });
   });
+
+  let selftestOpen = $state(false);
 
   // Applies right away, independent of Save.
   let autostart = $state(null);
@@ -292,11 +295,21 @@
     {#if deckError}<p class="error">{deckError}</p>{/if}
   {/if}
 
+  <h3>{t("selftest.title")}</h3>
+  <div class="deck">
+    <span>{t("selftest.hint")}</span>
+    <button onclick={() => (selftestOpen = true)}>{t("selftest.start")}</button>
+  </div>
+
   <footer>
     <button onclick={onClose}>{t("common.cancel")}</button>
     <button class="primary" onclick={save}>{t("common.save")}</button>
   </footer>
 </div>
+
+{#if selftestOpen}
+  <Selftest onClose={() => (selftestOpen = false)} />
+{/if}
 
 <style>
   .backdrop {

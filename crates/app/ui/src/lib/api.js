@@ -153,6 +153,22 @@ export async function setBackendLanguage(code) {
   return (await tauri()).invoke("set_language", { code });
 }
 
+/**
+ * The self-test: `[{ status, title, detail }]`, status "ok", "warn", "fail"
+ * or "info".
+ */
+export async function runSelftest() {
+  if (!inTauri)
+    return [
+      { status: "ok", title: "Konfiguration", detail: "Datei lesbar" },
+      { status: "ok", title: "Eingang „Mikro“", detail: "Verbunden" },
+      { status: "warn", title: "Puffer „Kopfhörer“", detail: "60 ms: 3 Aussetzer. Den Puffer erhöhen." },
+      { status: "fail", title: "Ausgang „Box“", detail: "Gerät ist da, lässt sich aber nicht öffnen." },
+      { status: "info", title: "Stream Deck", detail: "Kein Plugin verbunden" },
+    ];
+  return (await tauri()).invoke("run_selftest");
+}
+
 /** Whether Faderust starts with Windows (into the tray). */
 export async function getAutostart() {
   if (!inTauri) return mock.autostart;

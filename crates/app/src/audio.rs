@@ -54,26 +54,26 @@ struct Notice {
 /// Snapshot sent to the UI as the `state` event.
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct UiState {
-    inputs: Vec<UiDevice>,
-    outputs: Vec<UiDevice>,
+pub(crate) struct UiState {
+    pub(crate) inputs: Vec<UiDevice>,
+    pub(crate) outputs: Vec<UiDevice>,
     gains: Vec<Vec<crate::config::Gain>>,
-    lanes: Vec<Vec<UiLane>>,
+    pub(crate) lanes: Vec<Vec<UiLane>>,
 }
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct UiDevice {
-    label: String,
-    device: String,
-    connected: bool,
+pub(crate) struct UiDevice {
+    pub(crate) label: String,
+    pub(crate) device: String,
+    pub(crate) connected: bool,
     device_name: Option<String>,
     level_db: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
-    buffer_ms: Option<u32>,
+    pub(crate) buffer_ms: Option<u32>,
     /// Outputs only: closed while nothing plays for them.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
-    released: bool,
+    pub(crate) released: bool,
     /// Inputs only.
     #[serde(skip_serializing_if = "Option::is_none")]
     fx: Option<Fx>,
@@ -87,12 +87,14 @@ struct UiDevice {
 
 #[derive(Serialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
-struct UiLane {
+pub(crate) struct UiLane {
     fill_ms: f32,
     correction_ppm: i32,
-    underruns: u64,
+    pub(crate) underruns: u64,
+    /// Input frames lost because the output did not take them in time.
+    pub(crate) dropped_frames: u64,
     /// Silenced because the output feeds back into the input.
-    looped: bool,
+    pub(crate) looped: bool,
 }
 
 /// Starts the audio thread. `config` is shared with the UI commands; the
@@ -458,6 +460,9 @@ fn run(
                 &config.lock().unwrap_or_else(|e| e.into_inner()),
                 engine.as_ref(),
             );
+            if let Some(shared) = app.try_state::<crate::AppState>() {
+                *shared.last_state.lock().unwrap_or_else(|e| e.into_inner()) = Some(state.clone());
+            }
             let _ = app.emit("state", state);
             last_emit = Instant::now();
         }
@@ -585,6 +590,7 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
                         fill_ms: s.fill_frames.load(Relaxed) as f32 * 1000.0 / rate as f32,
                         correction_ppm: s.correction_ppm.load(Relaxed),
                         underruns: s.underruns.load(Relaxed),
+                        dropped_frames: s.dropped_frames.load(Relaxed),
                         looped: e.is_loop(i, o),
                     }
                 })

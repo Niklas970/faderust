@@ -26,6 +26,7 @@
 - **Multipoint-freundlich.** Bluetooth-Ausgänge gibt Faderust bei Stille frei (nach 30 s, pro Ausgang einstellbar), damit die Kopfhörer zum Handy wechseln können. Kommt wieder Ton, öffnen sie sich von selbst.
 - **Effekte pro Eingang:** Rauschunterdrückung ([RNNoise](https://jmvalin.ca/demo/rnnoise/), gegen Tastatur und Lüfter), Low-Cut, Drei-Band-EQ und Gate. Die Rauschunterdrückung läuft bei Geräten mit 48 kHz und verzögert den Ton um 10 ms.
 - **Deutsch und Englisch.** Die Sprache folgt Windows und lässt sich unter „Design“ umstellen.
+- **Selbsttest.** Unter „Geräte“ prüft Faderust Geräte, Puffer, Rückkopplung, Fernsteuerung und Stream-Deck-Plugin und zeigt, was in Ordnung ist und was nicht. Der Bericht lässt sich für ein Issue kopieren.
 - **Windows-Sound aus einer Hand:** Standardgeräte für Wiedergabe, Aufnahme und Anrufe sowie die Lautstärke pro Gerät.
 - **Presets, Autostart im Tray, Updates in der App** (mit Signaturprüfung) und ein **Stream-Deck-Plugin**.
 - **Kompakt und im Vordergrund.** Zwei Knöpfe in der Titelleiste: schmale Ansicht ohne Beschriftungen und „Immer im Vordergrund“, z. B. neben einem Spiel. Beides bleibt gespeichert.
