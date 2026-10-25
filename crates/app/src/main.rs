@@ -438,6 +438,7 @@ fn initial_config() -> Config {
                 device: d.name,
                 buffer_ms: 40,
                 master: Default::default(),
+                release_secs: 30,
             })
             .into_iter()
             .collect(),

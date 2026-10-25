@@ -82,6 +82,10 @@ pub struct OutputEntry {
     /// Master fader of the whole output.
     #[serde(default)]
     pub master: Gain,
+    /// Seconds of silence before a Bluetooth output is released for
+    /// multipoint; 0 keeps it open.
+    #[serde(default = "default_release_secs")]
+    pub release_secs: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -131,6 +135,10 @@ fn default_buffer_ms() -> u32 {
     60
 }
 
+fn default_release_secs() -> u32 {
+    30
+}
+
 /// Buffers below this underrun constantly; above it latency gets silly.
 pub const BUFFER_RANGE: std::ops::RangeInclusive<u32> = 10..=500;
 
@@ -149,6 +157,7 @@ impl Config {
             o.buffer_ms = o
                 .buffer_ms
                 .clamp(*BUFFER_RANGE.start(), *BUFFER_RANGE.end());
+            o.release_secs = o.release_secs.min(3600);
         }
         self
     }
@@ -217,12 +226,14 @@ mod tests {
                     device: "USB Sound".into(),
                     buffer_ms: 30,
                     master: Default::default(),
+                    release_secs: 30,
                 },
                 OutputEntry {
                     label: "Kopfhörer".into(),
                     device: "Buds".into(),
                     buffer_ms: 80,
                     master: Default::default(),
+                    release_secs: 30,
                 },
             ],
             gains: vec![],
@@ -297,6 +308,8 @@ mod tests {
     fn fills_defaults() {
         let c: Config = toml::from_str("[[outputs]]\nlabel = \"A\"\ndevice = \"x\"\n").unwrap();
         assert_eq!(c.outputs[0].buffer_ms, 60);
+        assert_eq!(c.outputs[0].release_secs, 30);
+        assert_eq!(c.outputs[0].master, Gain::default());
         assert!(c.inputs.is_empty());
         let c: Config =
             toml::from_str("[[inputs]]\nlabel = \"A\"\ndevice = \"x\"\n[inputs.fx]\ngate = true\n")

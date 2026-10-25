@@ -282,6 +282,7 @@ mod tests {
                 device: "PS5".into(),
                 buffer_ms: 60,
                 master: Default::default(),
+                release_secs: 30,
             }],
             gains: vec![],
             presets: vec![],

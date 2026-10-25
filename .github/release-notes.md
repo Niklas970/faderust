@@ -1,5 +1,9 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.4.5:
+
+- Wie lange Faderust bei Stille wartet, bevor ein Bluetooth-Ausgang freigegeben wird, stellst du jetzt unter „Geräte“ pro Ausgang ein: nie, 5 s, 30 s oder 2 min. Standard sind 30 s, so laufen kurze Pausen ohne Verzögerung weiter. Nach einer Freigabe braucht Bluetooth beim Wiederstart etwa eine Sekunde, das lässt sich nicht beschleunigen
+
 Neu in 0.4.4:
 
 - Neues **Pult** im Stil von Voicemeeter: ein Streifen pro Gerät und pro Programm (z. B. Discord, Brave), jeweils mit einem Fader und Knöpfen A1, A2, A3 für die Ausgänge. Der Fader verschiebt alle eingeschalteten Ausgänge gemeinsam, ihr Abstand bleibt erhalten

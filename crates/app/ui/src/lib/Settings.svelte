@@ -60,7 +60,7 @@
     for (const m of matrices()) if (m[i] && m[i + by]) swap(m, i, i + by);
   }
   function addOutput() {
-    draft.outputs.push({ label: `Ausgang ${draft.outputs.length + 1}`, device: devices.outputs[0].name, bufferMs: 60 });
+    draft.outputs.push({ label: `Ausgang ${draft.outputs.length + 1}`, device: devices.outputs[0].name, bufferMs: 60, releaseSecs: 30 });
     for (const m of matrices()) for (const row of m) row.push({ db: 0, muted: false });
   }
   function removeOutput(o) {
@@ -95,7 +95,7 @@
   function addProgramMic() {
     // Read before the push: afterwards the cable is taken and `micCable` moves on.
     const cable = micCable.name;
-    draft.outputs.push({ label: "Programm-Mikro", device: cable, bufferMs: 30 });
+    draft.outputs.push({ label: "Programm-Mikro", device: cable, bufferMs: 30, releaseSecs: 30 });
     // The first input (usually the microphone) at 0 dB, everything else muted.
     for (const m of matrices()) m.forEach((row, i) => row.push({ db: 0, muted: i !== 0 }));
     micDevice = cableCounterpart(cable);
@@ -120,6 +120,14 @@
       current
     );
   }
+
+  // Release of Bluetooth outputs while silent (wired ones stay open anyway).
+  const RELEASE = [
+    { secs: 0, name: "Nie frei" },
+    { secs: 5, name: "Frei nach 5 s" },
+    { secs: 30, name: "Frei nach 30 s" },
+    { secs: 120, name: "Frei nach 2 min" },
+  ];
 </script>
 
 <div class="backdrop" role="presentation" onclick={onClose}></div>
@@ -175,6 +183,15 @@
         <input type="number" min="10" max="500" step="10" bind:value={output.bufferMs} />
         ms
       </label>
+      <select
+        class="release"
+        value={output.releaseSecs ?? 30}
+        onchange={(e) => (output.releaseSecs = Number(e.currentTarget.value))}
+        aria-label="Bluetooth bei Stille freigeben"
+        title="Bluetooth-Kopfhörer bei Stille freigeben, damit sie zum Handy wechseln können (Multipoint). Beim Wiederstart braucht Bluetooth etwa 1 s."
+      >
+        {#each RELEASE as r}<option value={r.secs}>{r.name}</option>{/each}
+      </select>
       <span class="order">
         <button class="icon" title="Nach links" aria-label="Nach links" disabled={o === 0} onclick={() => moveOutput(o, -1)}
           >←</button
@@ -293,6 +310,9 @@
   }
   select {
     flex: 1;
+  }
+  select.release {
+    flex: none;
   }
   .buffer {
     display: flex;

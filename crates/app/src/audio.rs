@@ -22,9 +22,6 @@ const EMIT_EVERY: Duration = Duration::from_millis(50);
 const MAINTAIN_EVERY: Duration = Duration::from_secs(1);
 /// How often to check whether anyone sees the window.
 const VISIBLE_EVERY: Duration = Duration::from_millis(250);
-/// Every output closes after this much silence, so other devices can take
-/// over Bluetooth headphones (multipoint), and reopens with signal.
-const RELEASE_AFTER: Duration = Duration::from_secs(5);
 /// Fader moves are saved at most this often.
 const SAVE_EVERY: Duration = Duration::from_secs(2);
 
@@ -143,7 +140,8 @@ fn build(config: &Config, skip: Option<&str>) -> Option<Engine<CpalBackend>> {
             .map(|o| OutputConfig {
                 device: o.device.clone(),
                 buffer_ms: o.buffer_ms,
-                release_after: Some(RELEASE_AFTER),
+                release_after: (o.release_secs > 0)
+                    .then(|| Duration::from_secs(o.release_secs.into())),
             })
             .collect(),
     };
