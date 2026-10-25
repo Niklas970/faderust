@@ -13,6 +13,9 @@ pub struct MixMatrix {
     muted: Box<[AtomicBool]>,
     /// Pairs the engine keeps silent whatever the fader says (feedback loops).
     blocked: Box<[AtomicBool]>,
+    /// Master gain per output (linear `f32` bits), applied on top of the pairs.
+    master: Box<[AtomicU32]>,
+    master_muted: Box<[AtomicBool]>,
 }
 
 impl MixMatrix {
@@ -25,6 +28,10 @@ impl MixMatrix {
             gains: (0..n).map(|_| AtomicU32::new(1.0f32.to_bits())).collect(),
             muted: (0..n).map(|_| AtomicBool::new(false)).collect(),
             blocked: (0..n).map(|_| AtomicBool::new(false)).collect(),
+            master: (0..outputs)
+                .map(|_| AtomicU32::new(1.0f32.to_bits()))
+                .collect(),
+            master_muted: (0..outputs).map(|_| AtomicBool::new(false)).collect(),
         }
     }
 
@@ -46,22 +53,34 @@ impl MixMatrix {
 
     /// Sets a linear gain. Negative and non-finite values are treated as 0.
     pub fn set_gain(&self, input: usize, output: usize, linear: f32) {
-        let g = if linear.is_finite() {
-            linear.max(0.0)
-        } else {
-            0.0
-        };
-        self.gains[self.index(input, output)].store(g.to_bits(), Relaxed);
+        self.gains[self.index(input, output)].store(sane(linear).to_bits(), Relaxed);
     }
 
     /// Sets the gain in dB; -inf or anything below -120 dB means silence.
     pub fn set_gain_db(&self, input: usize, output: usize, db: f32) {
-        let linear = if db <= -120.0 {
-            0.0
-        } else {
-            10f32.powf(db / 20.0)
-        };
-        self.set_gain(input, output, linear);
+        self.set_gain(input, output, from_db(db));
+    }
+
+    /// Sets an output's master gain in dB (same rules as [`Self::set_gain_db`]).
+    pub fn set_master_db(&self, output: usize, db: f32) {
+        self.master[self.output(output)].store(sane(from_db(db)).to_bits(), Relaxed);
+    }
+
+    pub fn master(&self, output: usize) -> f32 {
+        f32::from_bits(self.master[self.output(output)].load(Relaxed))
+    }
+
+    pub fn set_master_muted(&self, output: usize, muted: bool) {
+        self.master_muted[self.output(output)].store(muted, Relaxed);
+    }
+
+    pub fn is_master_muted(&self, output: usize) -> bool {
+        self.master_muted[self.output(output)].load(Relaxed)
+    }
+
+    fn output(&self, output: usize) -> usize {
+        assert!(output < self.outputs, "output {output} out of range");
+        output
     }
 
     pub fn gain(&self, input: usize, output: usize) -> f32 {
@@ -84,13 +103,33 @@ impl MixMatrix {
         self.blocked[self.index(input, output)].load(Relaxed)
     }
 
-    /// Gain the audio thread applies: 0 when muted or blocked. Real-time safe.
+    /// Gain the audio thread applies: the pair's gain times the output's
+    /// master, 0 when either is muted or the pair is blocked. Real-time safe.
     pub fn effective_gain(&self, input: usize, output: usize) -> f32 {
-        if self.is_muted(input, output) || self.is_blocked(input, output) {
+        if self.is_muted(input, output)
+            || self.is_blocked(input, output)
+            || self.is_master_muted(output)
+        {
             0.0
         } else {
-            self.gain(input, output)
+            self.gain(input, output) * self.master(output)
         }
+    }
+}
+
+fn from_db(db: f32) -> f32 {
+    if db <= -120.0 {
+        0.0
+    } else {
+        10f32.powf(db / 20.0)
+    }
+}
+
+fn sane(linear: f32) -> f32 {
+    if linear.is_finite() {
+        linear.max(0.0)
+    } else {
+        0.0
     }
 }
 
@@ -129,6 +168,21 @@ mod tests {
         assert_eq!(m.gain(0, 0), 1.0);
         m.set_blocked(0, 0, false);
         assert_eq!(m.effective_gain(0, 0), 1.0);
+    }
+
+    #[test]
+    fn master_scales_and_mutes_a_whole_output() {
+        let m = MixMatrix::new(2, 2);
+        m.set_master_db(1, -6.0);
+        assert_eq!(m.effective_gain(0, 0), 1.0);
+        assert!((m.effective_gain(0, 1) - 0.501).abs() < 1e-3);
+        assert!((m.effective_gain(1, 1) - 0.501).abs() < 1e-3);
+        m.set_master_muted(0, true);
+        assert_eq!(m.effective_gain(0, 0), 0.0);
+        assert_eq!(m.effective_gain(1, 0), 0.0);
+        assert_eq!(m.gain(0, 0), 1.0, "the pairs keep their faders");
+        m.set_master_db(1, f32::NAN);
+        assert_eq!(m.master(1), 0.0);
     }
 
     #[test]

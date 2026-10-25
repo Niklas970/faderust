@@ -349,6 +349,16 @@ fn set_muted(
     send(&state, Command::SetMuted(input, output, muted))
 }
 
+#[tauri::command]
+fn set_master_gain(output: usize, db: f32, state: State<AppState>) -> Result<(), String> {
+    send(&state, Command::SetMasterGain(output, db))
+}
+
+#[tauri::command]
+fn set_master_muted(output: usize, muted: bool, state: State<AppState>) -> Result<(), String> {
+    send(&state, Command::SetMasterMuted(output, muted))
+}
+
 /// Changes an input's effects while it plays; saved with the next fader save.
 #[tauri::command]
 fn set_fx(input: usize, fx: Fx, state: State<AppState>) -> Result<(), String> {
@@ -427,6 +437,7 @@ fn initial_config() -> Config {
                 label: "Ausgang".into(),
                 device: d.name,
                 buffer_ms: 40,
+                master: Default::default(),
             })
             .into_iter()
             .collect(),
@@ -548,6 +559,8 @@ fn main() {
             save_config,
             set_gain,
             set_muted,
+            set_master_gain,
+            set_master_muted,
             set_fx,
             save_preset,
             load_preset,

@@ -13,13 +13,13 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Niklas970/faderust" alt="Lizenz MIT"></a>
 </p>
 
-![Faderust im Pult mit drei Ausgängen und Programmen rechts](assets/screenshot.png)
+![Faderust im Pult mit Geräten, Programmen und drei Ausgängen](assets/screenshot.png)
 
 > **Alpha.** Faderust läuft, ist aber noch kaum auf echter Hardware erprobt. Fehler bitte als [Issue](https://github.com/Niklas970/faderust/issues) melden.
 
 ## Was Faderust kann
 
-- **Zwei Ansichten:** das *Pult* im Stil von Voicemeeter (ein Fader pro Eingang, Knöpfe A1–A3 für die Ausgänge, Programme rechts) und die *Matrix*, in der jeder Eingang für jeden Ausgang einzeln geregelt wird. Mikrofon, PC-Ton und Konsole lassen sich so für Kopfhörer, Lautsprecher und Stream getrennt mischen.
+- **Zwei Ansichten:** das *Pult* im Stil von Voicemeeter (ein Streifen pro Gerät und Programm mit Knöpfen A1–A3, rechts ein Master-Fader pro Ausgang) und die *Matrix*, in der jeder Eingang für jeden Ausgang einzeln geregelt wird. Mikrofon, PC-Ton und Konsole lassen sich so für Kopfhörer, Lautsprecher und Stream getrennt mischen.
 - **Geräte kommen und gehen.** Bluetooth-Kopfhörer aus- und wieder einschalten, USB-Gerät abziehen: Faderust verbindet neu, ohne die anderen Geräte zu unterbrechen.
 - **Gibt Bluetooth-Kopfhörer frei, wenn nichts läuft.** Nach 5 Sekunden Stille schließt Faderust einen Bluetooth-Ausgang, damit die Kopfhörer per Multipoint zum Handy wechseln können. Kommt wieder Ton, öffnet er sich sofort von selbst. Kabel- und USB-Geräte bleiben offen und haben so keine Verzögerung.
 - **Effekte pro Eingang:** Low-Cut, Drei-Band-EQ und Gate, zum Beispiel gegen Tastaturgeräusche am Mikro.

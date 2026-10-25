@@ -2,12 +2,12 @@ Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler s
 
 Neu in 0.4.4:
 
-- Zwei Ansichten, oben umschaltbar (die Wahl wird gemerkt):
-  - **Pult** im Stil von Voicemeeter: ein Streifen pro Gerät mit einem Fader und Knöpfen A1, A2, A3 für die Ausgänge. Rechts stehen die Programme (z. B. Discord, Brave) mit eigenem Regler und eigenen A-Knöpfen, darunter die Ausgänge mit Pegel
-  - **Matrix**: alle Ein- und Ausgänge als Tabelle, jeder Pegel einzeln einstellbar
-- Der Fader im Pult verschiebt alle eingeschalteten Ausgänge gemeinsam, ihr Abstand bleibt erhalten. Feine Unterschiede pro Ausgang stellt man in der Matrix ein
-- Bleibt auch mit drei oder mehr Ausgängen schmal genug, kein seitliches Scrollen mehr
-- Die Windows-Lautstärke-Leiste für Programme entfällt. Programme bekommen über „+ Programm“ einen echten Regler mit Ausgangswahl
+- Neues **Pult** im Stil von Voicemeeter: ein Streifen pro Gerät und pro Programm (z. B. Discord, Brave), jeweils mit einem Fader und Knöpfen A1, A2, A3 für die Ausgänge. Der Fader verschiebt alle eingeschalteten Ausgänge gemeinsam, ihr Abstand bleibt erhalten
+- **Master-Fader pro Ausgang:** Rechts im Pult hat jeder Ausgang einen Gesamtregler und einen Stumm-Knopf
+- Neue Ansicht **Matrix**: alle Ein- und Ausgänge als Tabelle, jeder Pegel einzeln einstellbar. Umschalten unter „Design“
+- „+ Programm“ sitzt jetzt direkt im Pult und in der Matrix, der Knopf „Programme“ oben entfällt, ebenso die Windows-Lautstärke-Leiste für Programme
+- Neue Standardfarben: dunkle Darstellung und grüne Pegel (eigene Einstellungen bleiben erhalten)
+- Bleibt auch mit drei oder mehr Ausgängen übersichtlich, kein seitliches Scrollen mehr
 
 Neu in 0.4.3:
 

@@ -17,6 +17,8 @@
     onState,
     saveConfig,
     setGain,
+    setMasterGain,
+    setMasterMuted,
     setMuted,
     windowAction,
   } from "./lib/api.js";
@@ -178,14 +180,6 @@
 
     <div class="spacer" data-tauri-drag-region></div>
 
-    <div class="views" role="group" aria-label="Ansicht">
-      <button class:active={view === "strips"} aria-pressed={view === "strips"} onclick={() => setView("strips")} title="Ein Streifen pro Eingang"
-        >Pult</button
-      >
-      <button class:active={view === "matrix"} aria-pressed={view === "matrix"} onclick={() => setView("matrix")} title="Alle Ein- und Ausgänge als Tabelle"
-        >Matrix</button
-      >
-    </div>
 
     <nav class="nav">
       <button onclick={() => (presetsOpen = true)} class:active={presetsOpen}>
@@ -253,6 +247,8 @@
           lanes={state.lanes}
           onGain={setGain}
           onMute={setMuted}
+          onMaster={setMasterGain}
+          onMasterMute={setMasterMuted}
           onFx={(i) => (fxOpen = i)}
           onPrograms={openApps}
         />
@@ -281,7 +277,7 @@
 {/if}
 
 {#if themeOpen}
-  <Theme onClose={() => (themeOpen = false)} />
+  <Theme {view} onView={setView} onClose={() => (themeOpen = false)} />
 {/if}
 
 {#if windowsOpen}
@@ -436,28 +432,6 @@
   .primary {
     background: var(--accent);
     border-color: var(--accent);
-    color: #fff;
-  }
-  .views {
-    display: flex;
-    flex: none;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-  }
-  .views button {
-    padding: 5px 12px;
-    border: none;
-    border-radius: 0;
-    background: var(--panel-2);
-    color: var(--muted);
-    font-size: 13px;
-  }
-  .views button + button {
-    border-left: 1px solid var(--border);
-  }
-  .views button.active {
-    background: var(--accent);
     color: #fff;
   }
   main {
