@@ -1,5 +1,10 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.4.3:
+
+- Hält ein anderes Programm ein Gerät exklusiv fest (z. B. Voicemeeter, eine DAW oder ein ASIO-Treiber), sagt Faderust das jetzt in klaren Worten
+- Das Protokoll wiederholt einen solchen Fehler nicht mehr jede Sekunde
+
 Neu in 0.4.2:
 
 - Nur noch Bluetooth-Ausgänge geben sich bei Stille frei (für Multipoint). Kabel- und USB-Geräte bleiben offen und spielen nach einer Pause ohne Verzögerung weiter
