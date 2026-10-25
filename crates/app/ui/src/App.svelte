@@ -191,17 +191,6 @@
       <button onclick={() => (presetsOpen = true)} class:active={presetsOpen}>
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" /></svg>Presets
       </button>
-      <button onclick={openApps} class:active={appsOpen}>
-        <svg viewBox="0 0 16 16" aria-hidden="true"
-          ><rect x="2" y="2" width="5" height="5" rx="1" /><rect x="9" y="2" width="5" height="5" rx="1" /><rect
-            x="2"
-            y="9"
-            width="5"
-            height="5"
-            rx="1"
-          /><rect x="9" y="9" width="5" height="5" rx="1" /></svg
-        >Programme
-      </button>
       <button onclick={() => (windowsOpen = true)} class:active={windowsOpen}>
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l4-3v10l-4-3H2z" /><path d="M11.5 5.5a3.5 3.5 0 0 1 0 5M13.5 3.5a6.3 6.3 0 0 1 0 9" /></svg
         >Windows
@@ -254,6 +243,7 @@
           onGain={setGain}
           onMute={setMuted}
           onFx={(i) => (fxOpen = i)}
+          onPrograms={openApps}
         />
       {:else}
         <StripView

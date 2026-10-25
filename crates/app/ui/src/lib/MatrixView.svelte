@@ -4,7 +4,7 @@
   import { DB } from "./scale.js";
 
   /** Every input on every output at a glance: rows are inputs, columns outputs. */
-  let { inputs, outputs, gains, lanes, onGain, onMute, onFx } = $props();
+  let { inputs, outputs, gains, lanes, onGain, onMute, onFx, onPrograms } = $props();
 </script>
 
 <section class="matrix" style:--cols={outputs.length}>
@@ -49,9 +49,20 @@
       </div>
     {/each}
   {/each}
+
+  <button class="add" onclick={onPrograms} title="Programme als Eingang aufnehmen">+ Programm</button>
 </section>
 
 <style>
+  .add {
+    justify-self: start;
+    padding: 3px 10px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--accent);
+    background: none;
+    color: var(--accent);
+  }
   .matrix {
     flex: 1;
     display: grid;
