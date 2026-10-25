@@ -29,6 +29,13 @@ export async function windowAction(action) {
   if (action === "close") return w.close();
 }
 
+/** Keeps the window above all others (or not). */
+export async function setAlwaysOnTop(on) {
+  if (!inTauri) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  return getCurrentWindow().setAlwaysOnTop(on);
+}
+
 let pendingUpdate = null;
 
 /** A newer release, as `{ version }`, or null. Checked against GitHub. */

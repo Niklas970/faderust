@@ -16,6 +16,7 @@
     getVersion,
     onState,
     saveConfig,
+    setAlwaysOnTop,
     setGain,
     setMasterGain,
     setMasterMuted,
@@ -71,6 +72,39 @@
       // Remembered for this session only.
     }
   }
+  // Compact: slim title bar and no group headings, to park Faderust beside a
+  // game. Pinned: the window stays above all others. Both are remembered.
+  const COMPACT_KEY = "faderust.compact";
+  const PIN_KEY = "faderust.pinned";
+  const readFlag = (key) => {
+    try {
+      return localStorage.getItem(key) === "1";
+    } catch {
+      return false;
+    }
+  };
+  const writeFlag = (key, on) => {
+    try {
+      localStorage.setItem(key, on ? "1" : "0");
+    } catch {
+      // Remembered for this session only.
+    }
+  };
+  let compact = $state(readFlag(COMPACT_KEY));
+  let pinned = $state(readFlag(PIN_KEY));
+  function toggleCompact() {
+    compact = !compact;
+    writeFlag(COMPACT_KEY, compact);
+  }
+  function togglePinned() {
+    pinned = !pinned;
+    writeFlag(PIN_KEY, pinned);
+    setAlwaysOnTop(pinned).catch((e) => (error = `Immer im Vordergrund fehlgeschlagen: ${e}`));
+  }
+  onMount(() => {
+    if (pinned) setAlwaysOnTop(true).catch(() => {});
+  });
+
   // Program strips silent this long (seconds) are hidden; 0 shows them all.
   const HIDE_KEY = "faderust.hideSilent";
   let hideAfter = $state(readHide());
@@ -197,7 +231,7 @@
   }
 </script>
 
-<div class="app">
+<div class="app" class:compact>
   <!-- Own title bar (the window has no decorations): drag on empty space,
        double-click to maximize. -->
   <header class="titlebar" data-tauri-drag-region>
@@ -221,11 +255,11 @@
 
     <nav class="nav">
       <button onclick={() => (presetsOpen = true)} class:active={presetsOpen}>
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" /></svg>Presets
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" /></svg><span class="label">Presets</span>
       </button>
       <button onclick={() => (windowsOpen = true)} class:active={windowsOpen}>
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l4-3v10l-4-3H2z" /><path d="M11.5 5.5a3.5 3.5 0 0 1 0 5M13.5 3.5a6.3 6.3 0 0 1 0 9" /></svg
-        >Windows
+        ><span class="label">Windows</span>
       </button>
       <button onclick={openSettings} class:active={settingsOpen}>
         <svg viewBox="0 0 16 16" aria-hidden="true"
@@ -236,7 +270,7 @@
             height="2.5"
             rx=".6"
           /><rect x="10.5" y="10" width="3" height="2.5" rx=".6" /></svg
-        >Geräte
+        ><span class="label">Geräte</span>
       </button>
       <button onclick={() => (themeOpen = true)} class:active={themeOpen} title="Farben und Darstellung">
         <svg viewBox="0 0 16 16" aria-hidden="true"
@@ -245,11 +279,31 @@
             cy="7"
             r=".9"
           /><circle cx="8" cy="5" r=".9" /><circle cx="11" cy="6.5" r=".9" /></svg
-        >Design
+        ><span class="label">Design</span>
       </button>
     </nav>
 
     <div class="window">
+      <button
+        class="toggle"
+        class:on={compact}
+        title={compact ? "Normale Ansicht" : "Kompakte Ansicht"}
+        aria-label="Kompakte Ansicht"
+        aria-pressed={compact}
+        onclick={toggleCompact}
+      >
+        <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 3h8M1 7h8" /></svg>
+      </button>
+      <button
+        class="toggle"
+        class:on={pinned}
+        title={pinned ? "Nicht mehr im Vordergrund halten" : "Immer im Vordergrund"}
+        aria-label="Immer im Vordergrund"
+        aria-pressed={pinned}
+        onclick={togglePinned}
+      >
+        <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 1h3l-.5 3 1.5 2H2.5L4 4zM5 6v3" /></svg>
+      </button>
       <button title="Minimieren" aria-label="Minimieren" onclick={() => windowAction("minimize")}>
         <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 5h8" /></svg>
       </button>
@@ -279,6 +333,7 @@
         />
       {:else}
         <StripView
+          {compact}
           {side}
           {hideAfter}
           inputs={state.inputs}
@@ -459,6 +514,26 @@
     fill: none;
     stroke: currentColor;
     stroke-width: 1.1;
+  }
+  .window button.toggle.on {
+    color: var(--accent);
+  }
+  .compact .titlebar {
+    height: 36px;
+    gap: 8px;
+  }
+  .compact .name,
+  .compact .version,
+  .compact .nav .label {
+    display: none;
+  }
+  .compact .nav button {
+    height: 26px;
+    padding: 0 8px;
+  }
+  .compact main {
+    gap: 6px;
+    padding: 6px;
   }
   .spacer {
     flex: 1;

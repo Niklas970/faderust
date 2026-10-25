@@ -27,6 +27,7 @@
 - **Effekte pro Eingang:** Low-Cut, Drei-Band-EQ und Gate, zum Beispiel gegen Tastaturgeräusche am Mikro.
 - **Windows-Sound aus einer Hand:** Standardgeräte für Wiedergabe, Aufnahme und Anrufe sowie die Lautstärke pro Gerät.
 - **Presets, Autostart im Tray, Updates in der App** (mit Signaturprüfung) und ein **Stream-Deck-Plugin**.
+- **Kompakt und im Vordergrund.** Zwei Knöpfe in der Titelleiste: schmale Ansicht ohne Beschriftungen und „Immer im Vordergrund“, z. B. neben einem Spiel. Beides bleibt gespeichert.
 - **Eigene Farben:** Akzent- und Signalfarbe frei wählbar, dunkel (OLED-Schwarz) oder hell.
 
 ## Installation

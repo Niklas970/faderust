@@ -10,7 +10,7 @@
    * (left unless set otherwise) with a master fader each. Per-output levels
    * live in the matrix.
    */
-  let { side = "left", hideAfter = 120, inputs, outputs, gains, lanes, onGain, onMute, onMaster, onMasterMute, onInputMute, onFx, onPrograms } = $props();
+  let { compact = false, side = "left", hideAfter = 120, inputs, outputs, gains, lanes, onGain, onMute, onMaster, onMasterMute, onInputMute, onFx, onPrograms } = $props();
 
   const isProgram = (input) => input.device.startsWith("app:");
   const devices = $derived(inputs.map((input, i) => ({ input, i })).filter(({ input }) => !isProgram(input)));
@@ -80,7 +80,7 @@
   </section>
 {/snippet}
 
-<div class="desk">
+<div class="desk" class:compact>
   <div class="strips">
     <div class="group outs" class:left={side === "left"}>
       <h2>Ausgänge</h2>
@@ -271,6 +271,25 @@
     margin: 0;
     font-size: 12px;
     color: var(--muted);
+  }
+  /* Compact: no group headings, tighter strips. */
+  .compact h2 {
+    display: none;
+  }
+  .compact .strip {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+  .compact .strips,
+  .compact .row {
+    gap: 6px;
+  }
+  .compact .group + .group,
+  .compact .outs:not(.left) {
+    padding-left: 8px;
+  }
+  .compact .fx {
+    padding: 2px 6px;
   }
   .offline {
     opacity: 0.5;
