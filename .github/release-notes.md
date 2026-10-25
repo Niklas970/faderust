@@ -1,11 +1,7 @@
-## Neu in 0.4.5
+## Neu in 0.4.6
 
-- **MUTE für Geräte und Programme:** schaltet den Eingang überall stumm, die Auswahl A1–A3 bleibt erhalten
-- **Bluetooth-Freigabe einstellbar:** pro Ausgang unter „Geräte“ (nie, 5 s, 30 s, 2 min), Standard 30 s
-- **Stille Programme ausblenden:** nach 2 min, unter „Design“ einstellbar. „… still, zeigen“ holt sie zurück
-- **dB-Wert eintippen:** auf die Zahl unter einem Fader klicken
-- Ruhigere LED-Anzeigen, dunkle Darstellung in OLED-Schwarz
-- „+ Eingang“ für Programme ist robuster: erst aufs freie Kabel, dann aufnehmen, nach einem Fehler 30 s Pause
+- **Fenster passt sich an:** Kommt ein Streifen dazu oder fällt einer weg, ändert Faderust die Fensterbreite selbst (nicht bei maximiertem Fenster)
+- **Schmalere Programm-Streifen:** ohne Skala, mit kleineren A-Knöpfen
 
 ## Installation
 

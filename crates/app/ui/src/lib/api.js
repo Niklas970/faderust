@@ -29,6 +29,22 @@ export async function windowAction(action) {
   if (action === "close") return w.close();
 }
 
+/**
+ * Sets the window's width (CSS pixels) to fit its content, within the
+ * screen; height stays. Does nothing while maximized.
+ */
+export async function fitWindowWidth(width) {
+  const w = Math.round(Math.min(Math.max(width, 480), screen.availWidth));
+  if (!inTauri) return;
+  const { getCurrentWindow, LogicalSize } = await import("@tauri-apps/api/window");
+  const win = getCurrentWindow();
+  if (await win.isMaximized()) return;
+  const scale = await win.scaleFactor();
+  const size = (await win.innerSize()).toLogical(scale);
+  if (Math.abs(size.width - w) < 2) return;
+  await win.setSize(new LogicalSize(w, size.height));
+}
+
 let pendingUpdate = null;
 
 /** A newer release, as `{ version }`, or null. Checked against GitHub. */

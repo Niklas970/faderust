@@ -23,6 +23,8 @@
     showMute = true,
     // The level already includes this fader (an output's master).
     postFader = false,
+    // Without the scale, for the narrower program strips.
+    narrow = false,
     onChange,
     onMute,
   } = $props();
@@ -144,7 +146,7 @@
   );
 </script>
 
-<div class="strip" class:offline={!connected || blocked}>
+<div class="strip" class:narrow class:offline={!connected || blocked}>
   <div class="label" title={label}>{label}</div>
   {#if note}<div class="note" class:on={noteOn} class:warn={blocked} title={noteTitle}>{note}</div>{/if}
   <div class="body">
@@ -205,6 +207,22 @@
 </div>
 
 <style>
+  /* Narrow: no scale, the cap and slot move left (58 px track). */
+  .strip.narrow {
+    width: 84px;
+  }
+  .narrow .track {
+    width: 58px;
+  }
+  .narrow .scale {
+    display: none;
+  }
+  .narrow .slot {
+    left: 24px;
+  }
+  .narrow .cap {
+    left: 0;
+  }
   .strip {
     position: relative;
     display: flex;
