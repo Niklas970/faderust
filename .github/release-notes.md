@@ -1,5 +1,11 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.4.2:
+
+- Nur noch Bluetooth-Ausgänge geben sich bei Stille frei (für Multipoint). Kabel- und USB-Geräte bleiben offen und spielen nach einer Pause ohne Verzögerung weiter
+- Weniger CPU-Last: Faderust fragt die Geräteliste nur noch ab, wenn ein Gerät fehlt (sonst alle 10 Sekunden), rechnet stumme oder ausgeschaltete Verbindungen nicht mehr um und schickt keine Pegel an das Fenster, solange es versteckt oder minimiert ist
+- Die Programm-Pegel werden nur noch abgefragt, wenn die Programm-Leiste offen ist
+
 Neu in 0.4.1:
 
 - Ausgänge geben sich jetzt immer automatisch frei: nach 5 Sekunden Stille, ohne Einstellung. Die Auswahl „Frei nach …“ unter **Geräte** entfällt

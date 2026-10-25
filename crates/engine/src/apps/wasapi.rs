@@ -8,8 +8,10 @@ use std::ffi::c_void;
 use std::ptr::{null, null_mut};
 
 use windows::core::{IInspectable, IUnknown, Interface, GUID, HRESULT, HSTRING, PCWSTR, PWSTR};
-use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
-use windows::Win32::Foundation::{CloseHandle, RPC_E_CHANGED_MODE, S_OK};
+use windows::Win32::Devices::FunctionDiscovery::{
+    PKEY_Device_EnumeratorName, PKEY_Device_FriendlyName,
+};
+use windows::Win32::Foundation::{CloseHandle, PROPERTYKEY, RPC_E_CHANGED_MODE, S_OK};
 use windows::Win32::Media::Audio::Endpoints::{IAudioEndpointVolume, IAudioMeterInformation};
 use windows::Win32::Media::Audio::{
     eCapture, eCommunications, eConsole, eMultimedia, eRender, AudioSessionStateExpired, EDataFlow,
@@ -268,9 +270,41 @@ fn device_id(device: &IMMDevice) -> Result<String> {
 }
 
 fn friendly_name(device: &IMMDevice) -> Result<String> {
+    string_property(device, &PKEY_Device_FriendlyName)
+}
+
+fn string_property(device: &IMMDevice, key: &PROPERTYKEY) -> Result<String> {
     let store = unsafe { device.OpenPropertyStore(STGM_READ) }.map_err(err)?;
-    let value = unsafe { store.GetValue(&PKEY_Device_FriendlyName) }.map_err(err)?;
+    let value = unsafe { store.GetValue(key) }.map_err(err)?;
     take_string(unsafe { PropVariantToStringAlloc(&value) }.map_err(err)?)
+}
+
+/// Path of the driver interface behind an endpoint, e.g.
+/// `{1}.\\?\bthenum#...` for Bluetooth headphones.
+const PKEY_ENDPOINT_INTERFACE_PATH: PROPERTYKEY = PROPERTYKEY {
+    fmtid: GUID::from_u128(0xb3f8fa53_0004_438e_9003_51a46e139bfc),
+    pid: 2,
+};
+
+/// Whether the endpoint with this id sits on Bluetooth (classic or LE).
+/// `None` when Windows does not say.
+pub fn is_bluetooth(id: &str) -> Option<bool> {
+    let _com = Com::init().ok()?;
+    let device = unsafe { enumerator().ok()?.GetDevice(&HSTRING::from(id)) }.ok()?;
+    let hints = [PKEY_Device_EnumeratorName, PKEY_ENDPOINT_INTERFACE_PATH]
+        .iter()
+        .filter_map(|key| string_property(&device, key).ok())
+        .collect::<Vec<_>>();
+    if hints.is_empty() {
+        return None;
+    }
+    Some(hints.iter().any(|h| bluetooth_hint(h)))
+}
+
+/// Bluetooth enumerators: BTHENUM (stereo), BTHHFENUM (hands-free),
+/// BTHLEDEVICE / BTHLE (LE Audio).
+fn bluetooth_hint(text: &str) -> bool {
+    text.to_ascii_lowercase().contains("bth")
 }
 
 /// Calls `f(pid, session)` for every live program session on `device`,
@@ -479,6 +513,14 @@ impl PolicyConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recognises_bluetooth_endpoints() {
+        assert!(bluetooth_hint("BTHENUM"));
+        assert!(bluetooth_hint(r"{1}.\\?\bthhfenum#{0000111e-0000}"));
+        assert!(!bluetooth_hint("USB"));
+        assert!(!bluetooth_hint(r"{1}.\\?\hdaudio#func_01&ven_10ec"));
+    }
 
     const ID: &str = "{0.0.0.00000000}.{5f1b3c2a-0000-4000-8000-123456789abc}";
 

@@ -187,6 +187,17 @@ impl AudioBackend for CpalBackend {
         stream.play().map_err(err)?;
         Ok(CpalStream::Device(stream))
     }
+
+    fn releasable(&self, id: &str) -> bool {
+        // Only Bluetooth gains from it. When Windows does not say, release:
+        // a wired device only loses a moment.
+        #[cfg(windows)]
+        if let Some(endpoint) = id.strip_prefix("wasapi:") {
+            return crate::apps::wasapi::is_bluetooth(endpoint).unwrap_or(true);
+        }
+        let _ = id;
+        true
+    }
 }
 
 /// Whether a stream error means the stream is gone. Glitches (WASAPI reports
