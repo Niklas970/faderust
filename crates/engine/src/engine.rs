@@ -691,6 +691,10 @@ mod tests {
         out_streams: BTreeMap<String, (OutputCallback, ErrorCallback, StreamFormat)>,
         wired: Vec<String>,
         listings: u32,
+        /// Ids whose streams refuse to open.
+        broken: Vec<String>,
+        /// Makes device listings fail.
+        listing_fails: bool,
     }
 
     /// Backend whose devices a test plugs in and out and whose callbacks it
@@ -742,6 +746,20 @@ mod tests {
         fn vanish(&self, id: &str) {
             let id = format!("{{{id}}}");
             self.0.borrow_mut().outputs.retain(|(d, _)| d.id != id);
+        }
+
+        /// Makes opening the device's stream fail, or work again.
+        fn break_device(&self, id: &str, broken: bool) {
+            let id = format!("{{{id}}}");
+            let mut s = self.0.borrow_mut();
+            s.broken.retain(|b| *b != id);
+            if broken {
+                s.broken.push(id);
+            }
+        }
+
+        fn fail_listing(&self, fails: bool) {
+            self.0.borrow_mut().listing_fails = fails;
         }
 
         fn listings(&self) -> u32 {
@@ -803,6 +821,9 @@ mod tests {
     impl AudioBackend for FakeBackend {
         type Stream = FakeStream;
         fn input_devices(&self) -> Result<Vec<DeviceInfo>, BackendError> {
+            if self.0.borrow().listing_fails {
+                return Err(BackendError("listing failed".into()));
+            }
             Ok(self
                 .0
                 .borrow()
@@ -813,6 +834,9 @@ mod tests {
         }
         fn output_devices(&self) -> Result<Vec<DeviceInfo>, BackendError> {
             self.0.borrow_mut().listings += 1;
+            if self.0.borrow().listing_fails {
+                return Err(BackendError("listing failed".into()));
+            }
             Ok(self
                 .0
                 .borrow()
@@ -840,6 +864,9 @@ mod tests {
             data: InputCallback,
             error: ErrorCallback,
         ) -> Result<FakeStream, BackendError> {
+            if self.0.borrow().broken.iter().any(|b| b == id) {
+                return Err(BackendError(format!("{id} busy")));
+            }
             let mut s = self.0.borrow_mut();
             s.in_streams.insert(id.to_string(), (data, error, format));
             Ok(FakeStream {
@@ -854,6 +881,9 @@ mod tests {
             data: OutputCallback,
             error: ErrorCallback,
         ) -> Result<FakeStream, BackendError> {
+            if self.0.borrow().broken.iter().any(|b| b == id) {
+                return Err(BackendError(format!("{id} busy")));
+            }
             let mut s = self.0.borrow_mut();
             s.out_streams.insert(id.to_string(), (data, error, format));
             Ok(FakeStream {
@@ -1211,6 +1241,79 @@ mod tests {
         ));
         assert_level(&b.pump(1000, level)["usb"], 0.2, 1e-3);
         assert_eq!(engine.outputs()[0].stream_errors.load(Relaxed), 1);
+    }
+
+    #[test]
+    fn busy_device_is_retried() {
+        let b = FakeBackend::default();
+        b.plug_input("mic", 48_000, 1);
+        b.plug_output("usb", 48_000, 2);
+        b.break_device("usb", true);
+        let mut engine = Engine::new(b.clone(), config(&["mic"], &[("usb", 20)])).unwrap();
+
+        let events = engine.maintain();
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                EngineEvent::ConnectFailed {
+                    dir: Direction::Output,
+                    ..
+                }
+            )),
+            "{events:?}"
+        );
+        assert!(engine.outputs()[0].device.is_none());
+        // The input works regardless of the broken output.
+        assert!(engine.inputs()[0].device.is_some());
+
+        b.break_device("usb", false);
+        let events = engine.maintain();
+        assert_eq!(connected(&events), 1, "{events:?}");
+        assert_level(&b.pump(1000, level)["usb"], 0.2, 1e-3);
+    }
+
+    #[test]
+    fn failed_listing_keeps_working_devices() {
+        let b = FakeBackend::default();
+        b.plug_input("mic", 48_000, 1);
+        b.plug_output("usb", 48_000, 2);
+        let mut engine = Engine::new(b.clone(), config(&["mic"], &[("usb", 20)])).unwrap();
+        engine.maintain();
+        b.pump(500, level);
+
+        b.fail_listing(true);
+        // Far enough ahead that the engine lists the devices again.
+        let later = Instant::now() + RECHECK_EVERY * 2;
+        assert!(engine.maintain_at(later).is_empty());
+        assert!(engine.outputs()[0].device.is_some());
+        assert_level(&b.pump(1000, level)["usb"], 0.2, 1e-3);
+    }
+
+    #[test]
+    fn input_unplugged_and_back() {
+        let b = FakeBackend::default();
+        b.plug_input("mic", 48_000, 1);
+        b.plug_output("usb", 48_000, 2);
+        let mut engine = Engine::new(b.clone(), config(&["mic"], &[("usb", 20)])).unwrap();
+        engine.maintain();
+        assert_level(&b.pump(1000, level)["usb"], 0.2, 1e-3);
+
+        b.unplug("mic");
+        let events = engine.maintain();
+        assert!(matches!(
+            events[..],
+            [EngineEvent::Lost {
+                dir: Direction::Input,
+                ..
+            }]
+        ));
+        // The output keeps running, silent.
+        assert_level(&b.pump(500, level)["usb"], 0.0, 1e-6);
+
+        b.plug_input("mic", 48_000, 1);
+        let events = engine.maintain();
+        assert_eq!(connected(&events), 1, "{events:?}");
+        assert_level(&b.pump(1500, level)["usb"], 0.2, 1e-3);
     }
 
     #[test]
