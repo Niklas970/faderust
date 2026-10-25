@@ -24,7 +24,7 @@ rubato = { version = "5.0", default-features = false }
 # version cpal uses.
 [target.'cfg(windows)'.dependencies]
 # The `implement` macro (COM callbacks) expects this crate by name.
-windows-core = "0.62"
+windows-core = "0.100"
 windows = { version = "0.62", features = [
     "Win32_Devices_FunctionDiscovery",
     "Win32_Foundation",
