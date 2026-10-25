@@ -36,7 +36,8 @@ export async function windowAction(action) {
 export async function fitWindowWidth(width) {
   const w = Math.round(Math.min(Math.max(width, 480), screen.availWidth));
   if (!inTauri) return;
-  const { getCurrentWindow, LogicalSize } = await import("@tauri-apps/api/window");
+  const { getCurrentWindow, LogicalSize } =
+    await import("@tauri-apps/api/window");
   const win = getCurrentWindow();
   if (await win.isMaximized()) return;
   const scale = await win.scaleFactor();
