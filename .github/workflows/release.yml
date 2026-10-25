@@ -74,7 +74,7 @@ jobs:
             ui/node_modules/.bin/tauri build --bundles nsis \
               --config '{"bundle":{"createUpdaterArtifacts":false}}'
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: faderust-setup
           path: target/release/bundle/nsis/*-setup.exe
@@ -86,7 +86,7 @@ jobs:
           mkdir release
           cp target/release/bundle/nsis/*-setup.exe target/release/bundle/nsis/*-setup.exe.sig release/
           cp streamdeck/dist/*.streamDeckPlugin release/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: github.event_name != 'pull_request'
         with:
           name: release-files
