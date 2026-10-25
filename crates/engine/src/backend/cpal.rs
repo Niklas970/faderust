@@ -198,6 +198,11 @@ impl AudioBackend for CpalBackend {
         let _ = id;
         true
     }
+
+    fn reports_own_end(&self, id: &str) -> bool {
+        // A recording signals an error once its program quits.
+        id.starts_with(PROGRAM_PREFIX)
+    }
 }
 
 /// Whether a stream error means the stream is gone. Glitches (WASAPI reports
