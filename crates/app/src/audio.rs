@@ -159,6 +159,22 @@ fn apply_gains(engine: &Engine<CpalBackend>, config: &Config) {
     }
 }
 
+/// WASAPI's "device in use" (AUDCLNT_E_DEVICE_IN_USE), as cpal prints it.
+const DEVICE_IN_USE: &str = "-2004287478";
+/// WASAPI's "device invalidated" (AUDCLNT_E_DEVICE_INVALIDATED).
+const DEVICE_INVALIDATED: &str = "-2004287484";
+
+/// The cause of a failed connection in words a user can act on.
+fn explain(error: &str) -> String {
+    if error.contains(DEVICE_IN_USE) {
+        "Das Gerät ist belegt. Bei Bluetooth-Kopfhörern nutzt meist ein Programm (z. B. Discord) ihr Headset-Mikro und schaltet sie in den Freisprechmodus: dort ein anderes Mikro wählen. Sonst hält ein Programm das Gerät exklusiv fest, etwa Voicemeeter, eine DAW oder ein ASIO-Treiber. Faderust verbindet von selbst, sobald es frei ist.".into()
+    } else if error.contains(DEVICE_INVALIDATED) {
+        "Das Gerät wurde gerade umgestellt oder entfernt. Faderust versucht es weiter.".into()
+    } else {
+        format!("{error}. Nutzt ein anderes Programm das Gerät im Exklusivmodus?")
+    }
+}
+
 /// Turns engine events into messages, without repeating the same failure
 /// every second while a device stays unavailable.
 #[derive(Default)]
@@ -214,8 +230,9 @@ impl Notices {
                 (previous.as_ref() != Some(error)).then(|| Notice {
                     level: "error",
                     text: format!(
-                        "„{}“ lässt sich nicht öffnen: {error}. Nutzt ein anderes Programm das Gerät im Exklusivmodus?",
-                        label(dir, *slot)
+                        "„{}“ lässt sich nicht öffnen: {}",
+                        label(dir, *slot),
+                        explain(error)
                     ),
                 })
             }
@@ -331,8 +348,14 @@ fn run(
             if !events.is_empty() {
                 let c = config.lock().unwrap_or_else(|e| e.into_inner());
                 for event in &events {
-                    log::write(&event.to_string());
-                    if let Some(n) = notices.notice(&c, event, quiet) {
+                    let notice = notices.notice(&c, event, quiet);
+                    // A failure repeats every second; log it once.
+                    let repeat =
+                        matches!(event, EngineEvent::ConnectFailed { .. }) && notice.is_none();
+                    if !repeat {
+                        log::write(&event.to_string());
+                    }
+                    if let Some(n) = notice {
                         let _ = app.emit("notice", n);
                     }
                 }
@@ -503,7 +526,14 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
 
 #[cfg(test)]
 mod tests {
-    use super::{skipped, step_db};
+    use super::{explain, skipped, step_db};
+
+    #[test]
+    fn explains_a_device_held_by_another_program() {
+        let error = "Failed to initialize audio client: OS Error -2004287478 (FormatMessageW() returned error 317) (os error -2004287478)";
+        assert!(explain(error).contains("Headset-Mikro"));
+        assert!(explain("something else").starts_with("something else."));
+    }
 
     #[test]
     fn skips_only_the_crashed_program() {

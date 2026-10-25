@@ -1,5 +1,11 @@
 Testversion für Windows 10/11. Noch nicht auf echter Hardware erprobt, Fehler sind zu erwarten.
 
+Neu in 0.4.3:
+
+- Programm-Eingänge (z. B. Brave) werden nicht mehr grau, wenn das Programm eine Weile still ist. Sie bleiben verbunden, bis das Programm beendet wird, und spielen sofort weiter
+- Ist ein Gerät belegt, sagt Faderust jetzt warum: Bei Bluetooth-Kopfhörern nutzt meist ein Programm wie Discord ihr Headset-Mikro (Freisprechmodus, dann ist der Stereo-Ausgang gesperrt). Sonst hält ein Programm das Gerät exklusiv fest, etwa eine DAW oder ein ASIO-Treiber
+- Das Protokoll wiederholt einen solchen Fehler nicht mehr jede Sekunde
+
 Neu in 0.4.2:
 
 - Nur noch Bluetooth-Ausgänge geben sich bei Stille frei (für Multipoint). Kabel- und USB-Geräte bleiben offen und spielen nach einer Pause ohne Verzögerung weiter

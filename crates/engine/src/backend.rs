@@ -75,4 +75,11 @@ pub trait AudioBackend {
     fn releasable(&self, _id: &str) -> bool {
         true
     }
+
+    /// Whether the stream reports its own end, so a device missing from the
+    /// listing is not gone. Program recordings: a silent program drops out
+    /// of the list but keeps running.
+    fn reports_own_end(&self, _id: &str) -> bool {
+        false
+    }
 }

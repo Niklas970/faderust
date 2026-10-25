@@ -481,6 +481,9 @@ impl<B: AudioBackend> Engine<B> {
             return Some(LostReason::StreamError);
         }
         let (device, _) = state.device.as_ref()?;
+        if self.backend.reports_own_end(&device.id) {
+            return None;
+        }
         match list {
             Some(list) if !list.iter().any(|d| d.id == device.id) => Some(LostReason::Removed),
             _ => None,
@@ -861,6 +864,9 @@ mod tests {
         fn releasable(&self, id: &str) -> bool {
             !self.0.borrow().wired.iter().any(|w| w == id)
         }
+        fn reports_own_end(&self, id: &str) -> bool {
+            id.starts_with("{app:")
+        }
     }
 
     fn config(inputs: &[&str], outputs: &[(&str, u32)]) -> EngineConfig {
@@ -1045,6 +1051,33 @@ mod tests {
         assert!(engine.maintain_at(t0 + Duration::from_secs(60)).is_empty());
         assert!(!engine.is_released(0));
         assert!(engine.outputs()[0].device.is_some());
+    }
+
+    #[test]
+    fn silent_program_stays_until_its_recording_ends() {
+        let b = FakeBackend::default();
+        b.plug_input("app:brave.exe", 48_000, 2);
+        b.plug_output("usb", 48_000, 2);
+        let mut engine =
+            Engine::new(b.clone(), config(&["app:brave.exe"], &[("usb", 20)])).unwrap();
+        let t0 = Instant::now();
+        assert_eq!(connected(&engine.maintain_at(t0)), 2);
+
+        // Quiet programs drop out of the listing but keep recording.
+        b.0.borrow_mut().inputs.clear();
+        assert!(engine.maintain_at(t0 + Duration::from_secs(10)).is_empty());
+        assert!(engine.inputs()[0].device.is_some());
+
+        // The program quits: its recording reports it.
+        b.unplug("app:brave.exe");
+        assert_eq!(
+            engine.maintain_at(t0 + Duration::from_secs(11)),
+            vec![EngineEvent::Lost {
+                dir: Direction::Input,
+                slot: 0,
+                reason: LostReason::StreamError
+            }]
+        );
     }
 
     #[test]
