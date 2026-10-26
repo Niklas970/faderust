@@ -419,6 +419,29 @@ fn set_language(code: String) {
     faderust_engine::lang::set(&code);
 }
 
+/// The end of `faderust.log` for the log dialog.
+#[tauri::command]
+fn get_log(lines: Option<usize>) -> String {
+    log::tail(lines.unwrap_or(400).min(5000))
+}
+
+/// Shows the folder with `faderust.log` in the file manager.
+#[tauri::command]
+fn open_log_folder() -> Result<(), String> {
+    let dir = log::path()
+        .and_then(|p| p.parent())
+        .ok_or_else(|| "Kein Protokoll vorhanden / No log yet".to_owned())?;
+    if cfg!(windows) {
+        std::process::Command::new("explorer")
+            .arg(dir)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    } else {
+        Err(dir.display().to_string())
+    }
+}
+
 /// Looks at devices, buffers, remote control and plugin, see [`selftest`].
 // Async: lists devices on a worker thread, like `get_devices`.
 #[tauri::command]
@@ -793,6 +816,8 @@ fn main() {
             install_streamdeck,
             set_language,
             run_selftest,
+            get_log,
+            open_log_folder,
             get_autostart,
             set_autostart,
             open_cable_page,

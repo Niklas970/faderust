@@ -2,6 +2,8 @@
   import { onMount } from "svelte";
   import StripView from "./lib/StripView.svelte";
   import MatrixView from "./lib/MatrixView.svelte";
+  import Log from "./lib/Log.svelte";
+  import Selftest from "./lib/Selftest.svelte";
   import Settings from "./lib/Settings.svelte";
   import Apps from "./lib/Apps.svelte";
   import WindowsAudio from "./lib/WindowsAudio.svelte";
@@ -31,6 +33,8 @@
   let settingsOpen = $state(false);
   let appsOpen = $state(false);
   let windowsOpen = $state(false);
+  let logOpen = $state(false);
+  let selftestOpen = $state(false);
   let presetsOpen = $state(false);
   let themeOpen = $state(false);
   // Index of the input whose effects are open.
@@ -357,6 +361,12 @@
       <button class="primary" onclick={openSettings}>{t("app.setupDevices")}</button>
     </div>
   {/if}
+
+  <footer class="statusbar">
+    <button onclick={() => (logOpen = true)} class:active={logOpen} title={t("log.hint")}>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5h10v11H3zM5.5 5.5h5M5.5 8h5M5.5 10.5h3" /></svg>{t("nav.log")}
+    </button>
+  </footer>
 </div>
 
 {#if fxOpen !== null && state?.inputs[fxOpen]}
@@ -375,6 +385,14 @@
 
 {#if themeOpen}
   <Theme {view} onView={setView} {side} onSide={setSide} {hideAfter} onHide={setHide} onClose={() => (themeOpen = false)} />
+{/if}
+
+{#if logOpen}
+  <Log onSelftest={() => (selftestOpen = true)} onClose={() => (logOpen = false)} />
+{/if}
+
+{#if selftestOpen}
+  <Selftest onClose={() => (selftestOpen = false)} />
 {/if}
 
 {#if windowsOpen}
@@ -559,6 +577,40 @@
     overflow: auto;
     min-height: 0;
     align-items: stretch;
+  }
+  .statusbar {
+    display: flex;
+    align-items: center;
+    height: 26px;
+    padding: 0 10px;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    user-select: none;
+  }
+  .statusbar button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 20px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .statusbar button:hover,
+  .statusbar button.active {
+    color: var(--text);
+    background: var(--panel-2);
+  }
+  .statusbar svg {
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linejoin: round;
   }
   .empty {
     flex: 1;
