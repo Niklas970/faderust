@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256" role="img" aria-label="Faderust Logo">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1d2126"/>
-      <stop offset="1" stop-color="#040506"/>
+      <stop offset="0" stop-color="#17191c"/>
+      <stop offset="1" stop-color="#000000"/>
     </linearGradient>
     <linearGradient id="cap" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#f7b48e"/>
       <stop offset="1" stop-color="#c65f27"/>
     </linearGradient>
     <linearGradient id="signal" gradientUnits="userSpaceOnUse" x1="0" y1="20" x2="0" y2="51">
-      <stop offset="0" stop-color="#4fd1c0"/>
-      <stop offset="1" stop-color="#4fd1c0" stop-opacity="0.35"/>
+      <stop offset="0" stop-color="#5ccf6a"/>
+      <stop offset="1" stop-color="#5ccf6a" stop-opacity="0.35"/>
     </linearGradient>
   </defs>
   <rect x="1" y="1" width="62" height="62" rx="14" fill="url(#bg)"/>

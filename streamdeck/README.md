@@ -1,13 +1,15 @@
 # Faderust für Stream Deck
 
-Steuert Faderust vom Elgato Stream Deck. Braucht Stream Deck 7.1 oder neuer (Windows) und ein laufendes Faderust ab 0.3.5.
+Steuert Faderust vom Elgato Stream Deck. Braucht Stream Deck 7.1 oder neuer (Windows) und ein laufendes Faderust ab 0.5.0 (Streifen, Master und MUTE des Streifens brauchen die Schnittstelle ab Version 0.5.1).
 
 ## Aktionen
 
 | Aktion | Stream Deck+ (Drehregler) | Taste |
 |---|---|---|
-| **Fader** | Drehen ändert den Pegel (1 dB pro Raste), Drücken oder Tippen schaltet stumm. Der Streifen zeigt Name, Pegel und Faderstellung. | Ein Schritt pro Druck (3 dB, negativ für leiser), Titel zeigt den Pegel |
-| **Stumm** | – | Eingang auf einem oder allen Ausgängen stumm; Taste zeigt den Zustand |
+| **Streifen** | Wie ein Streifen im Pult: Drehen bewegt alle eingeschalteten Ausgänge des Eingangs gemeinsam (1 dB pro Raste), Drücken oder Tippen schaltet den Eingang stumm (MUTE, A1–A3 bleiben). | Ein Schritt pro Druck (3 dB, negativ für leiser) |
+| **Master** | Drehen ändert den Master-Fader eines Ausgangs, Drücken schaltet ihn stumm. | Ein Schritt pro Druck, Titel zeigt den Pegel |
+| **Fader** (ein Eingang auf einem Ausgang, Matrix) | Drehen ändert den Pegel (1 dB pro Raste), Drücken oder Tippen schaltet stumm. Der Streifen zeigt Name, Pegel und Faderstellung. | Ein Schritt pro Druck (3 dB, negativ für leiser), Titel zeigt den Pegel |
+| **Stumm** | – | Eingang auf einem Ausgang, auf allen Ausgängen einzeln oder als „MUTE des Streifens“ stumm; Taste zeigt den Zustand |
 | **Preset laden** | – | Lädt ein Preset aus Faderust; leuchtet, solange die Fader dazu passen |
 | **Standardgerät** | – | Macht ein Gerät zum Windows-Standard (oder nur für Anrufe); leuchtet, solange es das ist |
 
@@ -39,7 +41,7 @@ Faderust lauscht auf `ws://127.0.0.1:47811` (nur lokal) und spricht JSON. Verbin
 
 Faderust schickt bei jeder Änderung:
 
-- `{"type":"state","protocol":2,"inputs":[…],"outputs":[…],"gains":[[{"db":0,"muted":false}]],"presets":[…],"activePreset":null}`
+- `{"type":"state","protocol":3,"inputs":[…],"outputs":[…],"gains":[[{"db":0,"muted":false}]],"inputMuted":[false],"masters":[{"db":0,"muted":false}],"presets":[…],"activePreset":null}`
 - `{"type":"devices","supported":true,"playback":[…],"recording":[…]}` (Windows-Geräte mit `id`, `name`, `isDefault`, `isDefaultCommunications`)
 - `{"type":"error","message":"…"}` bei einer ungültigen Anfrage
 
@@ -51,6 +53,11 @@ Anfragen:
 | `addGain` | `input`, `output`, `delta` (dB) |
 | `setMuted` | `input`, `output`, `muted` |
 | `toggleMuted` | `input`, `output` |
+| `addStripGain` | `input`, `delta` (dB), bewegt alle eingeschalteten Ausgänge wie der Pult-Streifen |
+| `setInputMuted` | `input`, `muted` |
+| `setMasterGain` | `output`, `db` |
+| `addMasterGain` | `output`, `delta` (dB) |
+| `setMasterMuted` | `output`, `muted` |
 | `loadPreset` | `name` |
 | `setDefaultDevice` | `id`, `communications` |
 

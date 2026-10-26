@@ -1,7 +1,7 @@
 {
   "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
   "Name": "Faderust",
-  "Version": "0.3.1.0",
+  "Version": "0.3.2.0",
   "Author": "Niklas970",
   "Description": "Steuert den Faderust-Mixer: Fader, Stummschalten, Presets und Windows-Standardgeräte.",
   "URL": "https://github.com/Niklas970/faderust",
@@ -24,6 +24,60 @@
     "Version": "24"
   },
   "Actions": [
+    {
+      "Name": "Streifen",
+      "UUID": "com.niklas970.faderust.strip",
+      "Icon": "imgs/actions/strip/icon",
+      "Tooltip": "Streifen wie im Pult: Pegel für alle Ausgänge des Eingangs, Drücken schaltet MUTE.",
+      "PropertyInspectorPath": "ui/strip.html",
+      "Controllers": [
+        "Keypad",
+        "Encoder"
+      ],
+      "Encoder": {
+        "layout": "$B1",
+        "Icon": "imgs/actions/strip/icon",
+        "TriggerDescription": {
+          "Rotate": "Pegel",
+          "Push": "MUTE",
+          "Touch": "MUTE"
+        }
+      },
+      "States": [
+        {
+          "Image": "imgs/actions/strip/key",
+          "TitleAlignment": "bottom",
+          "FontSize": 11
+        }
+      ]
+    },
+    {
+      "Name": "Master",
+      "UUID": "com.niklas970.faderust.master",
+      "Icon": "imgs/actions/master/icon",
+      "Tooltip": "Master-Fader eines Ausgangs, Drücken schaltet ihn stumm.",
+      "PropertyInspectorPath": "ui/master.html",
+      "Controllers": [
+        "Keypad",
+        "Encoder"
+      ],
+      "Encoder": {
+        "layout": "$B1",
+        "Icon": "imgs/actions/master/icon",
+        "TriggerDescription": {
+          "Rotate": "Pegel",
+          "Push": "Stumm",
+          "Touch": "Stumm"
+        }
+      },
+      "States": [
+        {
+          "Image": "imgs/actions/master/key",
+          "TitleAlignment": "bottom",
+          "FontSize": 11
+        }
+      ]
+    },
     {
       "Name": "Fader",
       "UUID": "com.niklas970.faderust.volume",

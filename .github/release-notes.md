@@ -1,15 +1,7 @@
-## Neu in 0.5.0
+## Neu in 0.5.1
 
-- **Rauschunterdrückung** pro Eingang (RNNoise): filtert Tastatur, Lüfter und Rauschen aus dem Mikro. Läuft bei Geräten mit 48 kHz und verzögert den Ton um 10 ms
-- **Deutsch und Englisch:** Die Oberfläche folgt der Windows-Sprache, umstellbar unter „Design“
-- **Selbsttest** unter „Geräte“: prüft Geräte, Puffer, Rückkopplung, Fernsteuerung und Stream-Deck-Plugin; der Bericht lässt sich für ein Issue kopieren
-- **Stream-Deck-Plugin aus der App aktualisieren:** Das Setup bringt das Plugin mit, unter „Geräte“ siehst du, ob eine neuere Version bereitliegt
-- **Fernsteuerung mit Token:** Das Stream Deck meldet sich mit einem Token aus dem Konfigurationsordner an. **Das Plugin muss dafür einmal aktualisiert werden** (Plugin 0.3.1), ältere Plugins verbinden sich nicht mehr
-- **Kompakte Ansicht und „Immer im Vordergrund“:** zwei Knöpfe in der Titelleiste
-- **Fenster passt sich an:** Kommt ein Streifen dazu oder fällt einer weg, ändert Faderust die Fensterbreite selbst (nicht bei maximiertem Fenster)
-- **Schmalere Programm-Streifen:** ohne Skala, mit kleineren A-Knöpfen
-- **Latenz nach einem Aussetzer:** Staut sich nach einem Aussetzer des Ausgangs Ton an, wird er verworfen statt mit bis zu einer halben Sekunde Verzögerung gespielt
-- Sicherheit: schärfere Rechte der Workflows, `SECURITY.md`, Dependabot
+- **Stream Deck: neue Aktionen fürs Pult.** „Streifen“ regelt einen Eingang wie im Pult (alle seine Ausgänge gemeinsam, Drücken = MUTE), „Master“ regelt einen Ausgang, und der Stumm-Knopf kennt „MUTE des Streifens“. **Das Plugin muss dafür einmal aktualisiert werden** (Plugin 0.3.2): nach dem Update in Faderust unter „Geräte“ auf „Plugin aktualisieren“ klicken
+- Neue Stream-Deck-Icons in Grün auf OLED-Schwarz
 
 ## Installation
 

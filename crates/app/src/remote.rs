@@ -24,7 +24,7 @@ use crate::AppState;
 
 /// Fixed so the plugin finds Faderust without setup.
 pub const PORT: u16 = 47811;
-const PROTOCOL: u32 = 2;
+const PROTOCOL: u32 = 3;
 /// Where the plugin's token file is read from, inside the config folder.
 pub const TOKEN_FILE: &str = "remote.token";
 /// A client must say hello within this long, or it is turned away.
@@ -54,6 +54,28 @@ enum Request {
     ToggleMuted {
         input: usize,
         output: usize,
+    },
+    /// Moves an input's desk strip: every output it plays on, together.
+    AddStripGain {
+        input: usize,
+        delta: f32,
+    },
+    /// Mutes an input everywhere; its routing (A1, A2 …) stays.
+    SetInputMuted {
+        input: usize,
+        muted: bool,
+    },
+    SetMasterGain {
+        output: usize,
+        db: f32,
+    },
+    AddMasterGain {
+        output: usize,
+        delta: f32,
+    },
+    SetMasterMuted {
+        output: usize,
+        muted: bool,
     },
     LoadPreset {
         name: String,
@@ -177,6 +199,10 @@ struct State {
     outputs: Vec<String>,
     /// `gains[input][output]`.
     gains: Vec<Vec<Gain>>,
+    /// Mute of each whole input.
+    input_muted: Vec<bool>,
+    /// Master fader of each output.
+    masters: Vec<Gain>,
     presets: Vec<String>,
     /// The preset the faders match right now.
     active_preset: Option<String>,
@@ -189,6 +215,8 @@ impl State {
             inputs: config.inputs.iter().map(|i| i.label.clone()).collect(),
             outputs: config.outputs.iter().map(|o| o.label.clone()).collect(),
             gains: config.gains.clone(),
+            input_muted: config.inputs.iter().map(|i| i.muted).collect(),
+            masters: config.outputs.iter().map(|o| o.master).collect(),
             presets: config.presets.iter().map(|p| p.name.clone()).collect(),
             active_preset: config
                 .presets
@@ -359,6 +387,11 @@ fn handle(state: &AppState, req: Request) -> Result<bool, String> {
             muted,
         } => Command::SetMuted(input, output, muted),
         Request::ToggleMuted { input, output } => Command::ToggleMuted(input, output),
+        Request::AddStripGain { input, delta } => Command::AddStripGain(input, delta),
+        Request::SetInputMuted { input, muted } => Command::SetInputMuted(input, muted),
+        Request::SetMasterGain { output, db } => Command::SetMasterGain(output, db),
+        Request::AddMasterGain { output, delta } => Command::AddMasterGain(output, delta),
+        Request::SetMasterMuted { output, muted } => Command::SetMasterMuted(output, muted),
         Request::LoadPreset { name } => return crate::apply_preset(state, &name).map(|_| false),
         Request::SetDefaultDevice { id, communications } => {
             return crate::set_default(&id, communications).map(|_| true)
@@ -400,6 +433,20 @@ mod tests {
             Request::SetDefaultDevice {
                 id: "{0.0.0}".into(),
                 communications: false
+            }
+        );
+        assert_eq!(
+            parse(r#"{"type":"addStripGain","input":2,"delta":1}"#),
+            Request::AddStripGain {
+                input: 2,
+                delta: 1.0
+            }
+        );
+        assert_eq!(
+            parse(r#"{"type":"setMasterMuted","output":0,"muted":true}"#),
+            Request::SetMasterMuted {
+                output: 0,
+                muted: true
             }
         );
         assert!(serde_json::from_str::<Request>(r#"{"type":"format"}"#).is_err());
@@ -531,6 +578,8 @@ mod tests {
         assert_eq!(json["type"], "state");
         assert_eq!(json["inputs"][0], "Mikro");
         assert_eq!(json["gains"][0][0]["db"], 0.0);
+        assert_eq!(json["inputMuted"][0], false);
+        assert_eq!(json["masters"][0]["db"], 0.0);
         assert_eq!(json["activePreset"], serde_json::Value::Null);
 
         let mut config = config;

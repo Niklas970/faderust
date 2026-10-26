@@ -56,13 +56,15 @@ class Peer {
 
 const state = {
   type: "state",
-  protocol: 1,
+  protocol: 3,
   inputs: ["Mikro", "PC"],
   outputs: ["PS5", "Kopfhörer"],
   gains: [
     [{ db: 0, muted: false }, { db: -6, muted: false }],
     [{ db: -12, muted: true }, { db: 0, muted: true }],
   ],
+  inputMuted: [false, true],
+  masters: [{ db: 0, muted: false }, { db: -3, muted: true }],
   presets: ["Spielen", "Chat"],
   activePreset: "Chat",
 };
@@ -180,6 +182,38 @@ test("mute key on all outputs shows and flips the state", async () => {
   const b = await fr.next((m) => m.type === "setMuted" && m.output === 1);
   assert.equal(a.muted, false);
   assert.equal(b.muted, false);
+});
+
+test("strip dial moves the whole strip and mutes the input", async () => {
+  const settings = { input: 0 };
+  appear("strip", "strip", settings, "Encoder");
+  const fb = await sd.next((m) => m.event === "setFeedback" && m.context === "strip");
+  assert.equal(fb.payload.title, "Mikro");
+  assert.equal(fb.payload.value, "0.0 dB");
+  event("dialRotate", "strip", "strip", settings, { ticks: 3, pressed: false }, "Encoder");
+  assert.deepEqual(await fr.next((m) => m.type === "addStripGain"), { type: "addStripGain", input: 0, delta: 3 });
+  event("dialDown", "strip", "strip", settings, {}, "Encoder");
+  assert.deepEqual(await fr.next((m) => m.type === "setInputMuted"), { type: "setInputMuted", input: 0, muted: true });
+});
+
+test("master dial shows the output and mutes it", async () => {
+  const settings = { output: 1 };
+  appear("master", "master", settings, "Encoder");
+  const fb = await sd.next((m) => m.event === "setFeedback" && m.context === "master");
+  assert.equal(fb.payload.title, "Kopfhörer");
+  assert.equal(fb.payload.value, "Stumm");
+  event("dialRotate", "master", "master", settings, { ticks: -1, pressed: false }, "Encoder");
+  assert.deepEqual(await fr.next((m) => m.type === "addMasterGain"), { type: "addMasterGain", output: 1, delta: -1 });
+  event("dialDown", "master", "master", settings, {}, "Encoder");
+  assert.deepEqual(await fr.next((m) => m.type === "setMasterMuted"), { type: "setMasterMuted", output: 1, muted: false });
+});
+
+test("mute key can be the strip's MUTE button", async () => {
+  const settings = { input: 1, output: -2 };
+  appear("mute", "smute", settings);
+  assert.equal((await sd.next((m) => m.event === "setState" && m.context === "smute")).payload.state, 1);
+  event("keyDown", "mute", "smute", settings);
+  assert.deepEqual(await fr.next((m) => m.type === "setInputMuted"), { type: "setInputMuted", input: 1, muted: false });
 });
 
 test("preset key lights up for the active preset and loads", async () => {
