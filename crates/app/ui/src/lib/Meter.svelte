@@ -6,17 +6,33 @@
    */
   let { db = -120, vertical = true, thin = false } = $props();
 
-  // Rises at once, falls slowly like a hardware meter (dB per second).
+  // Rises at once, falls slowly like a hardware meter (dB per second). The
+  // fall runs on animation frames, so every meter keeps falling in step even
+  // when its value stops changing (a stream that ends sends -∞ only once).
   const FALL = 20;
   let shown = $state(-120);
+  let target = -120;
+  let frame = 0;
   let last = 0;
-  $effect(() => {
-    const now = performance.now();
-    const dt = last ? Math.min(0.5, (now - last) / 1000) : 0;
+
+  function fall(now) {
+    const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
     last = now;
-    const prev = untrack(() => shown);
-    shown = db >= prev ? db : Math.max(db, prev - FALL * dt);
+    shown = Math.max(target, shown - FALL * dt);
+    frame = shown > target ? requestAnimationFrame(fall) : 0;
+  }
+
+  $effect(() => {
+    target = db;
+    if (db >= untrack(() => shown)) {
+      shown = db;
+    } else if (!frame) {
+      last = performance.now();
+      frame = requestAnimationFrame(fall);
+    }
   });
+
+  $effect(() => () => cancelAnimationFrame(frame));
 
   const pct = $derived(Math.max(0, Math.min(100, ((shown + 60) / 60) * 100)));
 </script>
@@ -48,7 +64,7 @@
   .leds {
     position: absolute;
     inset: 1px;
-    transition: clip-path 120ms ease-out;
+    transition: clip-path 60ms linear;
   }
   .vertical .leds {
     background: linear-gradient(
