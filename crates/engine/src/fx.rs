@@ -290,6 +290,34 @@ const RNN_RATE: u32 = 48_000;
 /// RNNoise expects 16-bit sized values instead of -1…1.
 const RNN_SCALE: f32 = 32768.0;
 
+/// RNNoise fades its gain out fast once speech ends and takes quiet word
+/// endings with it. The attenuation it applied (output energy over input
+/// energy of a frame) is therefore only allowed to deepen slowly: what lies
+/// between the held and the actual gain is mixed back in from the input.
+const TAIL_DECAY: f32 = 0.92; // per 10 ms frame: about 120 ms
+/// Frames quieter than this (mean square, 16-bit scale; about -80 dBFS) are
+/// left as RNNoise made them.
+const TAIL_FLOOR: f32 = 10.0;
+
+#[derive(Debug, Clone, Copy, Default)]
+struct TailHold {
+    held: f32,
+    /// The weight of the previous frame, where the ramp starts.
+    last: f32,
+}
+
+impl TailHold {
+    /// How much of the unprocessed input to mix in (0…1) for a frame that
+    /// RNNoise attenuated to `gain` (0…1).
+    fn weight(&mut self, gain: f32) -> f32 {
+        self.held = gain.max(self.held * TAIL_DECAY);
+        if gain >= 0.98 {
+            return 0.0;
+        }
+        ((self.held - gain) / (1.0 - gain)).clamp(0.0, 1.0)
+    }
+}
+
 /// One channel of RNNoise. Collects a frame, then plays the frame it
 /// processed before: 10 ms of delay, no allocation while running.
 struct Denoiser {
@@ -297,6 +325,7 @@ struct Denoiser {
     input: [f32; RNN_FRAME],
     output: [f32; RNN_FRAME],
     pos: usize,
+    tail: TailHold,
 }
 
 impl Denoiser {
@@ -306,6 +335,7 @@ impl Denoiser {
             input: [0.0; RNN_FRAME],
             output: [0.0; RNN_FRAME],
             pos: 0,
+            tail: TailHold::default(),
         }
     }
 
@@ -314,6 +344,26 @@ impl Denoiser {
         self.input.fill(0.0);
         self.output.fill(0.0);
         self.pos = 0;
+        self.tail = TailHold::default();
+    }
+
+    /// Mixes input back into the frame just processed, see [`TailHold`]. The
+    /// weight ramps over the frame, so there are no steps.
+    fn hold_tail(&mut self) {
+        let energy = |frame: &[f32; RNN_FRAME]| frame.iter().map(|v| v * v).sum::<f32>();
+        let (before, after) = (energy(&self.input), energy(&self.output));
+        let gain = if before < RNN_FRAME as f32 * TAIL_FLOOR {
+            1.0
+        } else {
+            (after / before).sqrt().min(1.0)
+        };
+        let from = self.tail.last;
+        let to = self.tail.weight(gain);
+        self.tail.last = to;
+        for (n, (out, input)) in self.output.iter_mut().zip(&self.input).enumerate() {
+            let w = from + (to - from) * (n + 1) as f32 / RNN_FRAME as f32;
+            *out += (*input - *out) * w;
+        }
     }
 
     #[inline]
@@ -324,6 +374,7 @@ impl Denoiser {
         if self.pos == RNN_FRAME {
             self.pos = 0;
             self.state.process_frame(&mut self.output, &self.input);
+            self.hold_tail();
             for v in &mut self.output {
                 *v = (*v / RNN_SCALE).clamp(-1.0, 1.0);
             }
@@ -501,6 +552,28 @@ mod tests {
             "tone {before} -> {after}"
         );
         assert!(out.iter().all(|v| v.abs() <= 1.0));
+    }
+
+    #[test]
+    fn tail_hold_lets_the_gain_deepen_only_slowly() {
+        let mut t = TailHold::default();
+        // Speech: RNNoise passes everything, nothing is mixed in.
+        assert_eq!(t.weight(1.0), 0.0);
+        // Speech ends: RNNoise drops to 0.1 at once. The held gain falls
+        // from 1 by 8 % a frame (effective gain 0.92), so most of the input
+        // is mixed back in …
+        let first = t.weight(0.1);
+        assert!((first - 0.911).abs() < 0.01, "{first}");
+        let mut last = first;
+        // … less and less, until nothing is.
+        for _ in 0..80 {
+            let w = t.weight(0.1);
+            assert!(w <= last + 1e-6);
+            last = w;
+        }
+        assert!(last < 1e-3, "{last}");
+        // Steady noise suppression never mixes anything in.
+        assert_eq!(t.weight(0.1), 0.0);
     }
 
     #[test]

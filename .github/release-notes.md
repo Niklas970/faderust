@@ -5,6 +5,7 @@
 - **Stille Programme:** „N still, zeigen“ steht jetzt oben neben „+ Programm“. Pro Programm lässt sich mit dem Augen-Knopf unter dem Streifen einstellen, ob es bei Stille ausgeblendet wird
 - **Kompaktmodus schmaler und flacher:** alle Fader ohne Skala, niedriger, Ausgangsnamen ausgeblendet; so passen deutlich mehr Streifen in ein kleines Fenster
 - **LED-Anzeigen bleiben nicht mehr hängen:** Endet ein Ton (z. B. Video gestoppt), fallen die LEDs sauber auf null, und alle Anzeigen fallen im Gleichtakt
+- **Rauschunterdrückung schneidet Wortenden weniger ab:** RNNoise darf nach dem Sprechen nur langsam zumachen (ca. 120 ms), leise Endungen bleiben so hörbar
 - Neue Stream-Deck-Icons in Grün auf OLED-Schwarz
 
 ## Installation
