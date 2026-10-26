@@ -31,8 +31,8 @@ function fill(select) {
   const current = settings[select.dataset.setting];
   select.replaceChildren();
   const add = (v, label) => select.append(new Option(label, String(v)));
-  if (select.dataset.extra) {
-    const [v, label] = select.dataset.extra.split("|");
+  for (const extra of select.dataset.extra?.split(";") ?? []) {
+    const [v, label] = extra.split("|");
     add(v, label);
   }
   for (const o of list) add(o.value, o.label);

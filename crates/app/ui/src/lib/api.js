@@ -170,6 +170,19 @@ export async function setBackendLanguage(code) {
   return (await tauri()).invoke("set_language", { code });
 }
 
+/** The end of faderust.log as text. */
+export async function getLog(lines = 400) {
+  if (!inTauri)
+    return "12:00:01 UTC  Faderust 0.5.1 gestartet\n12:00:02 UTC  Eingang Mikro verbunden\n12:03:40 UTC  Kopfhörer: Aufnahme fehlgeschlagen";
+  return (await tauri()).invoke("get_log", { lines });
+}
+
+/** Opens the folder with the log in the file manager. */
+export async function openLogFolder() {
+  if (!inTauri) return;
+  return (await tauri()).invoke("open_log_folder");
+}
+
 /**
  * The self-test: `[{ status, title, detail }]`, status "ok", "warn", "fail"
  * or "info".
@@ -179,8 +192,16 @@ export async function runSelftest() {
     return [
       { status: "ok", title: "Konfiguration", detail: "Datei lesbar" },
       { status: "ok", title: "Eingang „Mikro“", detail: "Verbunden" },
-      { status: "warn", title: "Puffer „Kopfhörer“", detail: "60 ms: 3 Aussetzer. Den Puffer erhöhen." },
-      { status: "fail", title: "Ausgang „Box“", detail: "Gerät ist da, lässt sich aber nicht öffnen." },
+      {
+        status: "warn",
+        title: "Puffer „Kopfhörer“",
+        detail: "60 ms: 3 Aussetzer. Den Puffer erhöhen.",
+      },
+      {
+        status: "fail",
+        title: "Ausgang „Box“",
+        detail: "Gerät ist da, lässt sich aber nicht öffnen.",
+      },
       { status: "info", title: "Stream Deck", detail: "Kein Plugin verbunden" },
     ];
   return (await tauri()).invoke("run_selftest");
@@ -203,7 +224,13 @@ export async function setAutostart(enabled) {
  */
 export async function getStreamDeck() {
   if (!inTauri)
-    return { bundled: "0.3.1.0", connected: true, installed: "0.3.0.0", update: true, refused: false };
+    return {
+      bundled: "0.3.1.0",
+      connected: true,
+      installed: "0.3.0.0",
+      update: true,
+      refused: false,
+    };
   return (await tauri()).invoke("get_streamdeck");
 }
 
@@ -349,6 +376,8 @@ const mock = {
       },
       { label: "PC", device: "CABLE Output", fx: defaultFx() },
       { label: "PS5", device: "Line In", fx: defaultFx() },
+      { label: "Discord", device: "app:discord.exe", fx: defaultFx() },
+      { label: "Brave", device: "app:brave.exe", fx: defaultFx() },
     ],
     outputs: [
       {
@@ -561,7 +590,7 @@ const mock = {
           ...c,
           connected: true,
           deviceName: this.devices.inputs[i % 3].name,
-          levelDb: inLevels[i],
+          levelDb: c.device === "app:brave.exe" ? -90 : inLevels[i],
         })),
         outputs: outputs.map((c, o) => ({
           ...c,

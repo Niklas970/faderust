@@ -34,6 +34,10 @@ pub enum Command {
     ToggleMuted(usize, usize),
     /// Master fader of an output.
     SetMasterGain(usize, f32),
+    /// Moves a master fader by a dB step.
+    AddMasterGain(usize, f32),
+    /// Moves an input's desk strip (all outputs it plays on) by a dB step.
+    AddStripGain(usize, f32),
     SetMasterMuted(usize, bool),
     /// Mute of a whole input.
     SetInputMuted(usize, bool),
@@ -370,6 +374,28 @@ fn run(
                                 dirty_since.get_or_insert_with(Instant::now);
                             }
                         }
+                        Command::AddMasterGain(o, delta) => {
+                            let mut c = config.lock().unwrap_or_else(|e| e.into_inner());
+                            if let Some(out) = c.outputs.get_mut(o) {
+                                out.master.db = clamp_db(step_db(out.master.db, delta));
+                                if let Some(e) = &engine {
+                                    e.matrix.set_master_db(o, out.master.db);
+                                }
+                                dirty_since.get_or_insert_with(Instant::now);
+                            }
+                        }
+                        Command::AddStripGain(i, delta) => {
+                            let mut c = config.lock().unwrap_or_else(|e| e.into_inner());
+                            if let Some(row) = c.gains.get_mut(i) {
+                                strip_step(row, delta);
+                                if let Some(e) = &engine {
+                                    for (o, g) in row.iter().enumerate() {
+                                        e.matrix.set_gain_db(i, o, g.db);
+                                    }
+                                }
+                                dirty_since.get_or_insert_with(Instant::now);
+                            }
+                        }
                         Command::SetMasterMuted(o, muted) => {
                             let mut c = config.lock().unwrap_or_else(|e| e.into_inner());
                             if let Some(out) = c.outputs.get_mut(o) {
@@ -493,6 +519,33 @@ fn step_db(db: f32, delta: f32) -> f32 {
     }
 }
 
+/// Moves a desk strip like its fader in the UI (`stripChanges` in
+/// ui/src/lib/scale.js): the loudest output it plays on moves by `delta`,
+/// the others follow by the same amount.
+fn strip_step(row: &mut [crate::config::Gain], delta: f32) {
+    let on = row.iter().filter(|g| !g.muted);
+    let base = if row.iter().any(|g| !g.muted) {
+        on.map(|g| g.db).fold(-120.0, f32::max)
+    } else {
+        row.iter().map(|g| g.db).fold(-120.0, f32::max)
+    };
+    let next = step_db(base, delta);
+    for g in row.iter_mut().filter(|g| !g.muted) {
+        g.db = if next <= -120.0 {
+            -120.0
+        } else if g.db <= -120.0 || base <= -120.0 {
+            next
+        } else {
+            let db = g.db + next - base;
+            if db <= -60.0 {
+                -120.0
+            } else {
+                ((db * 2.0).round() / 2.0).min(12.0)
+            }
+        };
+    }
+}
+
 /// Applies `f` to one gain entry if it exists and returns the new value.
 fn gain_mut(
     config: &Mutex<Config>,
@@ -607,7 +660,23 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
 
 #[cfg(test)]
 mod tests {
-    use super::{explain, skipped, step_db};
+    use super::{explain, skipped, step_db, strip_step};
+    use crate::config::Gain;
+
+    #[test]
+    fn strip_step_moves_the_outputs_it_plays_on_together() {
+        let g = |db, muted| Gain { db, muted };
+        let mut row = [g(0.0, false), g(-6.0, false), g(-3.0, true)];
+        strip_step(&mut row, -2.0);
+        assert_eq!(row.map(|g| g.db), [-2.0, -8.0, -3.0]);
+        // Off: the first step up starts where a fader from -inf does.
+        let mut row = [g(-120.0, false), g(-120.0, false)];
+        strip_step(&mut row, 1.0);
+        assert_eq!(row.map(|g| g.db), [-59.0, -59.0]);
+        let mut row = [g(-58.0, false), g(-70.0, false)];
+        strip_step(&mut row, -3.0);
+        assert_eq!(row.map(|g| g.db), [-120.0, -120.0]);
+    }
 
     #[test]
     fn explains_a_device_held_by_another_program() {

@@ -18,6 +18,26 @@
   const devices = $derived(inputs.map((input, i) => ({ input, i })).filter(({ input }) => !isProgram(input)));
   const allPrograms = $derived(inputs.map((input, i) => ({ input, i })).filter(({ input }) => isProgram(input)));
 
+  // Programs the user wants to stay on the desk even when silent.
+  const KEEP_KEY = "faderust.keepShown";
+  let keep = $state(load());
+  function load() {
+    try {
+      const v = JSON.parse(localStorage.getItem(KEEP_KEY) ?? "[]");
+      return Array.isArray(v) ? v : [];
+    } catch {
+      return [];
+    }
+  }
+  function toggleKeep(device) {
+    keep = keep.includes(device) ? keep.filter((d) => d !== device) : [...keep, device];
+    try {
+      localStorage.setItem(KEEP_KEY, JSON.stringify(keep));
+    } catch {
+      // Not saved; it still applies until the window closes.
+    }
+  }
+
   // When each program was last heard (or first seen); silent ones hide.
   const heard = new Map();
   let showAll = $state(false);
@@ -27,7 +47,9 @@
       if (!heard.has(input.device) || (input.connected && input.levelDb > -60)) heard.set(input.device, now);
     }
     if (!hideAfter) return allPrograms;
-    return allPrograms.filter(({ input }) => now - heard.get(input.device) < hideAfter * 1000);
+    return allPrograms.filter(
+      ({ input }) => keep.includes(input.device) || now - heard.get(input.device) < hideAfter * 1000,
+    );
   });
   const programs = $derived(showAll ? allPrograms : audible);
   const silent = $derived(allPrograms.length - audible.length);
@@ -65,7 +87,8 @@
   }
 </script>
 
-{#snippet strip(input, i, narrow = false)}
+{#snippet strip(input, i, program = false)}
+  {@const narrow = program || compact}
   {@const r = row(i)}
   <section class="strip panel" class:narrow>
     <div class="buses">
@@ -94,7 +117,27 @@
         onMute={(v) => onInputMute(i, v)}
       />
     </div>
-    <button class="fx" class:on={fxActive(input.fx)} onclick={() => onFx(i)}>{t("fx.title")}</button>
+    {#if narrow}
+      <div class="foot">
+        <button class="fx" class:on={fxActive(input.fx)} onclick={() => onFx(i)} title={t("fx.title")}>FX</button>
+        {#if program}
+        <button
+          class="keep"
+          class:on={keep.includes(input.device)}
+          aria-pressed={keep.includes(input.device)}
+          title={keep.includes(input.device) ? t("strip.keepOn") : t("strip.keepOff")}
+          aria-label={keep.includes(input.device) ? t("strip.keepOn") : t("strip.keepOff")}
+          onclick={() => toggleKeep(input.device)}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true"
+            ><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></svg
+          >
+        </button>
+        {/if}
+      </div>
+    {:else}
+      <button class="fx" class:on={fxActive(input.fx)} onclick={() => onFx(i)}>{t("fx.title")}</button>
+    {/if}
   </section>
 {/snippet}
 
@@ -110,7 +153,7 @@
             <div class="grow">
               <Fader
                 label={output.label}
-                note={output.connected ? output.deviceName : output.released ? t("out.releasedShort") : t("out.waitingShort")}
+                note={compact ? "" : output.connected ? output.deviceName : output.released ? t("out.releasedShort") : t("out.waitingShort")}
                 noteOn={output.connected}
                 noteTitle={output.released ? t("out.released") : (output.deviceName ?? "")}
                 value={m.db}
@@ -118,6 +161,7 @@
                 levelDb={output.levelDb}
                 connected={output.connected || output.released}
                 postFader
+                narrow={compact}
                 onChange={(db) => onMaster(o, db)}
                 onMute={(v) => onMasterMute(o, v)}
               />
@@ -137,7 +181,15 @@
       </div>
     {/if}
     <div class="group">
-      <h2>{t("programs.title")} <button class="add" onclick={onPrograms} title={t("programs.addHint")}>{t("programs.add")}</button></h2>
+      <h2>
+        {t("programs.title")}
+        <button class="add" onclick={onPrograms} title={t("programs.addHint")}>{t("programs.add")}</button>
+        {#if silent}
+          <button class="more" onclick={() => (showAll = !showAll)}
+            >{showAll ? t("strip.hideSilent") : t("strip.showSilent", { count: silent })}</button
+          >
+        {/if}
+      </h2>
       <div class="row">
         {#each programs as { input, i } (i)}
           {@render strip(input, i, true)}
@@ -146,11 +198,6 @@
             <p class="hint">{t("strip.programsHint")}</p>
           {/if}
         {/each}
-        {#if silent}
-          <button class="more" onclick={() => (showAll = !showAll)}
-            >{showAll ? t("strip.hideSilent") : t("strip.showSilent", { count: silent })}</button
-          >
-        {/if}
       </div>
     </div>
   </div>
@@ -284,13 +331,43 @@
     color: var(--accent);
   }
   .more {
-    align-self: flex-start;
-    padding: 4px 10px;
+    padding: 3px 10px;
     font-size: 12px;
+    letter-spacing: 0;
+    text-transform: none;
     color: var(--muted);
     background: none;
     border: 1px dashed var(--border);
     border-radius: var(--radius-sm);
+  }
+  .foot {
+    display: flex;
+    gap: 4px;
+  }
+  .foot .fx {
+    padding: 4px 8px;
+  }
+  .keep {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    padding: 0;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--muted);
+  }
+  .keep svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+  .keep.on {
+    color: var(--accent);
+    border-color: var(--accent);
   }
   .hint {
     width: 160px;

@@ -5,11 +5,13 @@ import { FaderustAction } from "./base";
 
 type Settings = {
   input?: number;
-  /** -1: the input on every output, e.g. the microphone everywhere. */
+  /** -1: the input on every output, e.g. the microphone everywhere.
+   *  -2: the MUTE button of the desk strip (routing A1, A2 … stays). */
   output?: number;
 };
 
 const ALL = -1;
+const STRIP = -2;
 
 /** Mute key with the current state on it (state 1 = muted). */
 @action({ UUID: "com.niklas970.faderust.mute" })
@@ -18,11 +20,13 @@ export class Mute extends FaderustAction<Settings> {
   #outputs(s: Settings): number[] {
     const count = faderust.state?.outputs.length ?? 0;
     const output = s.output ?? 0;
+    if (output === STRIP) return [];
     if (output === ALL) return [...Array(count).keys()];
     return output < count ? [output] : [];
   }
 
   #muted(s: Settings): boolean | undefined {
+    if (s.output === STRIP) return faderust.state?.inputMuted?.[s.input ?? 0];
     const row = faderust.state?.gains[s.input ?? 0];
     const outputs = this.#outputs(s);
     if (!row || outputs.length === 0) return undefined;
@@ -39,6 +43,10 @@ export class Mute extends FaderustAction<Settings> {
     const s = this.settingsOf(ev.action);
     const muted = this.#muted(s);
     if (muted === undefined || !faderust.connected) return this.offline(ev.action);
+    if (s.output === STRIP) {
+      faderust.send({ type: "setInputMuted", input: s.input ?? 0, muted: !muted });
+      return;
+    }
     for (const output of this.#outputs(s)) {
       faderust.send({ type: "setMuted", input: s.input ?? 0, output, muted: !muted });
     }

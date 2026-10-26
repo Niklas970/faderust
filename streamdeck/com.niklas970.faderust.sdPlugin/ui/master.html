@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>Master</title>
+    <link rel="stylesheet" href="pi.css" />
+  </head>
+  <body>
+    <div id="status" class="status" hidden>Faderust läuft nicht. Starte Faderust, dann erscheinen hier die Auswahllisten.</div>
+    <div class="item"><label for="output">Ausgang</label><select id="output" data-setting="output" data-source="outputs" data-type="number"></select></div>
+    <div class="item"><label for="step">Schritt (dB)</label><input id="step" type="number" step="0.5" placeholder="Regler 1, Taste 3" data-setting="step" data-type="number" /></div>
+    <p class="hint">Master-Fader des Ausgangs. Stream Deck+: Drehen ändert den Pegel, Drücken oder Tippen schaltet den Ausgang stumm. Als Taste: ein Schritt pro Druck, negativ für leiser.</p>
+    <script src="pi.js"></script>
+  </body>
+</html>

@@ -33,6 +33,10 @@ export type State = {
   outputs: string[];
   /** `gains[input][output]`. */
   gains: Gain[][];
+  /** Mute of each whole input (protocol 2). */
+  inputMuted: boolean[];
+  /** Master fader of each output (protocol 2). */
+  masters: Gain[];
   presets: string[];
   activePreset: string | null;
 };
@@ -57,6 +61,11 @@ export type Request =
   | { type: "addGain"; input: number; output: number; delta: number }
   | { type: "setMuted"; input: number; output: number; muted: boolean }
   | { type: "toggleMuted"; input: number; output: number }
+  | { type: "addStripGain"; input: number; delta: number }
+  | { type: "setInputMuted"; input: number; muted: boolean }
+  | { type: "setMasterGain"; output: number; db: number }
+  | { type: "addMasterGain"; output: number; delta: number }
+  | { type: "setMasterMuted"; output: number; muted: boolean }
   | { type: "loadPreset"; name: string }
   | { type: "setDefaultDevice"; id: string; communications: boolean };
 
@@ -161,4 +170,12 @@ export function faderPercent(db: number): number {
   else if (db < -24) p = 0.05 + ((db + 60) / 36) * 0.2;
   else p = 0.25 + ((Math.min(db, 12) + 24) / 36) * 0.75;
   return Math.round(p * 100);
+}
+
+/** What a desk strip's fader shows: the loudest output it plays on. */
+export function stripGain(row: Gain[] | undefined): Gain | undefined {
+  if (!row?.length) return undefined;
+  const on = row.filter((g) => !g.muted);
+  const db = (on.length ? on : row).reduce((m, g) => Math.max(m, g.db), -120);
+  return { db, muted: on.length === 0 };
 }
