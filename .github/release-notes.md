@@ -1,12 +1,6 @@
-## Neu in 0.5.1
+## Neu in 0.5.2
 
-- **Stream Deck: neue Aktionen fürs Pult.** „Streifen“ regelt einen Eingang wie im Pult (alle seine Ausgänge gemeinsam, Drücken = MUTE), „Master“ regelt einen Ausgang, und der Stumm-Knopf kennt „MUTE des Streifens“. **Das Plugin muss dafür einmal aktualisiert werden** (Plugin 0.3.2): nach dem Update in Faderust unter „Geräte“ auf „Plugin aktualisieren“ klicken
-- **Protokoll:** Unten in der App öffnet „Protokoll“ das Log von Faderust. Man kann es kopieren, nur Fehler anzeigen, den Ordner öffnen und von dort den Selbsttest starten
-- **Stille Programme:** „N still, zeigen“ steht jetzt oben neben „+ Programm“. Pro Programm lässt sich mit dem Augen-Knopf unter dem Streifen einstellen, ob es bei Stille ausgeblendet wird
-- **Kompaktmodus schmaler und flacher:** alle Fader ohne Skala, niedriger, Ausgangsnamen ausgeblendet; so passen deutlich mehr Streifen in ein kleines Fenster
-- **LED-Anzeigen bleiben nicht mehr hängen:** Endet ein Ton (z. B. Video gestoppt), fallen die LEDs sauber auf null, und alle Anzeigen fallen im Gleichtakt
-- **Rauschunterdrückung schneidet Wortenden weniger ab:** RNNoise darf nach dem Sprechen nur langsam zumachen (ca. 120 ms), leise Endungen bleiben so hörbar
-- Neue Stream-Deck-Icons in Grün auf OLED-Schwarz
+- **LED-Anzeigen ruhiger und im Gleichtakt:** Sie steigen jetzt weich statt sprunghaft und fallen langsamer (12 dB pro Sekunde). Pegel desselben Tons, etwa am Mikro-Eingang und am Ausgang, bewegen sich dadurch als eine Einheit
 
 ## Installation
 
