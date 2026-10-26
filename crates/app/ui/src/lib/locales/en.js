@@ -154,6 +154,8 @@ export default {
   "side.left": "Left",
   "side.right": "Right",
   "strip.hideSilent": "Hide silent",
+  "strip.keepOff": "Hide when silent",
+  "strip.keepOn": "Always shown (does not hide when silent)",
   "strip.loopHint": "Loop: {output} plays on this input's cable",
   "strip.off": "{output} off",
   "strip.on": "{output} on",

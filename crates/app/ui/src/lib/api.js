@@ -376,6 +376,8 @@ const mock = {
       },
       { label: "PC", device: "CABLE Output", fx: defaultFx() },
       { label: "PS5", device: "Line In", fx: defaultFx() },
+      { label: "Discord", device: "app:discord.exe", fx: defaultFx() },
+      { label: "Brave", device: "app:brave.exe", fx: defaultFx() },
     ],
     outputs: [
       {
@@ -588,7 +590,7 @@ const mock = {
           ...c,
           connected: true,
           deviceName: this.devices.inputs[i % 3].name,
-          levelDb: inLevels[i],
+          levelDb: c.device === "app:brave.exe" ? -90 : inLevels[i],
         })),
         outputs: outputs.map((c, o) => ({
           ...c,

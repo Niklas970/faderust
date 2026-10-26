@@ -154,6 +154,8 @@ export default {
   "side.left": "Links",
   "side.right": "Rechts",
   "strip.hideSilent": "Stille ausblenden",
+  "strip.keepOff": "Bei Stille ausblenden",
+  "strip.keepOn": "Immer sichtbar (blendet bei Stille nicht aus)",
   "strip.loopHint": "Schleife: {output} spielt auf das Kabel dieses Eingangs",
   "strip.off": "{output} aus",
   "strip.on": "{output} an",
