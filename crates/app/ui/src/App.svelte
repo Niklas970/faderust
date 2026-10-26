@@ -587,6 +587,9 @@
     border-top: 1px solid var(--border);
     user-select: none;
   }
+  .compact .statusbar {
+    height: 20px;
+  }
   .statusbar button {
     display: flex;
     align-items: center;

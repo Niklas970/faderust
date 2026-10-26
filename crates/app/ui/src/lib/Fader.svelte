@@ -212,6 +212,14 @@
   .strip.narrow {
     width: 84px;
   }
+  /* Compact desk: less height around the fader. */
+  :global(.compact) .body {
+    min-height: 100px;
+    padding: 12px 0;
+  }
+  :global(.compact) .strip {
+    gap: 4px;
+  }
   .narrow .track {
     width: 58px;
   }

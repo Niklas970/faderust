@@ -87,7 +87,8 @@
   }
 </script>
 
-{#snippet strip(input, i, narrow = false)}
+{#snippet strip(input, i, program = false)}
+  {@const narrow = program || compact}
   {@const r = row(i)}
   <section class="strip panel" class:narrow>
     <div class="buses">
@@ -119,6 +120,7 @@
     {#if narrow}
       <div class="foot">
         <button class="fx" class:on={fxActive(input.fx)} onclick={() => onFx(i)} title={t("fx.title")}>FX</button>
+        {#if program}
         <button
           class="keep"
           class:on={keep.includes(input.device)}
@@ -131,6 +133,7 @@
             ><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></svg
           >
         </button>
+        {/if}
       </div>
     {:else}
       <button class="fx" class:on={fxActive(input.fx)} onclick={() => onFx(i)}>{t("fx.title")}</button>
@@ -150,7 +153,7 @@
             <div class="grow">
               <Fader
                 label={output.label}
-                note={output.connected ? output.deviceName : output.released ? t("out.releasedShort") : t("out.waitingShort")}
+                note={compact ? "" : output.connected ? output.deviceName : output.released ? t("out.releasedShort") : t("out.waitingShort")}
                 noteOn={output.connected}
                 noteTitle={output.released ? t("out.released") : (output.deviceName ?? "")}
                 value={m.db}
@@ -158,6 +161,7 @@
                 levelDb={output.levelDb}
                 connected={output.connected || output.released}
                 postFader
+                narrow={compact}
                 onChange={(db) => onMaster(o, db)}
                 onMute={(v) => onMasterMute(o, v)}
               />
