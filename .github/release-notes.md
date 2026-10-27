@@ -1,6 +1,7 @@
 ## Neu in 0.5.2
 
 - **LED-Anzeigen ruhiger und im Gleichtakt:** Sie steigen jetzt weich statt sprunghaft und fallen langsamer (12 dB pro Sekunde). Pegel desselben Tons, etwa am Mikro-Eingang und am Ausgang, bewegen sich dadurch als eine Einheit
+- **Kopfhörer nach dem Ruhemodus:** Ein Ausgang, der vor dem Ruhemodus still war, wurde nach dem Aufwachen sofort wieder freigegeben und blieb zu. Die Stille-Zeit wird jetzt nach Ruhemodus und Verbindungsverlust neu gezählt
 
 ## Installation
 

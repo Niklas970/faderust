@@ -42,6 +42,8 @@ const SIGNAL_HOLD: Duration = Duration::from_millis(1500);
 /// connected. Failing streams are noticed at once without a listing; this
 /// only catches devices that vanish silently.
 const RECHECK_EVERY: Duration = Duration::from_secs(10);
+/// A pause between two `maintain` calls longer than this counts as sleep.
+const SLEEP_GAP: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Default)]
 pub struct EngineConfig {
@@ -195,6 +197,8 @@ pub struct Engine<B: AudioBackend> {
     heard: Vec<Option<Instant>>,
     /// When `maintain` last listed the devices.
     listed: Option<Instant>,
+    /// When `release_silent` last ran, to notice a sleeping computer.
+    last_release_check: Option<Instant>,
 }
 
 /// Silence tracking of one output, see [`OutputConfig::release_after`].
@@ -257,6 +261,7 @@ impl<B: AudioBackend> Engine<B> {
             idle: (0..n_out).map(|_| Idle::default()).collect(),
             heard: vec![None; n_in],
             listed: None,
+            last_release_check: None,
             config,
         })
     }
@@ -408,6 +413,17 @@ impl<B: AudioBackend> Engine<B> {
     /// released ones with signal again for reconnection.
     fn release_silent(&mut self, now: Instant, events: &mut Vec<EngineEvent>) {
         self.listen(now);
+        // A long gap between two checks means the computer slept: the silence
+        // measured before says nothing about the devices that wake up again.
+        if self
+            .last_release_check
+            .is_some_and(|t| now.duration_since(t) > SLEEP_GAP)
+        {
+            for idle in &mut self.idle {
+                idle.quiet_since = None;
+            }
+        }
+        self.last_release_check = Some(now);
         for o in 0..self.outputs.len() {
             let Some(after) = self.config.outputs[o].release_after else {
                 continue;
@@ -636,6 +652,9 @@ impl<B: AudioBackend> Engine<B> {
             live.close();
         }
         self.outputs[o].device = None;
+        // Silence measured before the loss says nothing about the device that
+        // comes back (e.g. after sleep): it must not be released at once.
+        self.idle[o].quiet_since = None;
         for live in self.live_in.iter_mut().flatten() {
             let _ = live.handle.send(InputCommand::SetLane(o, None));
         }
@@ -1063,6 +1082,34 @@ mod tests {
         );
         b.pump(100, level);
         assert_eq!(connected(&engine.maintain_at(at(40))), 1);
+    }
+
+    #[test]
+    fn output_lost_while_quiet_is_not_released_right_after_reconnect() {
+        let b = FakeBackend::default();
+        b.plug_input("mic", 48_000, 1);
+        b.plug_output("bt", 48_000, 2);
+        let mut cfg = config(&["mic"], &[("bt", 80)]);
+        cfg.outputs[0].release_after = Some(Duration::from_secs(5));
+        let mut engine = Engine::new(b.clone(), cfg).unwrap();
+        engine.matrix.set_muted(0, 0, true);
+        let t0 = Instant::now();
+        let at = |s: u64| t0 + Duration::from_secs(s);
+        assert_eq!(connected(&engine.maintain_at(at(0))), 2);
+        b.pump(100, level);
+        engine.maintain_at(at(1));
+        b.pump(100, level);
+        engine.maintain_at(at(4));
+        // The stream breaks (sleep); the device reconnects much later.
+        b.fail_stream("bt");
+        engine.maintain_at(at(600));
+        b.pump(100, level);
+        let events = engine.maintain_at(at(601));
+        assert!(
+            !events.contains(&EngineEvent::Released { slot: 0 }),
+            "{events:?}"
+        );
+        assert!(!engine.is_released(0));
     }
 
     #[test]
