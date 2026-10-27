@@ -4,6 +4,13 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # windows-core must match the `windows` crate (0.62 is its newest
+      # release) and the copies cpal and tauri use: bumping it alone breaks
+      # the COM `implement` macro.
+      - dependency-name: windows-core
+      - dependency-name: windows
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: npm
     directory: /crates/app/ui
     schedule:
@@ -12,6 +19,11 @@ updates:
     directory: /streamdeck
     schedule:
       interval: weekly
+    ignore:
+      # TypeScript 7 (native) has no JavaScript API, which
+      # @rollup/plugin-typescript needs: the build fails on it.
+      - dependency-name: typescript
+        versions: [">=7"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
