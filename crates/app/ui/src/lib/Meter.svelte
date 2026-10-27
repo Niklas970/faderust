@@ -6,29 +6,39 @@
    */
   let { db = -120, vertical = true, thin = false } = $props();
 
-  // Rises at once, falls slowly like a hardware meter (dB per second). The
-  // fall runs on animation frames, so every meter keeps falling in step even
-  // when its value stops changing (a stream that ends sends -∞ only once).
-  const FALL = 20;
+  // Both directions are eased, so levels of the same sound that reach the
+  // desk a few tens of milliseconds apart (an input and the output playing
+  // it) move as one. Rising: time constant in seconds; falling: dB per
+  // second, like a hardware meter. The motion runs on animation frames, so
+  // every meter keeps moving in step even when its value stops changing (a
+  // stream that ends sends -∞ only once).
+  const RISE = 0.06;
+  const FALL = 12;
   let shown = $state(-120);
   let target = -120;
   let frame = 0;
   let last = 0;
 
-  function fall(now) {
+  function move(now) {
     const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
     last = now;
-    shown = Math.max(target, shown - FALL * dt);
-    frame = shown > target ? requestAnimationFrame(fall) : 0;
+    shown =
+      target > shown
+        ? shown + (target - shown) * (1 - Math.exp(-dt / RISE))
+        : Math.max(target, shown - FALL * dt);
+    if (Math.abs(target - shown) < 0.1) {
+      shown = target;
+      frame = 0;
+    } else {
+      frame = requestAnimationFrame(move);
+    }
   }
 
   $effect(() => {
     target = db;
-    if (db >= untrack(() => shown)) {
-      shown = db;
-    } else if (!frame) {
+    if (!frame && Math.abs(db - untrack(() => shown)) >= 0.1) {
       last = performance.now();
-      frame = requestAnimationFrame(fall);
+      frame = requestAnimationFrame(move);
     }
   });
 
@@ -64,7 +74,6 @@
   .leds {
     position: absolute;
     inset: 1px;
-    transition: clip-path 60ms linear;
   }
   .vertical .leds {
     background: linear-gradient(
