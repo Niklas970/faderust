@@ -1,5 +1,6 @@
 //! Runs the engine on its own thread and publishes its state to the UI.
 
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -298,6 +299,7 @@ fn run(
         .map(|exe| (Instant::now() + Duration::from_secs(3), exe.clone()));
     let mut last_maintain: Option<Instant> = None;
     let mut last_emit = Instant::now();
+    let mut level_delay = LevelDelay::default();
     let mut last_visible_check = Instant::now();
     let mut visible = true;
     let mut dirty_since: Option<Instant> = None;
@@ -482,10 +484,11 @@ fn run(
         // Meters for a hidden window are wasted work, in Faderust and in
         // the web view drawing them.
         if visible && last_emit.elapsed() >= EMIT_EVERY {
-            let state = snapshot(
+            let mut state = snapshot(
                 &config.lock().unwrap_or_else(|e| e.into_inner()),
                 engine.as_ref(),
             );
+            level_delay.apply(&mut state);
             if let Some(shared) = app.try_state::<crate::AppState>() {
                 *shared.last_state.lock().unwrap_or_else(|e| e.into_inner()) = Some(state.clone());
             }
@@ -498,6 +501,39 @@ fn run(
                 log::write(&format!("saving {}: {e}", path.display()));
             }
             dirty_since = None;
+        }
+    }
+}
+
+/// Holds back the input meters by the time the sound needs to reach the
+/// outputs (their buffers), so an input and the output playing it light up
+/// together instead of the input leading.
+#[derive(Default)]
+struct LevelDelay {
+    history: Vec<VecDeque<f32>>,
+}
+
+impl LevelDelay {
+    fn apply(&mut self, state: &mut UiState) {
+        let ms: Vec<u32> = state
+            .outputs
+            .iter()
+            .filter(|o| o.connected)
+            .filter_map(|o| o.buffer_ms)
+            .collect();
+        let ticks = if ms.is_empty() {
+            0
+        } else {
+            let mean = ms.iter().sum::<u32>() as f32 / ms.len() as f32;
+            (mean / EMIT_EVERY.as_millis() as f32).round() as usize
+        };
+        self.history.resize_with(state.inputs.len(), VecDeque::new);
+        for (input, hist) in state.inputs.iter_mut().zip(&mut self.history) {
+            hist.push_back(input.level_db);
+            while hist.len() > ticks + 1 {
+                hist.pop_front();
+            }
+            input.level_db = hist.front().copied().unwrap_or(input.level_db);
         }
     }
 }
@@ -660,8 +696,41 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
 
 #[cfg(test)]
 mod tests {
-    use super::{explain, skipped, step_db, strip_step};
+    use super::{explain, skipped, step_db, strip_step, LevelDelay, UiDevice, UiState};
     use crate::config::Gain;
+
+    fn ui_device(connected: bool, level_db: f32, buffer_ms: Option<u32>) -> UiDevice {
+        UiDevice {
+            label: String::new(),
+            device: String::new(),
+            connected,
+            device_name: None,
+            level_db,
+            buffer_ms,
+            released: false,
+            fx: None,
+            master: None,
+            muted: None,
+        }
+    }
+
+    #[test]
+    fn input_levels_are_held_back_by_the_output_buffer() {
+        let mut delay = LevelDelay::default();
+        let mut seen = Vec::new();
+        for level in [-10.0, -20.0, -30.0, -40.0] {
+            let mut state = UiState {
+                inputs: vec![ui_device(true, level, None)],
+                outputs: vec![ui_device(true, -120.0, Some(100))],
+                gains: Vec::new(),
+                lanes: Vec::new(),
+            };
+            delay.apply(&mut state);
+            seen.push(state.inputs[0].level_db);
+        }
+        // 100 ms buffer = two 50 ms ticks of delay.
+        assert_eq!(seen, [-10.0, -10.0, -10.0, -20.0]);
+    }
 
     #[test]
     fn strip_step_moves_the_outputs_it_plays_on_together() {

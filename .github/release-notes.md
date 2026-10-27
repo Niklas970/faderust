@@ -1,7 +1,8 @@
-## Neu in 0.5.2
+## Neu in 0.5.3
 
-- **LED-Anzeigen ruhiger und im Gleichtakt:** Sie steigen jetzt weich statt sprunghaft und fallen langsamer (12 dB pro Sekunde). Pegel desselben Tons, etwa am Mikro-Eingang und am Ausgang, bewegen sich dadurch als eine Einheit
-- **Kopfhörer nach dem Ruhemodus:** Ein Ausgang, der vor dem Ruhemodus still war, wurde nach dem Aufwachen sofort wieder freigegeben und blieb zu. Die Stille-Zeit wird jetzt nach Ruhemodus und Verbindungsverlust neu gezählt
+- **LED-Balken im Gleichtakt:** Die Eingangs-Balken werden um die Pufferzeit der Ausgänge verzögert angezeigt. Ein Eingang und der Ausgang, der ihn spielt, leuchten dadurch gleichzeitig statt nacheilend
+- **Protokoll unter „Geräte“:** Der Protokoll-Knopf sitzt jetzt im Geräte-Dialog neben dem Selbsttest, die Leiste unten entfällt
+- **Geräte-Dialog ohne Programme:** Bei den Eingängen erscheinen nur noch echte Geräte, Programme bleiben im Programm-Dialog
 
 ## Installation
 

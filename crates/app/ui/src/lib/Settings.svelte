@@ -1,6 +1,7 @@
 <script>
   import { onMount, untrack } from "svelte";
   import { t } from "./i18n.svelte.js";
+  import Log from "./Log.svelte";
   import Selftest from "./Selftest.svelte";
   import {
     cableCounterpart,
@@ -50,6 +51,7 @@
   });
 
   let selftestOpen = $state(false);
+  let logOpen = $state(false);
 
   // Applies right away, independent of Save.
   let autostart = $state(null);
@@ -78,6 +80,14 @@
   // step with the lists.
   const matrices = () => [draft.gains, ...(draft.presets ?? []).map((p) => p.gains)];
   const swap = (list, a, b) => ([list[a], list[b]] = [list[b], list[a]]);
+
+  // Program inputs ("app:…") belong to the program dialog, not to this list.
+  const isProgram = (input) => input.device.startsWith("app:");
+  // Nearest device input in the given direction, or -1.
+  function neighbor(i, by) {
+    for (let j = i + by; j >= 0 && j < draft.inputs.length; j += by) if (!isProgram(draft.inputs[j])) return j;
+    return -1;
+  }
 
   function addInput() {
     draft.inputs.push({ label: t("settings.newInput", { n: draft.inputs.length + 1 }), device: devices.inputs[0].name });
@@ -168,6 +178,7 @@
 
   <h3>{t("settings.inputs")}</h3>
   {#each draft.inputs as input, i}
+    {#if !isProgram(input)}
     <div class="row">
       <input class="name" bind:value={input.label} aria-label={t("settings.name")} />
       <select
@@ -178,19 +189,20 @@
         {#each options(devices.inputs, input.device) as name}<option>{name}</option>{/each}
       </select>
       <span class="order">
-        <button class="icon" title={t("settings.up")} aria-label={t("settings.up")} disabled={i === 0} onclick={() => moveInput(i, -1)}
+        <button class="icon" title={t("settings.up")} aria-label={t("settings.up")} disabled={neighbor(i, -1) < 0} onclick={() => moveInput(i, neighbor(i, -1) - i)}
           >↑</button
         >
         <button
           class="icon"
           title={t("settings.down")}
           aria-label={t("settings.down")}
-          disabled={i === draft.inputs.length - 1}
-          onclick={() => moveInput(i, 1)}>↓</button
+          disabled={neighbor(i, 1) < 0}
+          onclick={() => moveInput(i, neighbor(i, 1) - i)}>↓</button
         >
       </span>
       <button class="icon" title={t("settings.remove")} onclick={() => removeInput(i)}>✕</button>
     </div>
+    {/if}
   {/each}
   <button
     class="add"
@@ -299,6 +311,7 @@
   <div class="deck">
     <span>{t("selftest.hint")}</span>
     <button onclick={() => (selftestOpen = true)}>{t("selftest.start")}</button>
+    <button onclick={() => (logOpen = true)} title={t("log.hint")}>{t("nav.log")}</button>
   </div>
 
   <footer>
@@ -306,6 +319,10 @@
     <button class="primary" onclick={save}>{t("common.save")}</button>
   </footer>
 </div>
+
+{#if logOpen}
+  <Log onSelftest={() => (selftestOpen = true)} onClose={() => (logOpen = false)} />
+{/if}
 
 {#if selftestOpen}
   <Selftest onClose={() => (selftestOpen = false)} />
