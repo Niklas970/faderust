@@ -21,6 +21,8 @@ use crate::config::{Config, Fx};
 use crate::log;
 
 const EMIT_EVERY: Duration = Duration::from_millis(50);
+/// How often released outputs are checked for returning signal.
+const WAKE_EVERY: Duration = Duration::from_millis(10);
 const MAINTAIN_EVERY: Duration = Duration::from_secs(1);
 /// How often to check whether anyone sees the window.
 const VISIBLE_EVERY: Duration = Duration::from_millis(250);
@@ -308,7 +310,12 @@ fn run(
     let mut quiet = true;
 
     loop {
-        match rx.recv_timeout(EMIT_EVERY) {
+        // While an output is released, look for returning sound often: what
+        // plays before it reopens is lost.
+        let waiting = engine
+            .as_ref()
+            .is_some_and(|e| (0..e.outputs().len()).any(|o| e.is_released(o)));
+        match rx.recv_timeout(if waiting { WAKE_EVERY } else { EMIT_EVERY }) {
             Ok(cmd) => {
                 let mut pending = vec![cmd];
                 pending.extend(rx.try_iter());
@@ -434,7 +441,11 @@ fn run(
         }
 
         if let Some(e) = &mut engine {
+            let woke_at = Instant::now();
             let mut events = e.wake();
+            if !events.is_empty() {
+                log::write(&format!("wake took {} ms", woke_at.elapsed().as_millis()));
+            }
             let maintained = last_maintain.is_none_or(|t| t.elapsed() >= MAINTAIN_EVERY);
             if maintained {
                 events.extend(e.maintain());

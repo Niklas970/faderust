@@ -3,6 +3,8 @@
 - **LED-Balken im Gleichtakt:** Die Eingangs-Balken werden um die Pufferzeit der Ausgänge verzögert angezeigt. Ein Eingang und der Ausgang, der ihn spielt, leuchten dadurch gleichzeitig statt nacheilend
 - **Protokoll unter „Geräte“:** Der Protokoll-Knopf sitzt jetzt im Geräte-Dialog neben dem Selbsttest, die Leiste unten entfällt
 - **Geräte-Dialog ohne Programme:** Bei den Eingängen erscheinen nur noch echte Geräte, Programme bleiben im Programm-Dialog
+- **Programme ohne Ton:** Faderust nimmt jetzt auch Prozesse eines Programms auf, die erst nach dem Start der Aufnahme erscheinen (zweites Fenster, neu gestarteter Audioprozess). Vorher blieb so ein Programm stumm, obwohl der Eingang aktiv war
+- **Schneller aufwachen:** Freigegebene Ausgänge achten alle 10 statt 50 ms auf zurückkehrenden Ton. Die Dauer des Aufwachens steht im Protokoll („wake took … ms“)
 
 ## Installation
 
