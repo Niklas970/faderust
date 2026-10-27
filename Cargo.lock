@@ -1196,7 +1196,7 @@ name = "faderust"
 version = "0.5.1"
 dependencies = [
  "faderust-engine",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "serde",
  "serde_json",
  "tauri",
