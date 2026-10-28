@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use windows::core::{implement, Interface, Ref, HRESULT, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT};
@@ -58,6 +58,10 @@ const RETRY_AFTER: Duration = Duration::from_secs(30);
 /// How often a running recording looks for processes of its program that
 /// started after it (a second window, a restarted audio process).
 const REFRESH_EVERY: Duration = Duration::from_secs(2);
+/// A pause this long between two rounds of the recording thread means the
+/// computer slept. Windows leaves such recordings silent without an error,
+/// so they are started again.
+const SLEPT_AFTER: Duration = Duration::from_secs(15);
 /// A recording that ran this long without taking Faderust down is trusted.
 const TRUSTED_AFTER: Duration = Duration::from_secs(5);
 
@@ -336,8 +340,14 @@ impl Recorder {
         let silence = vec![0.0f32; SILENCE_FRAMES * CHANNELS as usize];
         let started = Instant::now();
         let mut refreshed = Instant::now();
+        // Wall clock: a monotonic clock may not count the time asleep.
+        let mut last_round = SystemTime::now();
         let mut trusted = false;
         while !stop.load(Ordering::Relaxed) {
+            if last_round.elapsed().is_ok_and(|gap| gap >= SLEPT_AFTER) {
+                return false;
+            }
+            last_round = SystemTime::now();
             if !trusted && started.elapsed() >= TRUSTED_AFTER {
                 clear_marker();
                 trusted = true;
@@ -354,6 +364,10 @@ impl Recorder {
             let woke = unsafe { WaitForMultipleObjects(&events, false, 100) };
             if woke == WAIT_TIMEOUT {
                 continue;
+            }
+            // A failed wait returns at once: looping on it burns a core.
+            if woke.0 >= WAIT_OBJECT_0.0 + events.len() as u32 {
+                return false;
             }
             for s in &self.sources {
                 if s.drain(data, &silence).is_err() {

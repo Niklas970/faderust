@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use faderust_engine::backend::cpal::CpalBackend;
 use faderust_engine::lang::tr;
@@ -23,6 +23,11 @@ use crate::log;
 const EMIT_EVERY: Duration = Duration::from_millis(50);
 /// How often released outputs are checked for returning signal.
 const WAKE_EVERY: Duration = Duration::from_millis(10);
+/// A pause this long between two rounds of the engine thread means the
+/// computer slept. Devices and recordings often stay "open" but dead after
+/// waking, so the engine is built anew. Wall clock: a monotonic clock may
+/// not count the time asleep.
+const RESUME_GAP: Duration = Duration::from_secs(30);
 const MAINTAIN_EVERY: Duration = Duration::from_secs(1);
 /// How often to check whether anyone sees the window.
 const VISIBLE_EVERY: Duration = Duration::from_millis(250);
@@ -301,6 +306,7 @@ fn run(
         .map(|exe| (Instant::now() + Duration::from_secs(3), exe.clone()));
     let mut last_maintain: Option<Instant> = None;
     let mut last_emit = Instant::now();
+    let mut last_round = SystemTime::now();
     let mut level_delay = LevelDelay::default();
     let mut last_visible_check = Instant::now();
     let mut visible = true;
@@ -438,6 +444,21 @@ fn run(
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
+        }
+
+        let slept = last_round.elapsed().is_ok_and(|gap| gap >= RESUME_GAP);
+        last_round = SystemTime::now();
+        if slept && engine.is_some() {
+            log::write("resumed from sleep, rebuilding the engine");
+            // Drop the old engine first so devices are free.
+            drop(engine.take());
+            engine = build(
+                &config.lock().unwrap_or_else(|e| e.into_inner()),
+                skip.as_deref(),
+            );
+            last_maintain = None;
+            notices = Notices::default();
+            quiet = true;
         }
 
         if let Some(e) = &mut engine {
