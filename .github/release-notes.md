@@ -1,14 +1,7 @@
-## Neu in 0.5.3
+## Neu in 0.5.4
 
-- **LED-Balken im Gleichtakt:** Die Eingangs-Balken werden um die Pufferzeit der Ausgänge verzögert angezeigt. Ein Eingang und der Ausgang, der ihn spielt, leuchten dadurch gleichzeitig statt nacheilend
-- **Protokoll unter „Geräte“:** Der Protokoll-Knopf sitzt jetzt im Geräte-Dialog neben dem Selbsttest, die Leiste unten entfällt
-- **Geräte-Dialog ohne Programme:** Bei den Eingängen erscheinen nur noch echte Geräte, Programme bleiben im Programm-Dialog
-- **Programme ohne Ton:** Faderust nimmt jetzt auch Prozesse eines Programms auf, die erst nach dem Start der Aufnahme erscheinen (zweites Fenster, neu gestarteter Audioprozess). Vorher blieb so ein Programm stumm, obwohl der Eingang aktiv war
-- **Nach dem Ruhemodus:** Nach dem Aufwachen baut Faderust alle Geräte und Programm-Aufnahmen neu auf. Vorher blieben sie oft scheinbar verbunden, aber tot: Programme blieben stumm, nur das Mikro ging, und der Prozessor lief mit 12 % Last
-- **Hängende Ausgänge:** Nimmt ein Ausgang keinen Ton mehr an, ohne einen Fehler zu melden, erkennt Faderust das nach etwa 5 Sekunden und verbindet ihn neu
-- **Mehr im Protokoll:** Start mit Prozessnummer, Beenden, wenn ein Ausgang hängt, wenn das Verbinden eines Geräts lange dauert, und der Neuaufbau nach dem Ruhemodus
-- **Streifen-Fader nach unten:** Wer den Fader eines Streifens ganz herunter- und wieder hochzieht, behält die Unterschiede zwischen den Ausgängen. Vorher blieb ein leiserer Ausgang auf „aus“ hängen und stand danach gleich laut wie die anderen
-- **Schneller aufwachen:** Freigegebene Ausgänge achten alle 10 statt 50 ms auf zurückkehrenden Ton. Die Dauer des Aufwachens steht im Protokoll („wake took … ms“)
+- **Stille Programme gleich ausgeblendet:** Nach einem Start oder Update verschwinden Programme, die gerade keinen Ton spielen, nach wenigen Sekunden statt erst nach der eingestellten Zeit. Spielt eines, erscheint es wieder
+- **Alles andere bleibt:** „N still, zeigen“ blendet sie weiterhin ein, das Auge pro Programm hält eines dauerhaft sichtbar
 
 ## Installation
 

@@ -1193,7 +1193,7 @@ dependencies = [
 
 [[package]]
 name = "faderust"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "faderust-engine",
  "getrandom 0.4.3",
@@ -1210,7 +1210,7 @@ dependencies = [
 
 [[package]]
 name = "faderust-engine"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "audioadapter-buffers",
  "cpal",
