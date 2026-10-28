@@ -28,6 +28,8 @@ const WAKE_EVERY: Duration = Duration::from_millis(10);
 /// waking, so the engine is built anew. Wall clock: a monotonic clock may
 /// not count the time asleep.
 const RESUME_GAP: Duration = Duration::from_secs(30);
+/// A `maintain` round that takes longer than this is logged.
+const SLOW_MAINTAIN: Duration = Duration::from_millis(500);
 const MAINTAIN_EVERY: Duration = Duration::from_secs(1);
 /// How often to check whether anyone sees the window.
 const VISIBLE_EVERY: Duration = Duration::from_millis(250);
@@ -262,6 +264,11 @@ impl Notices {
                         "“{}” disconnected. Faderust reconnects as soon as the device is back.",
                     )
                     .replace("{}", &label(dir, *slot)),
+                    LostReason::Stalled => tr(
+                        "„{}“ nimmt keinen Ton mehr an (oft nach dem Ruhemodus) und wird neu verbunden.",
+                        "“{}” no longer takes audio (often after sleep) and is being reconnected.",
+                    )
+                    .replace("{}", &label(dir, *slot)),
                     LostReason::StreamError => tr(
                         "„{}“ meldet einen Fehler und wird neu verbunden.",
                         "“{}” reports an error and is being reconnected.",
@@ -469,8 +476,16 @@ fn run(
             }
             let maintained = last_maintain.is_none_or(|t| t.elapsed() >= MAINTAIN_EVERY);
             if maintained {
+                let started = Instant::now();
                 events.extend(e.maintain());
                 last_maintain = Some(Instant::now());
+                // Opening a device that wakes up slowly holds this thread.
+                if started.elapsed() >= SLOW_MAINTAIN {
+                    log::write(&format!(
+                        "maintain took {} ms",
+                        started.elapsed().as_millis()
+                    ));
+                }
             }
             if !events.is_empty() {
                 let c = config.lock().unwrap_or_else(|e| e.into_inner());

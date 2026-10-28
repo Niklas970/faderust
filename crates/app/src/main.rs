@@ -833,8 +833,13 @@ fn main() {
             load_preset,
             delete_preset
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Faderust");
+        .build(tauri::generate_context!())
+        .expect("error while building Faderust")
+        .run(|_, event| {
+            if let tauri::RunEvent::Exit = event {
+                log::write("Faderust beendet");
+            }
+        });
 }
 
 #[cfg(test)]
