@@ -1,6 +1,7 @@
 ## Neu in 0.5.4
 
 - **Stille Programme gleich ausgeblendet:** Nach einem Start oder Update verschwinden Programme, die gerade keinen Ton spielen, nach wenigen Sekunden statt erst nach der eingestellten Zeit. Spielt eines, erscheint es wieder
+- **Lesbarere Überschriften:** „Outputs“, „Devices“ und „Programs“ sind größer und in der Textfarbe statt in Grau
 - **Alles andere bleibt:** „N still, zeigen“ blendet sie weiterhin ein, das Auge pro Programm hält eines dauerhaft sichtbar
 
 ## Installation

@@ -272,13 +272,13 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 24px;
+    min-height: 28px;
     margin: 0;
-    font-size: 12px;
+    font-size: 15px;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--text);
   }
   .strip {
     display: flex;
