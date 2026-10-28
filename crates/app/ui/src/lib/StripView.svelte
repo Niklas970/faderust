@@ -38,13 +38,17 @@
     }
   }
 
-  // When each program was last heard (or first seen); silent ones hide.
+  // When each program was last heard; silent ones hide. A program not heard
+  // yet counts as heard a moment ago only, so after a start the silent ones
+  // are gone after a few seconds instead of after the full time.
+  const GRACE = 5000;
   const heard = new Map();
   let showAll = $state(false);
   const audible = $derived.by(() => {
     const now = Date.now();
     for (const { input } of allPrograms) {
-      if (!heard.has(input.device) || (input.connected && input.levelDb > -60)) heard.set(input.device, now);
+      if (input.connected && input.levelDb > -60) heard.set(input.device, now);
+      else if (!heard.has(input.device)) heard.set(input.device, now - Math.max(0, hideAfter * 1000 - GRACE));
     }
     if (!hideAfter) return allPrograms;
     return allPrograms.filter(
