@@ -41,6 +41,11 @@ const SIGNAL_HOLD: Duration = Duration::from_millis(1500);
 /// How often [`Engine::maintain`] lists the devices while every slot is
 /// connected. Failing streams are noticed at once without a listing; this
 /// only catches devices that vanish silently.
+/// An output is checked for a stall over windows of this length.
+const STALL_WINDOW: Duration = Duration::from_secs(5);
+/// More frames than this dropped within one window (about a second of audio)
+/// means the output takes nothing: ordinary clock drift loses a few.
+const STALL_FRAMES: u64 = 48_000;
 const RECHECK_EVERY: Duration = Duration::from_secs(10);
 /// A pause between two `maintain` calls longer than this counts as sleep.
 const SLEEP_GAP: Duration = Duration::from_secs(10);
@@ -118,6 +123,9 @@ pub enum LostReason {
     StreamError,
     /// The device is no longer listed.
     Removed,
+    /// An output stopped taking audio without reporting an error (typically
+    /// after sleep): the inputs kept dropping frames.
+    Stalled,
 }
 
 impl fmt::Display for EngineEvent {
@@ -137,6 +145,7 @@ impl fmt::Display for EngineEvent {
                 let why = match reason {
                     LostReason::StreamError => "stream error",
                     LostReason::Removed => "device removed",
+                    LostReason::Stalled => "stalled, no audio taken",
                 };
                 write!(f, "{dir}{slot} lost ({why})")
             }
@@ -193,6 +202,9 @@ pub struct Engine<B: AudioBackend> {
     /// Effect settings per input, stable across reconnections.
     fx: Vec<Arc<InputFx>>,
     idle: Vec<Idle>,
+    /// Per output: start of the current stall window and the frames dropped
+    /// for it by then.
+    stall: Vec<(Instant, u64)>,
     /// When each input last played above [`SILENCE`].
     heard: Vec<Option<Instant>>,
     /// When `maintain` last listed the devices.
@@ -261,6 +273,7 @@ impl<B: AudioBackend> Engine<B> {
             idle: (0..n_out).map(|_| Idle::default()).collect(),
             heard: vec![None; n_in],
             listed: None,
+            stall: vec![(Instant::now(), 0); n_out],
             last_release_check: None,
             config,
         })
@@ -330,7 +343,9 @@ impl<B: AudioBackend> Engine<B> {
             .flatten();
 
         for o in 0..self.outputs.len() {
-            if let Some(reason) = self.lost(Direction::Output, o, out_list.as_deref()) {
+            let stalled = self.output_stalled(o, now);
+            let lost = self.lost(Direction::Output, o, out_list.as_deref());
+            if let Some(reason) = lost.or(stalled.then_some(LostReason::Stalled)) {
                 self.disconnect_output(o);
                 events.push(EngineEvent::Lost {
                     dir: Direction::Output,
@@ -475,6 +490,26 @@ impl<B: AudioBackend> Engine<B> {
             self.block_loops();
         }
         events
+    }
+
+    /// Whether `output` dropped a second of audio or more over the last
+    /// window: it is open but takes nothing.
+    fn output_stalled(&mut self, o: usize, now: Instant) -> bool {
+        let dropped: u64 = self
+            .lanes
+            .iter()
+            .map(|row| row[o].dropped_frames.load(Relaxed))
+            .sum();
+        let (since, before) = self.stall[o];
+        if self.live_out[o].is_none() {
+            self.stall[o] = (now, dropped);
+            return false;
+        }
+        if now.duration_since(since) < STALL_WINDOW {
+            return false;
+        }
+        self.stall[o] = (now, dropped);
+        dropped.saturating_sub(before) > STALL_FRAMES
     }
 
     fn lost(
@@ -807,6 +842,19 @@ mod tests {
             }
         }
 
+        /// Like [`pump`](Self::pump), but only the inputs run: outputs that
+        /// take nothing.
+        fn pump_inputs(&self, ms: u32, level: impl Fn(&str) -> f32) {
+            for _ in 0..ms / 10 {
+                let mut s = self.0.borrow_mut();
+                for (id, (cb, _, f)) in s.in_streams.iter_mut() {
+                    let name = id.trim_matches(|c| c == '{' || c == '}');
+                    let frames = f.sample_rate as usize / 100;
+                    cb(&vec![level(name); frames * f.channels as usize]);
+                }
+            }
+        }
+
         /// Runs every stream for `ms` in 10 ms periods. Every input
         /// delivers the constant `level(id)`. Returns the last block of
         /// each output by name.
@@ -1110,6 +1158,34 @@ mod tests {
             "{events:?}"
         );
         assert!(!engine.is_released(0));
+    }
+
+    #[test]
+    fn output_that_takes_nothing_is_reconnected() {
+        let b = FakeBackend::default();
+        b.plug_input("mic", 48_000, 1);
+        b.plug_output("usb", 48_000, 2);
+        let mut engine = Engine::new(b.clone(), config(&["mic"], &[("usb", 20)])).unwrap();
+        let t0 = Instant::now();
+        let at = |s: u64| t0 + Duration::from_secs(s);
+        assert_eq!(connected(&engine.maintain_at(at(0))), 2);
+
+        // A healthy output keeps up: nothing is lost.
+        b.pump(1000, level);
+        assert!(engine.maintain_at(at(5)).is_empty());
+
+        // The output stops (the computer slept) while the input goes on.
+        b.pump_inputs(6000, level);
+        let events = engine.maintain_at(at(11));
+        assert!(
+            events.contains(&EngineEvent::Lost {
+                dir: Direction::Output,
+                slot: 0,
+                reason: LostReason::Stalled,
+            }),
+            "{events:?}"
+        );
+        assert_eq!(connected(&events), 1);
     }
 
     #[test]

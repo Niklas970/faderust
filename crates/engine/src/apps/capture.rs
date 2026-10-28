@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use windows::core::{implement, Interface, Ref, HRESULT, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT};
@@ -55,6 +55,13 @@ const OPEN_TIMEOUT: Duration = Duration::from_secs(8);
 /// before asking again. Retrying every second piles up stuck requests in
 /// the Windows audio service, which then breaks the program's sound.
 const RETRY_AFTER: Duration = Duration::from_secs(30);
+/// How often a running recording looks for processes of its program that
+/// started after it (a second window, a restarted audio process).
+const REFRESH_EVERY: Duration = Duration::from_secs(2);
+/// A pause this long between two rounds of the recording thread means the
+/// computer slept. Windows leaves such recordings silent without an error,
+/// so they are started again.
+const SLEPT_AFTER: Duration = Duration::from_secs(15);
 /// A recording that ran this long without taking Faderust down is trusted.
 const TRUSTED_AFTER: Duration = Duration::from_secs(5);
 
@@ -195,6 +202,7 @@ pub fn open(
                 .replace("{exe}", exe),
             )
         })?;
+    let exe_owned = app.exe.clone();
     let roots = capture_roots(&app.pids, &processes()?);
     if roots.is_empty() {
         return Err(CaptureError(
@@ -212,7 +220,7 @@ pub fn open(
         .spawn(move || {
             // A panic here must not take the engine with it.
             let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                match Recorder::new(&roots) {
+                match Recorder::new(&exe_owned, &roots) {
                     Ok(mut recorder) => {
                         let _ = ready_tx.send(Ok(()));
                         recorder.run(&thread_stop, &mut *data)
@@ -275,31 +283,30 @@ impl Drop for ProgramCapture {
 
 /// One loopback client per root process, all on the recording thread.
 struct Recorder {
+    exe: String,
     // Field order matters: COM objects go before COM itself.
     sources: Vec<Source>,
-    /// Signalled when any of the programs' processes ends.
-    processes: Vec<HANDLE>,
     _com: Com,
 }
 
 struct Source {
+    pid: u32,
+    /// Signalled when the process ends; `None` if it could not be opened.
+    process: Option<HANDLE>,
     client: IAudioClient,
     capture: IAudioCaptureClient,
     event: HANDLE,
 }
 
 impl Recorder {
-    fn new(roots: &[u32]) -> Result<Self, CaptureError> {
+    fn new(exe: &str, roots: &[u32]) -> Result<Self, CaptureError> {
         let com = Com::init().map_err(|e| CaptureError(e.0))?;
         let mut recorder = Self {
+            exe: exe.to_string(),
             sources: Vec::new(),
-            processes: Vec::new(),
             _com: com,
         };
         for &pid in roots {
-            if let Ok(process) = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, false, pid) } {
-                recorder.processes.push(process);
-            }
             recorder.sources.push(Source::new(pid)?);
         }
         for s in &recorder.sources {
@@ -308,27 +315,59 @@ impl Recorder {
         Ok(recorder)
     }
 
-    /// Hands on audio until `stop` is set (true) or a process ends (false).
+    /// Starts recording processes of the program that appeared since. A
+    /// program that gets a new process after the recording began (a second
+    /// window, a restarted audio service) would otherwise stay silent.
+    fn add_new_roots(&mut self) {
+        let Ok(apps) = programs() else { return };
+        let Some(app) = apps.iter().find(|a| a.exe.eq_ignore_ascii_case(&self.exe)) else {
+            return;
+        };
+        let Ok(list) = processes() else { return };
+        for pid in new_roots(&capture_roots(&app.pids, &list), &self.sources) {
+            // A failure is not retried: asking again and again piles up
+            // requests in the Windows audio service.
+            if let Ok(source) = Source::new(pid) {
+                if unsafe { source.client.Start() }.is_ok() {
+                    self.sources.push(source);
+                }
+            }
+        }
+    }
+
+    /// Hands on audio until `stop` is set (true) or every process ended (false).
     fn run(&mut self, stop: &AtomicBool, data: &mut dyn FnMut(&[f32])) -> bool {
         let silence = vec![0.0f32; SILENCE_FRAMES * CHANNELS as usize];
-        let events: Vec<HANDLE> = self.sources.iter().map(|s| s.event).collect();
         let started = Instant::now();
+        let mut refreshed = Instant::now();
+        // Wall clock: a monotonic clock may not count the time asleep.
+        let mut last_round = SystemTime::now();
         let mut trusted = false;
         while !stop.load(Ordering::Relaxed) {
+            if last_round.elapsed().is_ok_and(|gap| gap >= SLEPT_AFTER) {
+                return false;
+            }
+            last_round = SystemTime::now();
             if !trusted && started.elapsed() >= TRUSTED_AFTER {
                 clear_marker();
                 trusted = true;
             }
-            if self
-                .processes
-                .iter()
-                .any(|&p| unsafe { WaitForSingleObject(p, 0) } == WAIT_OBJECT_0)
-            {
+            self.sources.retain(|s| !s.ended());
+            if self.sources.is_empty() {
                 return false;
             }
+            if refreshed.elapsed() >= REFRESH_EVERY {
+                self.add_new_roots();
+                refreshed = Instant::now();
+            }
+            let events: Vec<HANDLE> = self.sources.iter().map(|s| s.event).collect();
             let woke = unsafe { WaitForMultipleObjects(&events, false, 100) };
             if woke == WAIT_TIMEOUT {
                 continue;
+            }
+            // A failed wait returns at once: looping on it burns a core.
+            if woke.0 >= WAIT_OBJECT_0.0 + events.len() as u32 {
+                return false;
             }
             for s in &self.sources {
                 if s.drain(data, &silence).is_err() {
@@ -340,24 +379,25 @@ impl Recorder {
     }
 }
 
-impl Drop for Recorder {
-    fn drop(&mut self) {
-        for s in &self.sources {
-            unsafe {
-                let _ = s.client.Stop();
-            }
-        }
-        for &p in &self.processes {
-            unsafe {
-                let _ = CloseHandle(p);
-            }
-        }
-    }
+/// The processes in `roots` that no source records yet.
+fn new_roots(roots: &[u32], sources: &[Source]) -> Vec<u32> {
+    roots
+        .iter()
+        .copied()
+        .filter(|pid| !sources.iter().any(|s| s.pid == *pid))
+        .collect()
 }
 
 impl Source {
     fn new(pid: u32) -> Result<Self, CaptureError> {
-        let client = activate(pid)?;
+        let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, false, pid) }.ok();
+        let client = match activate(pid) {
+            Ok(c) => c,
+            Err(e) => {
+                close(process);
+                return Err(e);
+            }
+        };
         let format = WAVEFORMATEX {
             wFormatTag: WAVE_FORMAT_IEEE_FLOAT,
             nChannels: CHANNELS,
@@ -367,27 +407,57 @@ impl Source {
             wBitsPerSample: 32,
             cbSize: 0,
         };
-        unsafe {
-            client.Initialize(
-                AUDCLNT_SHAREMODE_SHARED,
-                AUDCLNT_STREAMFLAGS_LOOPBACK
-                    | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
-                    | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
-                200_000, // 20 ms in 100 ns units
-                0,
-                &format,
-                None,
-            )
+        let setup = (|| {
+            unsafe {
+                client.Initialize(
+                    AUDCLNT_SHAREMODE_SHARED,
+                    AUDCLNT_STREAMFLAGS_LOOPBACK
+                        | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
+                        | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+                    200_000, // 20 ms in 100 ns units
+                    0,
+                    &format,
+                    None,
+                )
+            }
+            .map_err(err)?;
+            let event = unsafe { CreateEventW(None, false, false, PCWSTR::null()) }.map_err(err)?;
+            let capture: IAudioCaptureClient = match unsafe { client.GetService() } {
+                Ok(c) => c,
+                Err(e) => {
+                    unsafe {
+                        let _ = CloseHandle(event);
+                    }
+                    return Err(err(e));
+                }
+            };
+            if let Err(e) = unsafe { client.SetEventHandle(event) } {
+                unsafe {
+                    let _ = CloseHandle(event);
+                }
+                return Err(err(e));
+            }
+            Ok((capture, event))
+        })();
+        match setup {
+            Ok((capture, event)) => Ok(Self {
+                pid,
+                process,
+                client,
+                capture,
+                event,
+            }),
+            Err(e) => {
+                close(process);
+                Err(e)
+            }
         }
-        .map_err(err)?;
-        let event = unsafe { CreateEventW(None, false, false, PCWSTR::null()) }.map_err(err)?;
-        let source = Self {
-            capture: unsafe { client.GetService() }.map_err(err)?,
-            client,
-            event,
-        };
-        unsafe { source.client.SetEventHandle(source.event) }.map_err(err)?;
-        Ok(source)
+    }
+
+    /// Whether the recorded process has ended.
+    fn ended(&self) -> bool {
+        self.process
+            .is_some_and(|p| unsafe { WaitForSingleObject(p, 0) } == WAIT_OBJECT_0)
     }
 
     fn drain(&self, data: &mut dyn FnMut(&[f32]), silence: &[f32]) -> windows::core::Result<()> {
@@ -422,7 +492,17 @@ impl Source {
 impl Drop for Source {
     fn drop(&mut self) {
         unsafe {
+            let _ = self.client.Stop();
             let _ = CloseHandle(self.event);
+        }
+        close(self.process);
+    }
+}
+
+fn close(handle: Option<HANDLE>) {
+    if let Some(h) = handle {
+        unsafe {
+            let _ = CloseHandle(h);
         }
     }
 }

@@ -1,11 +1,12 @@
 //! Runs the engine on its own thread and publishes its state to the UI.
 
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use faderust_engine::backend::cpal::CpalBackend;
 use faderust_engine::lang::tr;
@@ -20,6 +21,15 @@ use crate::config::{Config, Fx};
 use crate::log;
 
 const EMIT_EVERY: Duration = Duration::from_millis(50);
+/// How often released outputs are checked for returning signal.
+const WAKE_EVERY: Duration = Duration::from_millis(10);
+/// A pause this long between two rounds of the engine thread means the
+/// computer slept. Devices and recordings often stay "open" but dead after
+/// waking, so the engine is built anew. Wall clock: a monotonic clock may
+/// not count the time asleep.
+const RESUME_GAP: Duration = Duration::from_secs(30);
+/// A `maintain` round that takes longer than this is logged.
+const SLOW_MAINTAIN: Duration = Duration::from_millis(500);
 const MAINTAIN_EVERY: Duration = Duration::from_secs(1);
 /// How often to check whether anyone sees the window.
 const VISIBLE_EVERY: Duration = Duration::from_millis(250);
@@ -254,6 +264,11 @@ impl Notices {
                         "“{}” disconnected. Faderust reconnects as soon as the device is back.",
                     )
                     .replace("{}", &label(dir, *slot)),
+                    LostReason::Stalled => tr(
+                        "„{}“ nimmt keinen Ton mehr an (oft nach dem Ruhemodus) und wird neu verbunden.",
+                        "“{}” no longer takes audio (often after sleep) and is being reconnected.",
+                    )
+                    .replace("{}", &label(dir, *slot)),
                     LostReason::StreamError => tr(
                         "„{}“ meldet einen Fehler und wird neu verbunden.",
                         "“{}” reports an error and is being reconnected.",
@@ -298,6 +313,8 @@ fn run(
         .map(|exe| (Instant::now() + Duration::from_secs(3), exe.clone()));
     let mut last_maintain: Option<Instant> = None;
     let mut last_emit = Instant::now();
+    let mut last_round = SystemTime::now();
+    let mut level_delay = LevelDelay::default();
     let mut last_visible_check = Instant::now();
     let mut visible = true;
     let mut dirty_since: Option<Instant> = None;
@@ -306,7 +323,12 @@ fn run(
     let mut quiet = true;
 
     loop {
-        match rx.recv_timeout(EMIT_EVERY) {
+        // While an output is released, look for returning sound often: what
+        // plays before it reopens is lost.
+        let waiting = engine
+            .as_ref()
+            .is_some_and(|e| (0..e.outputs().len()).any(|o| e.is_released(o)));
+        match rx.recv_timeout(if waiting { WAKE_EVERY } else { EMIT_EVERY }) {
             Ok(cmd) => {
                 let mut pending = vec![cmd];
                 pending.extend(rx.try_iter());
@@ -431,12 +453,39 @@ fn run(
             Err(RecvTimeoutError::Disconnected) => break,
         }
 
+        let slept = last_round.elapsed().is_ok_and(|gap| gap >= RESUME_GAP);
+        last_round = SystemTime::now();
+        if slept && engine.is_some() {
+            log::write("resumed from sleep, rebuilding the engine");
+            // Drop the old engine first so devices are free.
+            drop(engine.take());
+            engine = build(
+                &config.lock().unwrap_or_else(|e| e.into_inner()),
+                skip.as_deref(),
+            );
+            last_maintain = None;
+            notices = Notices::default();
+            quiet = true;
+        }
+
         if let Some(e) = &mut engine {
+            let woke_at = Instant::now();
             let mut events = e.wake();
+            if !events.is_empty() {
+                log::write(&format!("wake took {} ms", woke_at.elapsed().as_millis()));
+            }
             let maintained = last_maintain.is_none_or(|t| t.elapsed() >= MAINTAIN_EVERY);
             if maintained {
+                let started = Instant::now();
                 events.extend(e.maintain());
                 last_maintain = Some(Instant::now());
+                // Opening a device that wakes up slowly holds this thread.
+                if started.elapsed() >= SLOW_MAINTAIN {
+                    log::write(&format!(
+                        "maintain took {} ms",
+                        started.elapsed().as_millis()
+                    ));
+                }
             }
             if !events.is_empty() {
                 let c = config.lock().unwrap_or_else(|e| e.into_inner());
@@ -482,10 +531,11 @@ fn run(
         // Meters for a hidden window are wasted work, in Faderust and in
         // the web view drawing them.
         if visible && last_emit.elapsed() >= EMIT_EVERY {
-            let state = snapshot(
+            let mut state = snapshot(
                 &config.lock().unwrap_or_else(|e| e.into_inner()),
                 engine.as_ref(),
             );
+            level_delay.apply(&mut state);
             if let Some(shared) = app.try_state::<crate::AppState>() {
                 *shared.last_state.lock().unwrap_or_else(|e| e.into_inner()) = Some(state.clone());
             }
@@ -498,6 +548,39 @@ fn run(
                 log::write(&format!("saving {}: {e}", path.display()));
             }
             dirty_since = None;
+        }
+    }
+}
+
+/// Holds back the input meters by the time the sound needs to reach the
+/// outputs (their buffers), so an input and the output playing it light up
+/// together instead of the input leading.
+#[derive(Default)]
+struct LevelDelay {
+    history: Vec<VecDeque<f32>>,
+}
+
+impl LevelDelay {
+    fn apply(&mut self, state: &mut UiState) {
+        let ms: Vec<u32> = state
+            .outputs
+            .iter()
+            .filter(|o| o.connected)
+            .filter_map(|o| o.buffer_ms)
+            .collect();
+        let ticks = if ms.is_empty() {
+            0
+        } else {
+            let mean = ms.iter().sum::<u32>() as f32 / ms.len() as f32;
+            (mean / EMIT_EVERY.as_millis() as f32).round() as usize
+        };
+        self.history.resize_with(state.inputs.len(), VecDeque::new);
+        for (input, hist) in state.inputs.iter_mut().zip(&mut self.history) {
+            hist.push_back(input.level_db);
+            while hist.len() > ticks + 1 {
+                hist.pop_front();
+            }
+            input.level_db = hist.front().copied().unwrap_or(input.level_db);
         }
     }
 }
@@ -660,8 +743,41 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
 
 #[cfg(test)]
 mod tests {
-    use super::{explain, skipped, step_db, strip_step};
+    use super::{explain, skipped, step_db, strip_step, LevelDelay, UiDevice, UiState};
     use crate::config::Gain;
+
+    fn ui_device(connected: bool, level_db: f32, buffer_ms: Option<u32>) -> UiDevice {
+        UiDevice {
+            label: String::new(),
+            device: String::new(),
+            connected,
+            device_name: None,
+            level_db,
+            buffer_ms,
+            released: false,
+            fx: None,
+            master: None,
+            muted: None,
+        }
+    }
+
+    #[test]
+    fn input_levels_are_held_back_by_the_output_buffer() {
+        let mut delay = LevelDelay::default();
+        let mut seen = Vec::new();
+        for level in [-10.0, -20.0, -30.0, -40.0] {
+            let mut state = UiState {
+                inputs: vec![ui_device(true, level, None)],
+                outputs: vec![ui_device(true, -120.0, Some(100))],
+                gains: Vec::new(),
+                lanes: Vec::new(),
+            };
+            delay.apply(&mut state);
+            seen.push(state.inputs[0].level_db);
+        }
+        // 100 ms buffer = two 50 ms ticks of delay.
+        assert_eq!(seen, [-10.0, -10.0, -10.0, -20.0]);
+    }
 
     #[test]
     fn strip_step_moves_the_outputs_it_plays_on_together() {

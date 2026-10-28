@@ -27,7 +27,13 @@ pub fn init(path: PathBuf) {
         ));
         previous(info);
     }));
-    write(&format!("Faderust {} gestartet", env!("CARGO_PKG_VERSION")));
+    write(&format!(
+        "Faderust {} gestartet (pid {}, {} {})",
+        env!("CARGO_PKG_VERSION"),
+        std::process::id(),
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    ));
 }
 
 /// Appends one line with a UTC timestamp, and prints it for development.

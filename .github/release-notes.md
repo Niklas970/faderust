@@ -1,7 +1,14 @@
-## Neu in 0.5.2
+## Neu in 0.5.3
 
-- **LED-Anzeigen ruhiger und im Gleichtakt:** Sie steigen jetzt weich statt sprunghaft und fallen langsamer (12 dB pro Sekunde). Pegel desselben Tons, etwa am Mikro-Eingang und am Ausgang, bewegen sich dadurch als eine Einheit
-- **Kopfhörer nach dem Ruhemodus:** Ein Ausgang, der vor dem Ruhemodus still war, wurde nach dem Aufwachen sofort wieder freigegeben und blieb zu. Die Stille-Zeit wird jetzt nach Ruhemodus und Verbindungsverlust neu gezählt
+- **LED-Balken im Gleichtakt:** Die Eingangs-Balken werden um die Pufferzeit der Ausgänge verzögert angezeigt. Ein Eingang und der Ausgang, der ihn spielt, leuchten dadurch gleichzeitig statt nacheilend
+- **Protokoll unter „Geräte“:** Der Protokoll-Knopf sitzt jetzt im Geräte-Dialog neben dem Selbsttest, die Leiste unten entfällt
+- **Geräte-Dialog ohne Programme:** Bei den Eingängen erscheinen nur noch echte Geräte, Programme bleiben im Programm-Dialog
+- **Programme ohne Ton:** Faderust nimmt jetzt auch Prozesse eines Programms auf, die erst nach dem Start der Aufnahme erscheinen (zweites Fenster, neu gestarteter Audioprozess). Vorher blieb so ein Programm stumm, obwohl der Eingang aktiv war
+- **Nach dem Ruhemodus:** Nach dem Aufwachen baut Faderust alle Geräte und Programm-Aufnahmen neu auf. Vorher blieben sie oft scheinbar verbunden, aber tot: Programme blieben stumm, nur das Mikro ging, und der Prozessor lief mit 12 % Last
+- **Hängende Ausgänge:** Nimmt ein Ausgang keinen Ton mehr an, ohne einen Fehler zu melden, erkennt Faderust das nach etwa 5 Sekunden und verbindet ihn neu
+- **Mehr im Protokoll:** Start mit Prozessnummer, Beenden, wenn ein Ausgang hängt, wenn das Verbinden eines Geräts lange dauert, und der Neuaufbau nach dem Ruhemodus
+- **Streifen-Fader nach unten:** Wer den Fader eines Streifens ganz herunter- und wieder hochzieht, behält die Unterschiede zwischen den Ausgängen. Vorher blieb ein leiserer Ausgang auf „aus“ hängen und stand danach gleich laut wie die anderen
+- **Schneller aufwachen:** Freigegebene Ausgänge achten alle 10 statt 50 ms auf zurückkehrenden Ton. Die Dauer des Aufwachens steht im Protokoll („wake took … ms“)
 
 ## Installation
 

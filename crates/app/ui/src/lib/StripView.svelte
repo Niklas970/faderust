@@ -71,8 +71,22 @@
     });
   });
 
+  // Moving a strip shifts all its outputs by the same amount. The levels
+  // from before the move are kept while only the strip fader moves them, so
+  // pulling it down and up again restores the differences between outputs
+  // (an output pushed to -∞ on the way would otherwise stay there).
+  const anchors = new Map();
+
   function move(i, db) {
-    for (const [o, v] of stripChanges(row(i), db)) onGain(i, o, v);
+    const now = row(i);
+    const anchor = anchors.get(i);
+    const untouched =
+      anchor && anchor.applied.length === now.length && anchor.base.every((g, o) => now[o]?.muted === g.muted) &&
+      anchor.applied.every(([o, v]) => now[o]?.db === v);
+    const base = untouched ? anchor.base : now.map((g) => ({ ...g }));
+    const changes = stripChanges(base, db);
+    for (const [o, v] of changes) onGain(i, o, v);
+    anchors.set(i, { base, applied: changes });
   }
 
   /** Switching an output on that sits at -∞ brings it to the strip's level. */
