@@ -3,6 +3,7 @@
 - **Stille Programme gleich ausgeblendet:** Nach einem Start oder Update verschwinden Programme, die gerade keinen Ton spielen, nach wenigen Sekunden statt erst nach der eingestellten Zeit. Spielt eines, erscheint es wieder
 - **Lesbarere Überschriften:** „Outputs“, „Devices“ und „Programs“ sind größer und in der Textfarbe statt in Grau
 - **Hängende Engine nach dem Ruhemodus:** Alte, tote Streams werden auf einem eigenen Thread geschlossen, damit ein Stream, der sich nie schließt, den Neuaufbau nicht blockiert. Hängt die Engine trotzdem, schreibt eine Überwachung nach 15 Sekunden ins Protokoll, woran sie hängt („engine thread stuck for … s while …“)
+- **Protokoll bleibt klein:** Die Protokolldatei beginnt jetzt auch während des Laufs neu, sobald sie 512 KB erreicht (die alte bleibt als `faderust.log.old`). Vorher wuchs sie bei dauerhaft laufender App ohne Ende
 - **Alles andere bleibt:** „N still, zeigen“ blendet sie weiterhin ein, das Auge pro Programm hält eines dauerhaft sichtbar
 
 ## Installation
