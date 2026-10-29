@@ -197,9 +197,15 @@ const DEVICE_IN_USE: &str = "-2004287478";
 /// WASAPI's "device invalidated" (AUDCLNT_E_DEVICE_INVALIDATED).
 const DEVICE_INVALIDATED: &str = "-2004287484";
 
-/// The cause of a failed connection in words a user can act on.
-fn explain(error: &str) -> String {
-    if error.contains(DEVICE_IN_USE) {
+/// The cause of a failed connection in words a user can act on. `cable`:
+/// the device is a virtual cable, where the Bluetooth hint does not apply.
+fn explain(error: &str, cable: bool) -> String {
+    if error.contains(DEVICE_IN_USE) && cable {
+        tr(
+            "Das virtuelle Kabel ist belegt. Meist hängt nach dem Ruhemodus der Windows-Audiodienst oder ein zweiter Faderust-Prozess hält es: im Task-Manager nach einer weiteren faderust.exe sehen, sonst den Dienst „Windows-Audio“ neu starten. Faderust verbindet von selbst, sobald es frei ist.",
+            "The virtual cable is in use. After sleep the Windows Audio service often hangs, or a second Faderust process holds it: look for another faderust.exe in Task Manager, otherwise restart the “Windows Audio” service. Faderust reconnects by itself as soon as it is free.",
+        )
+    } else if error.contains(DEVICE_IN_USE) {
         tr(
             "Das Gerät ist belegt. Bei Bluetooth-Kopfhörern nutzt meist ein Programm (z. B. Discord) ihr Headset-Mikro und schaltet sie in den Freisprechmodus: dort ein anderes Mikro wählen. Sonst hält ein Programm das Gerät exklusiv fest, etwa Voicemeeter, eine DAW oder ein ASIO-Treiber. Faderust verbindet von selbst, sobald es frei ist.",
             "The device is in use. With Bluetooth headphones, a program (e.g. Discord) usually uses their headset microphone and switches them to hands-free mode: pick another microphone there. Otherwise a program holds the device exclusively, such as Voicemeeter, a DAW or an ASIO driver. Faderust reconnects by itself as soon as it is free.",
@@ -282,13 +288,18 @@ impl Notices {
             }
             EngineEvent::ConnectFailed { dir, slot, error } => {
                 let previous = self.failing.insert(key(dir, *slot), error.clone());
+                let pattern = match dir {
+                    Direction::Input => config.inputs.get(*slot).map(|e| &e.device),
+                    Direction::Output => config.outputs.get(*slot).map(|e| &e.device),
+                };
+                let cable = pattern.is_some_and(|d| faderust_engine::apps::is_virtual_cable(d));
                 (previous.as_ref() != Some(error)).then(|| Notice {
                     level: "error",
                     text: format!(
                         "{} {}",
                         tr("„{}“ lässt sich nicht öffnen:", "“{}” cannot be opened:")
                             .replace("{}", &label(dir, *slot)),
-                        explain(error)
+                        explain(error, cable)
                     ),
                 })
             }
@@ -903,8 +914,9 @@ mod tests {
     #[test]
     fn explains_a_device_held_by_another_program() {
         let error = "Failed to initialize audio client: OS Error -2004287478 (FormatMessageW() returned error 317) (os error -2004287478)";
-        assert!(explain(error).contains("Headset-Mikro"));
-        assert!(explain("something else").starts_with("something else."));
+        assert!(explain(error, false).contains("Headset-Mikro"));
+        assert!(explain(error, true).contains("Windows-Audio"));
+        assert!(explain("something else", false).starts_with("something else."));
     }
 
     #[test]
