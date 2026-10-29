@@ -1,0 +1,10 @@
+[package]
+name = "faderust-usbcable"
+description = "Experimental virtual audio cable: a USB Audio Class 1.0 device served over USB/IP"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]

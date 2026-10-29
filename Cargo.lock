@@ -1167,7 +1167,7 @@ dependencies = [
 
 [[package]]
 name = "faderust"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "faderust-engine",
  "getrandom 0.4.3",
@@ -1184,7 +1184,7 @@ dependencies = [
 
 [[package]]
 name = "faderust-engine"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "audioadapter-buffers",
  "cpal",
@@ -1194,6 +1194,10 @@ dependencies = [
  "windows",
  "windows-core",
 ]
+
+[[package]]
+name = "faderust-usbcable"
+version = "0.5.7"
 
 [[package]]
 name = "fastrand"
