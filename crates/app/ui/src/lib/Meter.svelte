@@ -1,5 +1,5 @@
 <script>
-  import { untrack } from "svelte";
+  import { addTicker } from "./meterClock.js";
   /**
    * LED bar meter in dBFS, -60 dB (empty) to 0 dB (full). Signal segments
    * up to -12 dB, warning up to -3 dB, clip above.
@@ -14,45 +14,51 @@
   // stream that ends sends -∞ only once).
   const RISE = 0.06;
   const FALL = 12;
-  let shown = $state(-120);
+  let shown = -120;
   let target = -120;
-  let frame = 0;
-  let last = 0;
+  let cover;
+  let stop = null;
 
-  function move(now) {
-    const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
-    last = now;
+  function draw() {
+    const lit = Math.max(0, Math.min(1, (shown + 60) / 60));
+    if (cover) cover.style.transform = vertical ? `scaleY(${1 - lit})` : `scaleX(${1 - lit})`;
+  }
+
+  // Returns false once the meter has reached its target.
+  function move(dt) {
     shown =
       target > shown
         ? shown + (target - shown) * (1 - Math.exp(-dt / RISE))
         : Math.max(target, shown - FALL * dt);
-    if (Math.abs(target - shown) < 0.1) {
-      shown = target;
-      frame = 0;
-    } else {
-      frame = requestAnimationFrame(move);
-    }
+    const done = Math.abs(target - shown) < 0.1;
+    if (done) shown = target;
+    draw();
+    return !done;
   }
 
   $effect(() => {
     target = db;
-    if (!frame && Math.abs(db - untrack(() => shown)) >= 0.1) {
-      last = performance.now();
-      frame = requestAnimationFrame(move);
+    if (!stop && Math.abs(db - shown) >= 0.1) {
+      stop = addTicker((dt) => {
+        if (!move(dt)) {
+          stop?.();
+          stop = null;
+        }
+      });
     }
   });
 
-  $effect(() => () => cancelAnimationFrame(frame));
-
-  // Share of the bar that is lit, 0…1.
-  const lit = $derived(Math.max(0, Math.min(1, (shown + 60) / 60)));
+  $effect(() => {
+    draw();
+    return () => stop?.();
+  });
 </script>
 
 <div class="meter" class:vertical class:thin aria-hidden="true">
   <div class="leds"></div>
   <!-- Covers the part above the level. Only its transform changes, which the
        browser moves without redrawing the LEDs under it. -->
-  <div class="cover" style:transform={vertical ? `scaleY(${1 - lit})` : `scaleX(${1 - lit})`}></div>
+  <div class="cover" bind:this={cover}></div>
 </div>
 
 <style>
