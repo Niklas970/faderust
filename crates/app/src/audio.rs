@@ -2,7 +2,7 @@
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::atomic::Ordering::Relaxed;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering::Relaxed};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -303,6 +303,8 @@ fn run(
     rx: Receiver<Command>,
     skip: Option<String>,
 ) {
+    let watch = Watch::new();
+    watch.spawn_watchdog();
     let mut engine = build(
         &config.lock().unwrap_or_else(|e| e.into_inner()),
         skip.as_deref(),
@@ -328,6 +330,7 @@ fn run(
         let waiting = engine
             .as_ref()
             .is_some_and(|e| (0..e.outputs().len()).any(|o| e.is_released(o)));
+        watch.enter(IDLE);
         match rx.recv_timeout(if waiting { WAKE_EVERY } else { EMIT_EVERY }) {
             Ok(cmd) => {
                 let mut pending = vec![cmd];
@@ -336,7 +339,9 @@ fn run(
                     match cmd {
                         Command::Reconfigure => {
                             // Drop the old engine first so devices are free.
+                            watch.enter(DROPPING);
                             drop(engine.take());
+                            watch.enter(BUILDING);
                             engine = build(
                                 &config.lock().unwrap_or_else(|e| e.into_inner()),
                                 skip.as_deref(),
@@ -457,8 +462,11 @@ fn run(
         last_round = SystemTime::now();
         if slept && engine.is_some() {
             log::write("resumed from sleep, rebuilding the engine");
-            // Drop the old engine first so devices are free.
-            drop(engine.take());
+            // The old streams are dead and closing one can hang for good:
+            // let another thread try while a new engine starts.
+            watch.enter(DROPPING);
+            retire(engine.take());
+            watch.enter(BUILDING);
             engine = build(
                 &config.lock().unwrap_or_else(|e| e.into_inner()),
                 skip.as_deref(),
@@ -469,6 +477,7 @@ fn run(
         }
 
         if let Some(e) = &mut engine {
+            watch.enter(WAKING);
             let woke_at = Instant::now();
             let mut events = e.wake();
             if !events.is_empty() {
@@ -476,6 +485,7 @@ fn run(
             }
             let maintained = last_maintain.is_none_or(|t| t.elapsed() >= MAINTAIN_EVERY);
             if maintained {
+                watch.enter(MAINTAINING);
                 let started = Instant::now();
                 events.extend(e.maintain());
                 last_maintain = Some(Instant::now());
@@ -531,6 +541,7 @@ fn run(
         // Meters for a hidden window are wasted work, in Faderust and in
         // the web view drawing them.
         if visible && last_emit.elapsed() >= EMIT_EVERY {
+            watch.enter(EMITTING);
             let mut state = snapshot(
                 &config.lock().unwrap_or_else(|e| e.into_inner()),
                 engine.as_ref(),
@@ -550,6 +561,101 @@ fn run(
             dirty_since = None;
         }
     }
+}
+
+/// What the engine thread is doing, for the watchdog.
+const PHASES: [&str; 6] = [
+    "waiting",
+    "dropping the engine",
+    "building the engine",
+    "waking outputs",
+    "maintaining devices",
+    "sending state",
+];
+const IDLE: usize = 0;
+const DROPPING: usize = 1;
+const BUILDING: usize = 2;
+const WAKING: usize = 3;
+const MAINTAINING: usize = 4;
+const EMITTING: usize = 5;
+/// The engine thread counts as stuck after this long without a heartbeat.
+const STUCK_AFTER: Duration = Duration::from_secs(15);
+
+/// Heartbeat of the engine thread. Windows can hold a call forever (a dead
+/// stream, a device that wakes up badly); the watchdog then writes what the
+/// thread was doing into the log.
+struct Watch {
+    start: Instant,
+    beat_ms: AtomicU64,
+    phase: AtomicUsize,
+}
+
+impl Watch {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            start: Instant::now(),
+            beat_ms: AtomicU64::new(0),
+            phase: AtomicUsize::new(IDLE),
+        })
+    }
+
+    /// The thread is alive and starts `phase`.
+    fn enter(&self, phase: usize) {
+        self.beat_ms
+            .store(self.start.elapsed().as_millis() as u64, Relaxed);
+        self.phase.store(phase, Relaxed);
+    }
+
+    fn silent_for(&self) -> Duration {
+        self.start
+            .elapsed()
+            .saturating_sub(Duration::from_millis(self.beat_ms.load(Relaxed)))
+    }
+
+    fn phase(&self) -> &'static str {
+        PHASES[self.phase.load(Relaxed).min(PHASES.len() - 1)]
+    }
+
+    fn spawn_watchdog(self: &Arc<Self>) {
+        let watch = Arc::clone(self);
+        let _ = thread::Builder::new()
+            .name("faderust-watchdog".into())
+            .spawn(move || {
+                let mut reported = false;
+                let mut last = SystemTime::now();
+                loop {
+                    thread::sleep(Duration::from_secs(5));
+                    // This thread sleeps with the computer: no verdict then.
+                    let slept = last.elapsed().is_ok_and(|gap| gap >= STUCK_AFTER);
+                    last = SystemTime::now();
+                    if slept {
+                        reported = false;
+                        continue;
+                    }
+                    let silent = watch.silent_for();
+                    if silent >= STUCK_AFTER && !reported {
+                        log::write(&format!(
+                            "engine thread stuck for {} s while {}",
+                            silent.as_secs(),
+                            watch.phase()
+                        ));
+                        reported = true;
+                    } else if silent < STUCK_AFTER && reported {
+                        log::write("engine thread running again");
+                        reported = false;
+                    }
+                }
+            });
+    }
+}
+
+/// Drops `engine` on a thread of its own, so a stream that never closes
+/// holds up only that thread.
+fn retire(engine: Option<Engine<CpalBackend>>) {
+    let Some(engine) = engine else { return };
+    let _ = thread::Builder::new()
+        .name("faderust-retire".into())
+        .spawn(move || drop(engine));
 }
 
 /// Holds back the input meters by the time the sound needs to reach the
