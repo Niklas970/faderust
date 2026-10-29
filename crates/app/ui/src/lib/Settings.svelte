@@ -390,6 +390,7 @@
   }
   .buffer input {
     width: 70px;
+    color: var(--text);
   }
   button {
     padding: 6px 12px;

@@ -261,7 +261,7 @@
   }
   .note {
     margin-top: -4px;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--muted);
   }
   .note.on {
@@ -301,7 +301,7 @@
     right: 0;
     transform: translateY(50%);
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1;
     color: var(--muted);
   }
@@ -465,7 +465,7 @@
     border-radius: 4px;
     border: 1px solid #101113;
     background: linear-gradient(#3b3f45, #2a2d32 60%, #24272b);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;

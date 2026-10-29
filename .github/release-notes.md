@@ -2,6 +2,7 @@
 
 - **Klarere Meldung beim Kabel:** Lässt sich ein virtuelles Kabel (VB-Cable) nicht öffnen, nennt die Meldung jetzt die passenden Ursachen (hängender Windows-Audiodienst nach dem Ruhemodus, zweite faderust.exe) statt des Hinweises auf Bluetooth-Kopfhörer
 - **Weniger Last durch das Fenster:** Die Oberfläche zeichnet nicht mehr bei jedem Pegel-Update (20-mal pro Sekunde) alle Streifen und Listen neu, sondern nur die Pegel-Balken. Das senkt die Prozessorlast von WebView2 spürbar
+- **Bessere Lesbarkeit:** Grauer Text, Beschriftungen und Rahmen haben mehr Kontrast (dunkel und hell), der Haupttext ist heller, die kleinsten Schriften sind um einen Punkt größer und der Puffer-Wert im Geräte-Dialog steht in der Textfarbe
 
 ## Installation
 

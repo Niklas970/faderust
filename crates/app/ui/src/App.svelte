@@ -425,7 +425,7 @@
     border-radius: var(--radius-sm);
     background: none;
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 12px;
     color: var(--muted);
     cursor: pointer;
   }

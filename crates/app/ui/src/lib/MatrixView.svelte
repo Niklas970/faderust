@@ -108,7 +108,7 @@
     font-weight: 600;
   }
   .device {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
@@ -166,7 +166,7 @@
     border-radius: 4px;
     border: 1px solid #101113;
     background: linear-gradient(#3b3f45, #24272b);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     color: #aeb4bb;
   }
