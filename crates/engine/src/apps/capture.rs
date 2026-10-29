@@ -257,10 +257,12 @@ pub fn open(
             Err(e)
         }
         Err(_) => {
-            // Stuck in Windows or gone: let it finish on its own.
+            // Stuck in Windows or gone: ask it to stop and wait for it to
+            // finish so the thread does not leak.
             stop.store(true, Ordering::Relaxed);
             clear_marker();
             failed(exe);
+            let _ = thread.join();
             Err(CaptureError("Programm-Aufnahme startet nicht".into()))
         }
     }
@@ -456,8 +458,10 @@ impl Source {
 
     /// Whether the recorded process has ended.
     fn ended(&self) -> bool {
-        self.process
-            .is_some_and(|p| unsafe { WaitForSingleObject(p, 0) } == WAIT_OBJECT_0)
+        match self.process {
+            None => true,
+            Some(p) => unsafe { WaitForSingleObject(p, 0) } == WAIT_OBJECT_0,
+        }
     }
 
     fn drain(&self, data: &mut dyn FnMut(&[f32]), silence: &[f32]) -> windows::core::Result<()> {
@@ -553,6 +557,7 @@ fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
 
     let done = unsafe { CreateEventW(None, true, false, PCWSTR::null()) }.map_err(err)?;
     let handler: IActivateAudioInterfaceCompletionHandler = Activated(done).into();
+    let mut started = false;
     let result = (|| {
         let operation = unsafe {
             ActivateAudioInterfaceAsync(
@@ -563,6 +568,7 @@ fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
             )
         }
         .map_err(err)?;
+        started = true;
         if unsafe { WaitForSingleObject(done, ACTIVATE_TIMEOUT_MS) } != WAIT_OBJECT_0 {
             // The handler may still fire later: leave the event open for it.
             return Err(CaptureError(crate::lang::tr(
@@ -588,7 +594,14 @@ fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
             .cast::<IAudioClient>()
             .map_err(err)
     })();
-    if unsafe { WaitForSingleObject(done, 0) } == WAIT_OBJECT_0 {
+    if started {
+        if unsafe { WaitForSingleObject(done, 0) } == WAIT_OBJECT_0 {
+            unsafe {
+                let _ = CloseHandle(done);
+            }
+        }
+    } else {
+        // Activation never started: safe to close immediately.
         unsafe {
             let _ = CloseHandle(done);
         }

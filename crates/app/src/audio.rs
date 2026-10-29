@@ -823,9 +823,11 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
                     let Some(e) = engine else {
                         return UiLane::default();
                     };
-                    let rate = e.inputs()[i]
-                        .device
-                        .as_ref()
+                    if i >= e.inputs().len() || o >= e.outputs().len() {
+                        return UiLane::default();
+                    }
+                    let rate = e.inputs().get(i)
+                        .and_then(|s| s.device.as_ref())
                         .map_or(48_000, |(_, f)| f.sample_rate);
                     let s = e.lane_stats(i, o);
                     UiLane {

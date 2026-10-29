@@ -239,8 +239,12 @@ impl Lane {
             .process_into_buffer(&input, &mut output, None)
         {
             Ok((_, produced)) => {
-                self.out_pos = 0;
-                self.out_len = produced;
+                if produced == 0 {
+                    self.silence();
+                } else {
+                    self.out_pos = 0;
+                    self.out_len = produced;
+                }
             }
             Err(_) => self.silence(),
         }

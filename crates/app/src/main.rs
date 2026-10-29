@@ -552,6 +552,7 @@ fn get_config(state: State<AppState>) -> Config {
 
 #[tauri::command]
 fn save_config(config: Config, state: State<AppState>) -> Result<(), String> {
+    let mut guard = state.config.lock().unwrap_or_else(|e| e.into_inner());
     let config = config.normalized();
     config.save(&state.path).map_err(|e| {
         format!(
@@ -559,7 +560,8 @@ fn save_config(config: Config, state: State<AppState>) -> Result<(), String> {
             faderust_engine::lang::tr("Konfiguration nicht gespeichert", "Configuration not saved")
         )
     })?;
-    *state.config.lock().unwrap_or_else(|e| e.into_inner()) = config;
+    *guard = config;
+    drop(guard);
     send(&state, Command::Reconfigure)
 }
 

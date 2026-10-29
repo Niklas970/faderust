@@ -226,8 +226,12 @@ pub(crate) struct Com(bool);
 impl Com {
     pub(crate) fn init() -> Result<Self> {
         let hr = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
-        if hr.is_ok() {
+        if hr == S_OK {
             Ok(Self(true))
+        } else if hr == S_FALSE {
+            // COM was already initialised on this thread by someone else:
+            // usable, but not ours to uninitialise.
+            Ok(Self(false))
         } else if hr == RPC_E_CHANGED_MODE {
             // Already initialised as STA by someone else: usable, not ours.
             Ok(Self(false))
