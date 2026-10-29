@@ -378,7 +378,7 @@ fn run(
                             }
                         }
                         Command::SetGain(i, o, db) => {
-                            if let Some(g) = gain_mut(&config, i, o, |g| g.db = db) {
+                            if let Some(g) = gain_mut(&config, i, o, |g| g.db = clamp_db(db)) {
                                 if let Some(e) = &engine {
                                     e.matrix.set_gain_db(i, o, g.db);
                                 }
@@ -394,7 +394,7 @@ fn run(
                             }
                         }
                         Command::AddGain(i, o, delta) => {
-                            let step = |g: &mut crate::config::Gain| g.db = step_db(g.db, delta);
+                            let step = |g: &mut crate::config::Gain| g.db = clamp_db(step_db(g.db, delta));
                             if let Some(g) = gain_mut(&config, i, o, step) {
                                 if let Some(e) = &engine {
                                     e.matrix.set_gain_db(i, o, g.db);
@@ -756,7 +756,6 @@ fn gain_mut(
     let mut c = config.lock().unwrap_or_else(|e| e.into_inner());
     let g = c.gains.get_mut(i)?.get_mut(o)?;
     f(g);
-    g.db = clamp_db(g.db);
     Some(*g)
 }
 
