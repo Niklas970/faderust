@@ -1,8 +1,9 @@
-## Neu in 0.5.5
+## Neu in 0.5.6
 
-- **Klarere Meldung beim Kabel:** Lässt sich ein virtuelles Kabel (VB-Cable) nicht öffnen, nennt die Meldung jetzt die passenden Ursachen (hängender Windows-Audiodienst nach dem Ruhemodus, zweite faderust.exe) statt des Hinweises auf Bluetooth-Kopfhörer
-- **Weniger Last durch das Fenster:** Die Oberfläche zeichnet nicht mehr bei jedem Pegel-Update (20-mal pro Sekunde) alle Streifen und Listen neu, sondern nur die Pegel-Balken. Das senkt die Prozessorlast von WebView2 spürbar
-- **Bessere Lesbarkeit:** Grauer Text, Beschriftungen und Rahmen haben mehr Kontrast (dunkel und hell), der Haupttext ist heller, die kleinsten Schriften sind um einen Punkt größer und der Puffer-Wert im Geräte-Dialog steht in der Textfarbe
+- **LED-Balken sparen Prozessor:** Die Balken werden nicht mehr bei jeder Bewegung neu gezeichnet, nur noch ein Deckblatt wird verschoben. Das senkt die Lastspitzen beim Sprechen oder bei Musik, wenn sich viele Balken gleichzeitig bewegen
+- **Weniger Last für den Windows-Audiodienst:** Die Liste der Programme mit Ton wird nur noch alle 2 Sekunden abgefragt statt für jeden wartenden Programm-Eingang jede Sekunde. Das entlastet den Windows-Audiodienst, der bei zu vielen Abfragen hängen kann („Fehler bei der Audiowiedergabe“ im Browser)
+- **Sauberes Beenden:** Hängt beim Beenden ein Audio-Stream, beendet sich Faderust nach 3 Sekunden trotzdem, statt als Hintergrundprozess weiter Geräte zu belegen
+- **Kleine Fehlerkorrekturen:** Updater-Plugins auf den neuesten Patch (zip 9), Wertebereich der Fader nur noch an einer Stelle begrenzt, Vorlagen laden passt die Fader an die aktuelle Zahl der Ein- und Ausgänge an, Pegelanzeige bricht bei geänderter Geräteliste nicht mehr ab, ein hängender Resampler kann den Audiotakt nicht mehr blockieren, ein Handle-Leck in der Programm-Aufnahme geschlossen
 
 ## Installation
 

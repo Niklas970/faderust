@@ -55,6 +55,8 @@ const OPEN_TIMEOUT: Duration = Duration::from_secs(8);
 /// before asking again. Retrying every second piles up stuck requests in
 /// the Windows audio service, which then breaks the program's sound.
 const RETRY_AFTER: Duration = Duration::from_secs(30);
+/// How long the list of playing programs is reused.
+const PROGRAMS_CACHE: Duration = Duration::from_secs(2);
 /// How often a running recording looks for processes of its program that
 /// started after it (a second window, a restarted audio process).
 const REFRESH_EVERY: Duration = Duration::from_secs(2);
@@ -115,11 +117,24 @@ fn clear_marker() {
     }
 }
 
-/// Programs that play audio right now, except Faderust itself.
+/// Programs that play audio right now, except Faderust itself. Listing them
+/// walks every audio session of every device; the engine asks every second
+/// for each program input that waits, so the answer is kept for a moment.
 pub fn programs() -> Result<Vec<AppAudio>, CaptureError> {
+    static CACHE: Mutex<Option<(Instant, Vec<AppAudio>)>> = Mutex::new(None);
+    if let Ok(cache) = CACHE.lock() {
+        if let Some((at, apps)) = cache.as_ref() {
+            if at.elapsed() < PROGRAMS_CACHE {
+                return Ok(apps.clone());
+            }
+        }
+    }
     let own = std::process::id();
     let mut apps = WasapiRouter::new().apps().map_err(|e| CaptureError(e.0))?;
     apps.retain(|a| !a.pids.contains(&own));
+    if let Ok(mut cache) = CACHE.lock() {
+        *cache = Some((Instant::now(), apps.clone()));
+    }
     Ok(apps)
 }
 
@@ -553,6 +568,7 @@ fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
 
     let done = unsafe { CreateEventW(None, true, false, PCWSTR::null()) }.map_err(err)?;
     let handler: IActivateAudioInterfaceCompletionHandler = Activated(done).into();
+    let mut started = false;
     let result = (|| {
         let operation = unsafe {
             ActivateAudioInterfaceAsync(
@@ -563,6 +579,7 @@ fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
             )
         }
         .map_err(err)?;
+        started = true;
         if unsafe { WaitForSingleObject(done, ACTIVATE_TIMEOUT_MS) } != WAIT_OBJECT_0 {
             // The handler may still fire later: leave the event open for it.
             return Err(CaptureError(crate::lang::tr(
@@ -588,7 +605,9 @@ fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
             .cast::<IAudioClient>()
             .map_err(err)
     })();
-    if unsafe { WaitForSingleObject(done, 0) } == WAIT_OBJECT_0 {
+    // Never started: nothing can signal the event, close it now. Started
+    // but not done yet: the handler may still fire, leave it open for it.
+    if !started || unsafe { WaitForSingleObject(done, 0) } == WAIT_OBJECT_0 {
         unsafe {
             let _ = CloseHandle(done);
         }
