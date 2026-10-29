@@ -293,7 +293,7 @@
   .narrow .bus {
     min-width: 0;
     padding: 3px 4px;
-    font-size: 11px;
+    font-size: 12px;
   }
   .grow {
     flex: 1;

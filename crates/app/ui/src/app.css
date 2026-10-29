@@ -22,9 +22,9 @@
   --panel-2: #17191c;
   /* Recessed areas: fader slots, meters, inputs. */
   --well: #050506;
-  --border: #272a2f;
-  --text: #dcdfe3;
-  --muted: #858b93;
+  --border: #33373d;
+  --text: #eceef1;
+  --muted: #a9afb7;
   --accent: var(--accent-base);
   --accent-strong: color-mix(in srgb, var(--accent-base) 88%, white);
   --accent-light: color-mix(in srgb, var(--accent-base) 70%, white);
@@ -41,9 +41,9 @@
     --panel: #f3f4f6;
     --panel-2: #e9ebee;
     --well: #2a2d32;
-    --border: #c3c8ce;
-    --text: #1c1f23;
-    --muted: #5f666e;
+    --border: #aab0b8;
+    --text: #121417;
+    --muted: #444b53;
     --accent: color-mix(in srgb, var(--accent-base) 80%, black);
     --accent-strong: color-mix(in srgb, var(--accent-base) 68%, black);
     --accent-light: var(--accent-base);
@@ -58,9 +58,9 @@
   --panel: #f3f4f6;
   --panel-2: #e9ebee;
   --well: #2a2d32;
-  --border: #c3c8ce;
-  --text: #1c1f23;
-  --muted: #5f666e;
+  --border: #aab0b8;
+  --text: #121417;
+  --muted: #444b53;
   --accent: color-mix(in srgb, var(--accent-base) 80%, black);
   --accent-strong: color-mix(in srgb, var(--accent-base) 68%, black);
   --accent-light: var(--accent-base);
