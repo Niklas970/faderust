@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import StripView from "./lib/StripView.svelte";
+  import { createSync } from "./lib/stateSync.js";
   import MatrixView from "./lib/MatrixView.svelte";
   import Settings from "./lib/Settings.svelte";
   import Apps from "./lib/Apps.svelte";
@@ -191,7 +192,8 @@
 
   onMount(() => {
     let unlisten;
-    onState((s) => (state = s)).then((u) => (unlisten = u));
+    const sync = createSync();
+    onState((s) => (state = sync(state, s))).then((u) => (unlisten = u));
     return () => unlisten?.();
   });
 

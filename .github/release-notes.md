@@ -1,6 +1,7 @@
 ## Neu in 0.5.5
 
 - **Klarere Meldung beim Kabel:** Lässt sich ein virtuelles Kabel (VB-Cable) nicht öffnen, nennt die Meldung jetzt die passenden Ursachen (hängender Windows-Audiodienst nach dem Ruhemodus, zweite faderust.exe) statt des Hinweises auf Bluetooth-Kopfhörer
+- **Weniger Last durch das Fenster:** Die Oberfläche zeichnet nicht mehr bei jedem Pegel-Update (20-mal pro Sekunde) alle Streifen und Listen neu, sondern nur die Pegel-Balken. Das senkt die Prozessorlast von WebView2 spürbar
 
 ## Installation
 
