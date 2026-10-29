@@ -34,15 +34,6 @@ multiple-versions = "allow"
 
 [advisories]
 yanked = "deny"
-# zip 4 comes with tauri-plugin-updater, which pins it. The advisories are
-# about Unix permission bits and symlinks when extracting untrusted archives.
-# Faderust's updater downloads the NSIS setup itself (no archive) and checks
-# its signature before using it. Drop these once the plugin moves to zip 9.
-ignore = [
-    { id = "RUSTSEC-2026-0367", reason = "zip via tauri-plugin-updater; no archive extraction on Windows, signed payload" },
-    { id = "RUSTSEC-2026-0368", reason = "zip via tauri-plugin-updater; no archive extraction on Windows, signed payload" },
-    { id = "RUSTSEC-2026-0369", reason = "zip via tauri-plugin-updater; no archive extraction on Windows, signed payload" },
-]
 
 [sources]
 unknown-registry = "deny"

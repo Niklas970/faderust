@@ -394,7 +394,8 @@ fn run(
                             }
                         }
                         Command::AddGain(i, o, delta) => {
-                            let step = |g: &mut crate::config::Gain| g.db = clamp_db(step_db(g.db, delta));
+                            let step =
+                                |g: &mut crate::config::Gain| g.db = clamp_db(step_db(g.db, delta));
                             if let Some(g) = gain_mut(&config, i, o, step) {
                                 if let Some(e) = &engine {
                                     e.matrix.set_gain_db(i, o, g.db);
@@ -833,6 +834,9 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
                     let Some(e) = engine else {
                         return UiLane::default();
                     };
+                    if i >= e.inputs().len() || o >= e.outputs().len() {
+                        return UiLane::default();
+                    }
                     let rate = e.inputs()[i]
                         .device
                         .as_ref()

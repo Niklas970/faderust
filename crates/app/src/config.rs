@@ -187,6 +187,7 @@ impl Config {
             return false;
         };
         self.gains = p.gains.clone();
+        fit_gains(&mut self.gains, self.inputs.len(), self.outputs.len());
         true
     }
 

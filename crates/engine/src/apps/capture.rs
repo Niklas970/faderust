@@ -568,6 +568,7 @@ fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
 
     let done = unsafe { CreateEventW(None, true, false, PCWSTR::null()) }.map_err(err)?;
     let handler: IActivateAudioInterfaceCompletionHandler = Activated(done).into();
+    let mut started = false;
     let result = (|| {
         let operation = unsafe {
             ActivateAudioInterfaceAsync(
@@ -578,6 +579,7 @@ fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
             )
         }
         .map_err(err)?;
+        started = true;
         if unsafe { WaitForSingleObject(done, ACTIVATE_TIMEOUT_MS) } != WAIT_OBJECT_0 {
             // The handler may still fire later: leave the event open for it.
             return Err(CaptureError(crate::lang::tr(
@@ -603,7 +605,9 @@ fn activate(pid: u32) -> Result<IAudioClient, CaptureError> {
             .cast::<IAudioClient>()
             .map_err(err)
     })();
-    if unsafe { WaitForSingleObject(done, 0) } == WAIT_OBJECT_0 {
+    // Never started: nothing can signal the event, close it now. Started
+    // but not done yet: the handler may still fire, leave it open for it.
+    if !started || unsafe { WaitForSingleObject(done, 0) } == WAIT_OBJECT_0 {
         unsafe {
             let _ = CloseHandle(done);
         }
