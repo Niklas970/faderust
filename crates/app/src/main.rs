@@ -838,6 +838,14 @@ fn main() {
         .run(|_, event| {
             if let tauri::RunEvent::Exit = event {
                 log::write("Faderust beendet");
+                // A stream that never closes must not keep the process, and
+                // with it the audio devices, alive after Quit.
+                let _ = std::thread::Builder::new()
+                    .name("faderust-exit-guard".into())
+                    .spawn(|| {
+                        std::thread::sleep(std::time::Duration::from_secs(3));
+                        std::process::exit(0);
+                    });
             }
         });
 }
