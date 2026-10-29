@@ -1,6 +1,7 @@
 ## Neu in 0.5.6
 
 - **LED-Balken sparen Prozessor:** Die Balken werden nicht mehr bei jeder Bewegung neu gezeichnet, nur noch ein Deckblatt wird verschoben. Das senkt die Lastspitzen beim Sprechen oder bei Musik, wenn sich viele Balken gleichzeitig bewegen
+- **Weniger Last für den Windows-Audiodienst:** Die Liste der Programme mit Ton wird nur noch alle 2 Sekunden abgefragt statt für jeden wartenden Programm-Eingang jede Sekunde. Das entlastet den Windows-Audiodienst, der bei zu vielen Abfragen hängen kann („Fehler bei der Audiowiedergabe“ im Browser)
 
 ## Installation
 
