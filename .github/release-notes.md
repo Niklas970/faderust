@@ -1,8 +1,6 @@
-## Neu in 0.5.5
+## Neu in 0.5.6
 
-- **Klarere Meldung beim Kabel:** Lässt sich ein virtuelles Kabel (VB-Cable) nicht öffnen, nennt die Meldung jetzt die passenden Ursachen (hängender Windows-Audiodienst nach dem Ruhemodus, zweite faderust.exe) statt des Hinweises auf Bluetooth-Kopfhörer
-- **Weniger Last durch das Fenster:** Die Oberfläche zeichnet nicht mehr bei jedem Pegel-Update (20-mal pro Sekunde) alle Streifen und Listen neu, sondern nur die Pegel-Balken. Das senkt die Prozessorlast von WebView2 spürbar
-- **Bessere Lesbarkeit:** Grauer Text, Beschriftungen und Rahmen haben mehr Kontrast (dunkel und hell), der Haupttext ist heller, die kleinsten Schriften sind um einen Punkt größer und der Puffer-Wert im Geräte-Dialog steht in der Textfarbe
+- **LED-Balken sparen Prozessor:** Die Balken werden nicht mehr bei jeder Bewegung neu gezeichnet, nur noch ein Deckblatt wird verschoben. Das senkt die Lastspitzen beim Sprechen oder bei Musik, wenn sich viele Balken gleichzeitig bewegen
 
 ## Installation
 

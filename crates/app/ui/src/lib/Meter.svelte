@@ -44,11 +44,15 @@
 
   $effect(() => () => cancelAnimationFrame(frame));
 
-  const pct = $derived(Math.max(0, Math.min(100, ((shown + 60) / 60) * 100)));
+  // Share of the bar that is lit, 0…1.
+  const lit = $derived(Math.max(0, Math.min(1, (shown + 60) / 60)));
 </script>
 
 <div class="meter" class:vertical class:thin aria-hidden="true">
-  <div class="leds" style:--pct={`${pct}%`}></div>
+  <div class="leds"></div>
+  <!-- Covers the part above the level. Only its transform changes, which the
+       browser moves without redrawing the LEDs under it. -->
+  <div class="cover" style:transform={vertical ? `scaleY(${1 - lit})` : `scaleX(${1 - lit})`}></div>
 </div>
 
 <style>
@@ -70,10 +74,21 @@
     height: 6px;
     width: 100%;
   }
-  /* Full-size color ramp, cut down to the level; the mask splits it into LEDs. */
-  .leds {
+  /* Full-size color ramp; the mask splits it into LEDs. Drawn once. */
+  .leds,
+  .cover {
     position: absolute;
     inset: 1px;
+  }
+  .cover {
+    background: var(--well);
+    will-change: transform;
+  }
+  .vertical .cover {
+    transform-origin: top;
+  }
+  .meter:not(.vertical) .cover {
+    transform-origin: right;
   }
   .vertical .leds {
     background: linear-gradient(
@@ -82,7 +97,6 @@
       var(--amber) 80% 95%,
       var(--danger) 95%
     );
-    clip-path: inset(calc(100% - var(--pct)) 0 0 0);
     mask: repeating-linear-gradient(to top, #000 0 4px, transparent 4px 6px);
   }
   .meter:not(.vertical) .leds {
@@ -92,7 +106,6 @@
       var(--amber) 80% 95%,
       var(--danger) 95%
     );
-    clip-path: inset(0 calc(100% - var(--pct)) 0 0);
     mask: repeating-linear-gradient(to right, #000 0 3px, transparent 3px 4px);
   }
 </style>
