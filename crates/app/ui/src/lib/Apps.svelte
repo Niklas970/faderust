@@ -1,13 +1,13 @@
 <script>
   import { t } from "./i18n.svelte.js";
-  import { cableCounterpart, getApps, getDevices, isCable, openCablePage, setAppOutput } from "./api.js";
+  import { cableCounterpart, getApps, getDevices, getWindowsAudio, isCable, openCablePage, setAppOutput } from "./api.js";
 
   /**
    * Which program plays on which device, and which programs Faderust records
    * as inputs of their own. A program on a virtual cable also reaches
    * Faderust through the cable's capture side.
    */
-  let { inputs, outputs = [], onAddInput, onClose } = $props();
+  let { inputs, outputs = [], gains = [], onAddInput, onClose } = $props();
 
   let data = $state(null);
   let cableInputs = $state([]);
@@ -23,6 +23,10 @@
   }
   refresh();
   getDevices().then((d) => (cableInputs = d.inputs.filter((i) => isCable(i.name))));
+  let defaultId = $state(null);
+  getWindowsAudio()
+    .then((w) => (defaultId = w.playback.find((e) => e.isDefault)?.id ?? null))
+    .catch(() => {});
 
   let hasCable = $derived(data?.devices.some((d) => d.cable));
   // Cable capture devices no input uses yet.
@@ -51,8 +55,22 @@
     !inputs.some((i) => matches(cableCounterpart(d.name), i.device)) &&
     !outputs.some((o) => matches(d.name, o.device));
   let quietCable = $derived(data?.devices.find(silent));
-  // Recorded as an input and still playing somewhere you hear it.
-  const doubled = (app) => isInput(app) && !silent(data.devices.find((d) => d.id === app.device));
+  // The input reaches an output: not muted and at least one fader up.
+  const routed = (app) => {
+    const row = inputs.findIndex((i) => i.device === programId(app));
+    return row >= 0 && !inputs[row].muted && (gains[row] ?? []).some((g) => !g.muted && g.db > -59);
+  };
+  // Heard on its own device: a cable somebody listens to, a device Faderust
+  // plays on too, or the Windows default. Another device (speakers while you
+  // wear headphones) is not counted, Faderust cannot know whether you hear it.
+  const heard = (app) => {
+    const d = data.devices.find((x) => x.id === (app.device ?? defaultId));
+    if (!d) return false;
+    return d.cable ? !silent(d) : app.device == null || outputs.some((o) => matches(d.name, o.device));
+  };
+  // Recorded as an input, routed to an output and still playing somewhere
+  // you hear it.
+  const doubled = (app) => isInput(app) && routed(app) && heard(app);
 
   // Park the program on a quiet cable first and record it once it has
   // moved there: recording it mid-move can leave it without sound.

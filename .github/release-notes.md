@@ -1,6 +1,6 @@
-## Neu in 0.5.7
+## Neu in 0.5.8
 
-- **Noch weniger Last durch die LED-Balken:** Alle Balken laufen jetzt über einen gemeinsamen Takt mit etwa 30 Bildern pro Sekunde statt je einem eigenen mit 60, und ihre Bewegung läuft direkt, ohne die Oberfläche jedes Mal neu aufzubauen. Das senkt die Auslastung des Web-View-Prozesses weiter
+- **Genauere „Du hörst es doppelt“-Meldung:** Sie erscheint nur noch, wenn der Programm-Eingang wirklich zu einem Ausgang geht (nicht stumm, Fader oben) und das Programm auf einem Gerät läuft, das du hörst: ein Kabel mit Zuhörer, ein Gerät, auf dem Faderust auch ausgibt, oder das Windows-Standardgerät. Läuft das Programm auf einem anderen Gerät (zum Beispiel Lautsprecher, während du Kopfhörer trägst), bleibt die Meldung weg
 
 ## Installation
 

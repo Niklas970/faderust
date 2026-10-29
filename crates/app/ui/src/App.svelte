@@ -373,7 +373,7 @@
 <Notices />
 
 {#if appsOpen && config}
-  <Apps inputs={config.inputs} outputs={config.outputs} onAddInput={addInput} onClose={() => (appsOpen = false)} />
+  <Apps inputs={config.inputs} outputs={config.outputs} gains={config.gains} onAddInput={addInput} onClose={() => (appsOpen = false)} />
 {/if}
 
 {#if themeOpen}
