@@ -10,6 +10,6 @@ cd prototypes/iced-gui
 cargo run --release
 ```
 
-Drag the cap, scroll to nudge, double-click for 0 dB.
+Drag the cap, scroll to nudge, double-click for 0 dB. Header with Pult/Matrix switch, a routing matrix (click a cell to toggle) and a settings dialog (`FADERUST_VIEW=matrix`, `FADERUST_DIALOG=1` for screenshots).
 `FADERUST_SHOT=out.png` saves a screenshot and exits (set `ICED_BACKEND=tiny-skia`
 for the software renderer, e.g. under Xvfb).

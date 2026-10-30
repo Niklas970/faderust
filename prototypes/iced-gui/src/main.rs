@@ -11,7 +11,10 @@ use iced::alignment::{Horizontal, Vertical};
 use iced::gradient;
 use iced::mouse;
 use iced::widget::canvas::{self, Canvas, Fill, Frame, Geometry, Path, Stroke, Text};
-use iced::widget::{button, column, container, row, text};
+use iced::widget::{
+    button, checkbox, column, container, mouse_area, opaque, pick_list, row, space, stack, text,
+    text_input,
+};
 use iced::{
     window, Background, Border, Color, Element, Font, Length, Pixels, Point, Rectangle, Renderer,
     Shadow, Size, Subscription, Task, Theme,
@@ -49,7 +52,45 @@ struct Strip {
     phase: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum View {
+    Desk,
+    Matrix,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Lang {
+    System,
+    German,
+    English,
+}
+
+impl std::fmt::Display for Lang {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str(match self {
+            Lang::System => "Wie Windows",
+            Lang::German => "Deutsch",
+            Lang::English => "English",
+        })
+    }
+}
+
+struct Settings {
+    autostart: bool,
+    bt_release: bool,
+    release_secs: String,
+    hide_quiet: bool,
+    lang: Lang,
+}
+
+const OUTPUTS: [&str; 3] = ["Lautsprecher", "Kopfhörer", "Stream"];
+
 struct App {
+    view: View,
+    dialog: bool,
+    settings: Settings,
+    /// Matrix gain per input and output in dB; `OFF` = not routed.
+    matrix: [[f32; 3]; 4],
     strips: Vec<Strip>,
     last: Instant,
     started: Instant,
@@ -58,6 +99,14 @@ struct App {
 
 #[derive(Debug, Clone)]
 enum Message {
+    SetView(View),
+    Dialog(bool),
+    Autostart(bool),
+    BtRelease(bool),
+    ReleaseSecs(String),
+    HideQuiet(bool),
+    Language(Lang),
+    Cell(usize, usize),
     Level(usize, f32),
     Mute(usize),
     Frame(Instant),
@@ -83,6 +132,25 @@ impl App {
         ];
         strips[3].muted = true;
         let app = App {
+            view: if std::env::var("FADERUST_VIEW").as_deref() == Ok("matrix") {
+                View::Matrix
+            } else {
+                View::Desk
+            },
+            dialog: std::env::var("FADERUST_DIALOG").is_ok(),
+            settings: Settings {
+                autostart: true,
+                bt_release: true,
+                release_secs: "30".into(),
+                hide_quiet: true,
+                lang: Lang::System,
+            },
+            matrix: [
+                [-6.0, -6.0, scale::OFF],
+                [0.0, 0.0, 0.0],
+                [-14.0, scale::OFF, -14.0],
+                [scale::OFF, -24.0, scale::OFF],
+            ],
             strips,
             last: Instant::now(),
             started: Instant::now(),
@@ -93,6 +161,21 @@ impl App {
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::SetView(v) => self.view = v,
+            Message::Dialog(open) => self.dialog = open,
+            Message::Autostart(on) => self.settings.autostart = on,
+            Message::BtRelease(on) => self.settings.bt_release = on,
+            Message::ReleaseSecs(t) => {
+                if t.len() <= 3 && t.chars().all(|c| c.is_ascii_digit()) {
+                    self.settings.release_secs = t;
+                }
+            }
+            Message::HideQuiet(on) => self.settings.hide_quiet = on,
+            Message::Language(l) => self.settings.lang = l,
+            Message::Cell(i, o) => {
+                let g = &mut self.matrix[i][o];
+                *g = if *g <= scale::OFF { 0.0 } else { scale::OFF };
+            }
             Message::Level(i, db) => {
                 self.strips[i].db = db;
                 self.strips[i].cache.clear();
@@ -131,7 +214,7 @@ impl App {
         Task::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    fn desk(&self) -> Element<'_, Message> {
         let strips =
             self.strips.iter().enumerate().map(|(i, s)| {
                 let fader = Canvas::new(Fader {
@@ -188,17 +271,200 @@ impl App {
                     .align_x(Horizontal::Center)
                     .into()
             });
-        container(row(strips).spacing(18))
+        row(strips).spacing(18).into()
+    }
+
+    fn matrix(&self) -> Element<'_, Message> {
+        let head = row![space().width(110)].extend(OUTPUTS.iter().map(|o| {
+            container(text(o.to_uppercase()).size(12).color(TEXT))
+                .width(110)
+                .align_x(Horizontal::Center)
+                .into()
+        }));
+        let mut rows = column![head].spacing(10);
+        for (i, s) in self.strips.iter().enumerate() {
+            let cells = (0..OUTPUTS.len()).map(|o| {
+                let g = self.matrix[i][o];
+                let on = g > scale::OFF;
+                button(
+                    text(if on { scale::format(g) } else { "AUS".into() })
+                        .font(MONO)
+                        .size(13)
+                        .color(if on { Color::BLACK } else { MUTED })
+                        .center(),
+                )
+                .width(110)
+                .height(40)
+                .on_press(Message::Cell(i, o))
+                .style(move |_, _| button::Style {
+                    background: Some(Background::Color(if on { SIGNAL } else { PANEL_2 })),
+                    text_color: Color::WHITE,
+                    border: Border {
+                        color: BORDER,
+                        width: 1.0,
+                        radius: 4.0.into(),
+                    },
+                    ..button::Style::default()
+                })
+                .into()
+            });
+            rows = rows.push(
+                row![container(text(s.label.to_uppercase()).size(12).color(TEXT)).width(110)]
+                    .extend(cells)
+                    .align_y(Vertical::Center),
+            );
+        }
+        rows.into()
+    }
+
+    fn header(&self) -> Element<'_, Message> {
+        let tab = |label: &'static str, v: View| {
+            let on = self.view == v;
+            button(
+                text(label)
+                    .size(13)
+                    .color(if on { Color::BLACK } else { TEXT }),
+            )
+            .padding([5, 14])
+            .on_press(Message::SetView(v))
+            .style(move |_, _| flat(if on { ACCENT } else { PANEL_2 }))
+        };
+        let action = |label: &'static str, msg: Message| {
+            button(text(label).size(13).color(TEXT))
+                .padding([5, 14])
+                .on_press(msg)
+                .style(|_, _| flat(PANEL_2))
+        };
+        row![
+            text("FADERUST").size(15).color(ACCENT_LIGHT).font(Font {
+                weight: iced::font::Weight::Bold,
+                ..Font::DEFAULT
+            }),
+            space().width(12),
+            tab("Pult", View::Desk),
+            tab("Matrix", View::Matrix),
+            space().width(Length::Fill),
+            action("+ Programm", Message::Dialog(false)),
+            action("Geräte", Message::Dialog(false)),
+            action("Design", Message::Dialog(false)),
+            action("Einstellungen", Message::Dialog(true)),
+        ]
+        .spacing(6)
+        .align_y(Vertical::Center)
+        .into()
+    }
+
+    fn dialog_view(&self) -> Element<'_, Message> {
+        let s = &self.settings;
+        let line = |label: &'static str, control: Element<'static, Message>| {
+            row![
+                container(text(label).size(13).color(TEXT)).width(220),
+                control
+            ]
+            .align_y(Vertical::Center)
+            .spacing(12)
+        };
+        let card = container(
+            column![
+                row![
+                    text("Einstellungen").size(16).color(TEXT),
+                    space().width(Length::Fill),
+                    button(text("✕").size(13).color(TEXT))
+                        .on_press(Message::Dialog(false))
+                        .style(|_, _| flat(PANEL_2)),
+                ]
+                .align_y(Vertical::Center),
+                checkbox(s.autostart)
+                    .label("Mit Windows starten")
+                    .on_toggle(Message::Autostart),
+                checkbox(s.bt_release)
+                    .label("Bluetooth-Ausgänge freigeben, wenn still")
+                    .on_toggle(Message::BtRelease),
+                line(
+                    "Freigabe nach (Sekunden)",
+                    text_input("30", &s.release_secs)
+                        .on_input(Message::ReleaseSecs)
+                        .width(80)
+                        .into()
+                ),
+                checkbox(s.hide_quiet)
+                    .label("Stille Programme ausblenden")
+                    .on_toggle(Message::HideQuiet),
+                line(
+                    "Sprache",
+                    pick_list(
+                        [Lang::System, Lang::German, Lang::English],
+                        Some(s.lang),
+                        Message::Language
+                    )
+                    .into()
+                ),
+            ]
+            .spacing(14),
+        )
+        .padding(20)
+        .width(520)
+        .style(|_| container::Style {
+            background: Some(Background::Color(PANEL_2)),
+            border: Border {
+                color: BORDER,
+                width: 1.0,
+                radius: 6.0.into(),
+            },
+            ..container::Style::default()
+        });
+        // The backdrop swallows clicks; a click on it closes the dialog.
+        let backdrop =
+            mouse_area(
+                container(opaque(card))
+                    .center(Length::Fill)
+                    .style(|_| container::Style {
+                        background: Some(Background::Color(Color {
+                            a: 0.65,
+                            ..Color::BLACK
+                        })),
+                        ..container::Style::default()
+                    }),
+            )
+            .on_press(Message::Dialog(false));
+        opaque(backdrop)
+    }
+
+    fn view(&self) -> Element<'_, Message> {
+        let body = match self.view {
+            View::Desk => self.desk(),
+            View::Matrix => self.matrix(),
+        };
+        let page = container(column![self.header(), body].spacing(18))
             .padding(24)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .style(|_| container::Style {
                 background: Some(Background::Color(BG)),
                 ..container::Style::default()
-            })
-            .into()
+            });
+        if self.dialog {
+            stack![page, self.dialog_view()].into()
+        } else {
+            page.into()
+        }
     }
 
     fn subscription(&self) -> Subscription<Message> {
         iced::time::every(Duration::from_millis(33)).map(Message::Frame)
+    }
+}
+
+fn flat(color: Color) -> button::Style {
+    button::Style {
+        background: Some(Background::Color(color)),
+        text_color: Color::WHITE,
+        border: Border {
+            color: BORDER,
+            width: 1.0,
+            radius: 4.0.into(),
+        },
+        ..button::Style::default()
     }
 }
 
@@ -571,7 +837,7 @@ fn main() -> iced::Result {
     iced::application(App::new, App::update, App::view)
         .subscription(App::subscription)
         .theme(theme)
-        .window_size(Size::new(24.0 * 2.0 + 4.0 * STRIP_W + 3.0 * 18.0, 500.0))
+        .window_size(Size::new(720.0, 600.0))
         .title("Faderust – iced Prototyp")
         .run()
 }
