@@ -15,15 +15,18 @@ use std::time::{Duration, Instant};
 use iced::alignment::{Horizontal, Vertical};
 use iced::gradient;
 use iced::widget::canvas::{self, Canvas};
-use iced::widget::{button, column, container, row, space, stack, text};
+use iced::widget::{button, column, container, image, row, space, stack, text};
 use iced::{
-    window, Background, Border, Color, Element, Length, Shadow, Size, Subscription, Task, Theme,
+    window, Background, Border, Color, Element, Font, Length, Shadow, Size, Subscription, Task,
+    Theme,
 };
 
 use fader::{Fader, Kind};
 use style::*;
 
-pub const OUT_NAMES: [&str; 3] = ["Lautsprecher", "Kopfhörer", "Stream"];
+const LOGO: &[u8] = include_bytes!("../assets/logo.png");
+
+pub const OUT_NAMES: [&str; 3] = ["PS5", "Kopfhörer", "Box"];
 pub const DEV_OUT: &[&str] = &[
     "Lautsprecher (Realtek Audio)",
     "Kopfhörer (WH-1000XM5)",
@@ -52,11 +55,16 @@ pub struct Strip {
     pub shown: f32,
     phase: f32,
     pub routes: [bool; 3],
+    /// Programs are recorded from one program, devices from a capture device.
+    pub program: bool,
 }
 
 pub struct Out {
     pub cache: canvas::Cache,
     pub label: &'static str,
+    /// Device state under the name: where it plays, or "Freigegeben".
+    pub note: &'static str,
+    pub note_on: bool,
     pub db: f32,
     pub muted: bool,
     pub shown: f32,
@@ -161,7 +169,7 @@ pub enum Message {
 
 impl App {
     fn new() -> (Self, Task<Message>) {
-        let strip = |label, db, phase, routes| Strip {
+        let strip = |label, db, phase, routes, program| Strip {
             cache: canvas::Cache::new(),
             label,
             db,
@@ -169,22 +177,26 @@ impl App {
             shown: -120.0,
             phase,
             routes,
+            program,
         };
-        let out = |label, db, phase| Out {
+        let out = |label, note, note_on, db, phase| Out {
             cache: canvas::Cache::new(),
             label,
+            note,
+            note_on,
             db,
             muted: false,
             shown: -120.0,
             phase,
         };
         let mut strips = vec![
-            strip("Mikrofon", 0.0, 1.7, [true, false, true]),
-            strip("Spiel", -6.0, 0.0, [true, true, false]),
-            strip("Musik", -14.0, 3.1, [true, false, true]),
-            strip("Browser", -24.0, 4.4, [false, true, false]),
+            strip("Mikro", 0.0, 1.7, [true, true, true], false),
+            strip("PC", 0.0, 0.0, [true, true, true], false),
+            strip("PS5", 0.0, 3.1, [true, true, true], false),
+            strip("Discord", 0.0, 4.4, [true, true, true], true),
+            strip("Spotify", 0.0, 5.3, [true, true, true], true),
         ];
-        strips[3].muted = true;
+        strips[1].muted = true;
         let dialog = std::env::var("FADERUST_DIALOG")
             .ok()
             .and_then(|d| match d.as_str() {
@@ -214,11 +226,11 @@ impl App {
             dialog,
             strips,
             outs: vec![
-                out("Lautsprecher", 0.0, 0.4),
-                out("Kopfhörer", -3.0, 2.2),
-                out("Stream", 0.0, 3.6),
+                out("PS5", "Lautsprecher (USB Sou…", true, 0.0, 0.4),
+                out("Kopfhörer", "Kopfhörer (Galaxy Buds…", true, 0.0, 2.2),
+                out("Box", "Freigegeben", false, 0.0, 3.6),
             ],
-            fx: vec![fx.clone(), fx.clone(), fx.clone(), fx],
+            fx: vec![fx.clone(), fx.clone(), fx.clone(), fx.clone(), fx],
             apps: vec![
                 AppRow {
                     name: "Spiel (forza.exe)",
@@ -245,7 +257,7 @@ impl App {
                 autostart: true,
                 inputs: vec![("Mikrofon".into(), DEV_IN[0]), ("Spiel".into(), DEV_IN[2])],
                 outputs: vec![
-                    ("Lautsprecher".into(), DEV_OUT[0], "60".into(), RELEASE[0]),
+                    ("PS5".into(), DEV_OUT[0], "60".into(), RELEASE[0]),
                     ("Kopfhörer".into(), DEV_OUT[1], "60".into(), RELEASE[2]),
                 ],
             },
@@ -367,48 +379,62 @@ impl App {
         let nav = |icon: &'static str, label: &'static str, d: Dialog| {
             let on = self.dialog == Some(d);
             button(
-                row![
-                    text(icon)
-                        .size(13)
-                        .color(if on { ACCENT_LIGHT } else { MUTED }),
-                    text(label).size(13).color(TEXT)
-                ]
-                .spacing(6)
-                .align_y(Vertical::Center),
+                container(
+                    row![
+                        text(icon)
+                            .size(14)
+                            .color(if on { Color::WHITE } else { ACCENT }),
+                        text(label).size(13).font(BOLD).color(Color::WHITE)
+                    ]
+                    .spacing(7)
+                    .align_y(Vertical::Center),
+                )
+                .center_y(Length::Fill),
             )
-            .padding([5, 10])
+            .height(32)
+            .padding([0, 14])
             .on_press(Message::Open(Some(d)))
             .style(move |_, status| nav_style(on, matches!(status, button::Status::Hovered)))
         };
         let win = |label: &'static str, close: bool| {
-            button(text(label).size(12).color(TEXT).center())
-                .width(34)
-                .height(28)
+            button(container(text(label).size(12).color(MUTED)).center(Length::Fill))
+                .width(46)
+                .height(Length::Fill)
+                .padding(0)
                 .style(move |_, status| {
                     let hot = matches!(status, button::Status::Hovered);
-                    let mut s = nav_style(false, hot);
-                    if hot && close {
-                        s.background = Some(Background::Color(DANGER));
+                    button::Style {
+                        background: hot.then(|| {
+                            Background::Color(if close { rgb(196, 43, 28) } else { PANEL_2 })
+                        }),
+                        text_color: if hot { Color::WHITE } else { MUTED },
+                        border: Border::default(),
+                        ..button::Style::default()
                     }
-                    s
                 })
         };
         let brand = row![
-            container(space())
-                .width(18)
-                .height(18)
-                .style(|_| container::Style {
-                    background: Some(Background::Color(ACCENT)),
-                    border: Border {
-                        radius: 4.0.into(),
-                        ..Border::default()
-                    },
-                    ..container::Style::default()
-                }),
-            text("Faderust").size(15).font(BOLD).color(TEXT),
-            button(text("v0.5.8").size(11).color(MUTED))
+            image(image::Handle::from_bytes(LOGO))
+                .width(22)
+                .height(22)
+                .border_radius(3),
+            text("FADERUST").size(13).font(BOLD).color(TEXT),
+            button(text("v0.5.8").size(12).font(MONO).color(MUTED))
                 .padding([2, 6])
-                .style(|_, _| nav_style(false, false)),
+                .style(|_, status| button::Style {
+                    background: None,
+                    text_color: MUTED,
+                    border: Border {
+                        color: if matches!(status, button::Status::Hovered) {
+                            BORDER
+                        } else {
+                            Color::TRANSPARENT
+                        },
+                        width: 1.0,
+                        radius: 3.0.into(),
+                    },
+                    ..button::Style::default()
+                }),
         ]
         .spacing(8)
         .align_y(Vertical::Center);
@@ -416,19 +442,23 @@ impl App {
             row![
                 brand,
                 space().width(Length::Fill),
-                nav("★", "Presets", Dialog::Presets),
-                nav("♪", "Windows-Sound", Dialog::Windows),
-                nav("⚙", "Einstellungen", Dialog::Settings),
-                nav("◐", "Design", Dialog::Design),
-                space().width(16),
+                row![
+                    nav("⚐", "Presets", Dialog::Presets),
+                    nav("♪", "Windows", Dialog::Windows),
+                    nav("≡", "Geräte", Dialog::Settings),
+                    nav("◐", "Design", Dialog::Design),
+                ]
+                .spacing(6),
+                space().width(24),
                 win("–", false),
                 win("▢", false),
                 win("✕", true),
             ]
-            .spacing(4)
+            .spacing(12)
             .align_y(Vertical::Center),
         )
-        .padding([6, 12])
+        .padding(iced::Padding::default().left(12))
+        .height(48)
         .width(Length::Fill)
         .style(|_| container::Style {
             background: Some(Background::Color(PANEL)),
@@ -444,7 +474,7 @@ impl App {
 
     // --- desk ------------------------------------------------------------
 
-    fn label(text_: &str) -> Element<'static, Message> {
+    fn name_label(text_: &str) -> Element<'static, Message> {
         container(text(text_.to_uppercase()).size(12).color(TEXT).font(BOLD))
             .width(Length::Fill)
             .padding([3, 4])
@@ -460,29 +490,111 @@ impl App {
             .into()
     }
 
+    fn note(text_: &'static str, on: bool) -> Element<'static, Message> {
+        container(
+            text(text_)
+                .size(11)
+                .wrapping(iced::widget::text::Wrapping::None)
+                .color(if on { SIGNAL } else { MUTED }),
+        )
+        .width(Length::Fill)
+        .height(14)
+        .clip(true)
+        .into()
+    }
+
     fn readout(db: f32, muted: bool) -> Element<'static, Message> {
         text(if db <= scale::OFF {
             "−∞ dB".to_string()
         } else {
             format!("{} dB", scale::format(db))
         })
-        .font(MONO)
+        .font(Font {
+            weight: iced::font::Weight::Bold,
+            ..MONO
+        })
         .size(13)
         .color(if muted { MUTED } else { ACCENT_LIGHT })
         .into()
     }
 
+    /// Lit keycap: an LED strip on top glows red when muted.
     fn mute_button(on: bool, msg: Message, label: &'static str) -> Element<'static, Message> {
-        button(
+        let key = button(
             text(label)
                 .size(12)
+                .font(BOLD)
                 .color(if on { Color::WHITE } else { rgb(174, 180, 187) })
                 .center(),
         )
         .width(72)
         .height(32)
+        .padding(iced::Padding::default().top(6))
         .on_press(msg)
-        .style(mute_style(on))
+        .style(mute_style(on));
+        let led =
+            container(
+                container(space())
+                    .width(16)
+                    .height(3)
+                    .style(move |_| container::Style {
+                        background: Some(Background::Color(if on {
+                            rgb(255, 210, 207)
+                        } else {
+                            rgb(21, 23, 26)
+                        })),
+                        border: Border {
+                            radius: 2.0.into(),
+                            ..Border::default()
+                        },
+                        ..container::Style::default()
+                    }),
+            )
+            .center_x(72)
+            .padding([4, 0]);
+        stack![key, led].into()
+    }
+
+    /// One strip in its card: A1-A3, name, note, fader, readout, mute, effects.
+    fn card<'a>(content: Element<'a, Message>) -> Element<'a, Message> {
+        container(content)
+            .padding([10, 6])
+            .width(150)
+            .height(Length::Fill)
+            .align_x(Horizontal::Center)
+            .style(|_| container::Style {
+                background: Some(Background::Color(PANEL)),
+                border: Border {
+                    color: BORDER,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..container::Style::default()
+            })
+            .into()
+    }
+
+    fn chips(routes: [bool; 3], strip: Option<usize>) -> Element<'static, Message> {
+        row((0..3).map(|o| {
+            let on = routes[o];
+            let b = button(
+                text(format!("A{}", o + 1))
+                    .size(11)
+                    .font(BOLD)
+                    .color(if on { Color::WHITE } else { MUTED })
+                    .center(),
+            )
+            .width(34)
+            .height(22)
+            .padding(0)
+            .style(move |_, _| small_toggle(on));
+            match strip {
+                Some(i) => b.on_press(Message::Route(i, o)),
+                None => b,
+            }
+            .into()
+        }))
+        .spacing(4)
         .into()
     }
 
@@ -497,41 +609,27 @@ impl App {
             post_fader: false,
         })
         .width(STRIP_W)
-        .height(STRIP_H);
-        let routes = row((0..3).map(|o| {
-            let on = s.routes[o];
-            button(
-                text(format!("A{}", o + 1))
-                    .size(11)
-                    .color(if on { Color::BLACK } else { MUTED })
-                    .center(),
-            )
-            .width(30)
-            .height(22)
-            .padding(0)
-            .on_press(Message::Route(i, o))
-            .style(move |_, _| small_toggle(on))
-            .into()
-        }))
-        .spacing(4);
-        let fx = button(text("FX").size(11).color(TEXT).center())
-            .width(30)
-            .height(22)
+        .height(Length::Fill);
+        let fx = button(text("Effekte").size(12).color(TEXT).center())
+            .width(72)
+            .height(24)
             .padding(0)
             .on_press(Message::Open(Some(Dialog::Fx(i))))
-            .style(|_, _| small_toggle(false));
-        column![
-            Self::label(s.label),
-            fader,
-            Self::readout(s.db, s.muted),
-            Self::mute_button(s.muted, Message::Mute(i), "MUTE"),
-            routes,
-            fx,
-        ]
-        .spacing(8)
-        .width(STRIP_W)
-        .align_x(Horizontal::Center)
-        .into()
+            .style(|_, _| flat(PANEL_2));
+        Self::card(
+            column![
+                Self::chips(s.routes, Some(i)),
+                Self::name_label(s.label),
+                space().height(14),
+                fader,
+                Self::readout(s.db, s.muted),
+                Self::mute_button(s.muted, Message::Mute(i), "MUTE"),
+                fx,
+            ]
+            .spacing(8)
+            .align_x(Horizontal::Center)
+            .into(),
+        )
     }
 
     fn master(&self, o: usize) -> Element<'_, Message> {
@@ -545,47 +643,105 @@ impl App {
             post_fader: true,
         })
         .width(STRIP_W)
-        .height(STRIP_H);
-        column![
-            Self::label(m.label),
-            fader,
-            Self::readout(m.db, m.muted),
-            Self::mute_button(m.muted, Message::MasterMute(o), "M"),
-            space().height(22 + 8 + 22),
-        ]
-        .spacing(8)
-        .width(STRIP_W)
-        .align_x(Horizontal::Center)
-        .into()
+        .height(Length::Fill);
+        Self::card(
+            column![
+                Self::chips(
+                    {
+                        let mut r = [false; 3];
+                        r[o] = true;
+                        r
+                    },
+                    None
+                ),
+                Self::name_label(m.label),
+                Self::note(m.note, m.note_on),
+                fader,
+                Self::readout(m.db, m.muted),
+                Self::mute_button(m.muted, Message::MasterMute(o), "MUTE"),
+                space().height(24),
+            ]
+            .spacing(8)
+            .align_x(Horizontal::Center)
+            .into(),
+        )
     }
 
-    fn desk(&self) -> Element<'_, Message> {
-        let masters = row((0..self.outs.len()).map(|o| self.master(o))).spacing(18);
-        let inputs = row((0..self.strips.len()).map(|i| self.strip(i))).spacing(18);
-        let add = button(
-            text("+ Programm")
-                .size(13)
-                .color(TEXT)
-                .center()
-                .wrapping(iced::widget::text::Wrapping::None),
-        )
-        .width(110)
-        .padding([8, 14])
-        .on_press(Message::Open(Some(Dialog::Apps)))
-        .style(|_, _| flat(PANEL_2));
-        let divider = container(space())
-            .width(1)
-            .height(STRIP_H + 120.0)
+    fn heading(
+        label: &'static str,
+        extra: Option<Element<'static, Message>>,
+    ) -> Element<'static, Message> {
+        let mut r = row![text(label).size(12).font(BOLD).color(MUTED)]
+            .spacing(12)
+            .align_y(Vertical::Center);
+        if let Some(e) = extra {
+            r = r.push(e);
+        }
+        container(r).height(26).into()
+    }
+
+    fn section<'a>(
+        head: Element<'a, Message>,
+        cards: Vec<Element<'a, Message>>,
+    ) -> Element<'a, Message> {
+        column![head, row(cards).spacing(10).height(Length::Fill)]
+            .spacing(6)
+            .height(Length::Fill)
+            .into()
+    }
+
+    fn divider() -> Element<'static, Message> {
+        container(space())
+            .width(2)
+            .height(Length::Fill)
             .style(|_| container::Style {
                 background: Some(Background::Color(BORDER)),
                 ..container::Style::default()
-            });
-        let inputs = row![inputs, add].spacing(18).align_y(Vertical::Top);
+            })
+            .into()
+    }
+
+    fn desk(&self) -> Element<'_, Message> {
+        let outputs = Self::section(
+            Self::heading("AUSGÄNGE", None),
+            (0..self.outs.len()).map(|o| self.master(o)).collect(),
+        );
+        let devices = Self::section(
+            Self::heading("GERÄTE", None),
+            (0..self.strips.len())
+                .filter(|&i| !self.strips[i].program)
+                .map(|i| self.strip(i))
+                .collect(),
+        );
+        let add = button(text("+ Programm").size(12).font(BOLD).color(ACCENT_LIGHT))
+            .height(24)
+            .padding([0, 12])
+            .on_press(Message::Open(Some(Dialog::Apps)))
+            .style(|_, _| button::Style {
+                background: None,
+                text_color: ACCENT_LIGHT,
+                border: Border {
+                    color: ACCENT,
+                    width: 1.0,
+                    radius: 3.0.into(),
+                },
+                ..button::Style::default()
+            })
+            .into();
+        let programs = Self::section(
+            Self::heading("PROGRAMME", Some(add)),
+            (0..self.strips.len())
+                .filter(|&i| self.strips[i].program)
+                .map(|i| self.strip(i))
+                .collect(),
+        );
         if self.masters_left {
-            row![masters, divider, inputs].spacing(24).into()
+            row![outputs, Self::divider(), devices, Self::divider(), programs].spacing(10)
         } else {
-            row![inputs, divider, masters].spacing(24).into()
+            row![devices, Self::divider(), programs, Self::divider(), outputs].spacing(10)
         }
+        .height(Length::Fill)
+        .into()
     }
 
     fn matrix(&self) -> Element<'_, Message> {
@@ -638,33 +794,16 @@ impl App {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let tab = |label: &'static str, v: View| {
-            let on = self.view == v;
-            button(
-                text(label)
-                    .size(13)
-                    .color(if on { Color::BLACK } else { TEXT }),
-            )
-            .padding([5, 14])
-            .on_press(Message::SetView(v))
-            .style(move |_, _| flat(if on { ACCENT } else { PANEL_2 }))
-        };
         let body = match self.view {
             View::Desk => self.desk(),
             View::Matrix => self.matrix(),
         };
         let page = column![
             self.titlebar(),
-            container(
-                column![
-                    row![tab("Pult", View::Desk), tab("Matrix", View::Matrix)].spacing(6),
-                    body
-                ]
-                .spacing(18)
-            )
-            .padding(24)
-            .width(Length::Fill)
-            .height(Length::Fill),
+            container(body)
+                .padding(10)
+                .width(Length::Fill)
+                .height(Length::Fill),
         ];
         let page = container(page)
             .width(Length::Fill)
@@ -686,16 +825,12 @@ impl App {
 
 fn nav_style(active: bool, hot: bool) -> button::Style {
     button::Style {
-        background: if active || hot {
-            Some(Background::Color(PANEL_2))
-        } else {
-            None
-        },
-        text_color: TEXT,
+        background: Some(Background::Color(if active { ACCENT } else { PANEL_2 })),
+        text_color: Color::WHITE,
         border: Border {
-            color: if active { ACCENT } else { Color::TRANSPARENT },
+            color: if active || hot { ACCENT } else { BORDER },
             width: 1.0,
-            radius: 4.0.into(),
+            radius: 3.0.into(),
         },
         ..button::Style::default()
     }
@@ -716,10 +851,10 @@ pub fn flat(color: Color) -> button::Style {
 
 fn small_toggle(on: bool) -> button::Style {
     button::Style {
-        background: Some(Background::Color(if on { SIGNAL } else { PANEL_2 })),
+        background: Some(Background::Color(if on { ACCENT } else { PANEL_2 })),
         text_color: Color::WHITE,
         border: Border {
-            color: if on { SIGNAL } else { BORDER },
+            color: if on { ACCENT } else { BORDER },
             width: 1.0,
             radius: 3.0.into(),
         },
@@ -795,7 +930,11 @@ fn main() -> iced::Result {
     iced::application(App::new, App::update, App::view)
         .subscription(App::subscription)
         .theme(theme)
-        .window_size(Size::new(1180.0, 700.0))
+        .window(window::Settings {
+            size: Size::new(1400.0, 860.0),
+            icon: window::icon::from_file_data(LOGO, None).ok(),
+            ..window::Settings::default()
+        })
         .title("Faderust – iced Prototyp")
         .run()
 }

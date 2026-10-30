@@ -49,14 +49,15 @@ impl Fader<'_> {
     fn top() -> f32 {
         PAD
     }
-    fn height() -> f32 {
-        STRIP_H - 2.0 * PAD
+    /// Travel of the fader inside a canvas `total` high.
+    fn height(total: f32) -> f32 {
+        total - 2.0 * PAD
     }
-    fn pos_at(y: f32) -> f32 {
-        (1.0 - (y - Self::top()) / Self::height()).clamp(0.0, 1.0)
+    fn pos_at(y: f32, total: f32) -> f32 {
+        (1.0 - (y - Self::top()) / Self::height(total)).clamp(0.0, 1.0)
     }
-    fn y_of(pos: f32) -> f32 {
-        Self::top() + (1.0 - pos) * Self::height()
+    fn y_of(pos: f32, total: f32) -> f32 {
+        Self::top() + (1.0 - pos) * Self::height(total)
     }
 }
 
@@ -89,8 +90,8 @@ impl canvas::Program<Message> for Fader<'_> {
                 }
                 state.last_click = Some(now);
                 state.active = true;
-                let at = Self::pos_at(p.y);
-                let cap_half = 20.0 / Self::height();
+                let at = Self::pos_at(p.y, bounds.height);
+                let cap_half = 20.0 / Self::height(bounds.height);
                 state.grab = if (at - pos).abs() <= cap_half {
                     pos - at
                 } else {
@@ -109,7 +110,7 @@ impl canvas::Program<Message> for Fader<'_> {
                 })?;
                 Some(
                     set(scale::from_pos(
-                        (Self::pos_at(p.y) + state.grab).clamp(0.0, 1.0),
+                        (Self::pos_at(p.y, bounds.height) + state.grab).clamp(0.0, 1.0),
                     ))
                     .and_capture(),
                 )
@@ -172,14 +173,15 @@ impl canvas::Program<Message> for Fader<'_> {
 
 impl Fader<'_> {
     fn draw_body(&self, f: &mut Frame) {
+        let total = f.height();
         let pos = scale::to_pos(self.db);
-        let cap_y = Fader::y_of(pos);
+        let cap_y = Self::y_of(pos, total);
         let off = self.db <= scale::OFF;
-        let (top, h) = (Fader::top(), Fader::height());
+        let (top, h) = (Self::top(), Self::height(total));
 
         // Scale: numbers on the left, small marks beside the slot.
         for (d, label) in scale::TICKS {
-            let y = Fader::y_of(scale::to_pos(d));
+            let y = Self::y_of(scale::to_pos(d), total);
             let zero = d == 0.0;
             f.fill_text(Text {
                 content: label.to_string(),
@@ -206,7 +208,7 @@ impl Fader<'_> {
                 .with_color(rgb(44, 47, 51))
                 .with_width(1.0),
         );
-        let fill_h = (STRIP_H - PAD - 3.0 - cap_y).max(0.0);
+        let fill_h = (total - PAD - 3.0 - cap_y).max(0.0);
         if fill_h > 0.0 {
             let (core, glow) = if self.muted {
                 (rgb(85, 90, 97), None)
@@ -306,7 +308,8 @@ impl Fader<'_> {
 
     /// LED meter: 4 px on, 2 px off, signal / amber / clip like the web one.
     fn draw_meter(&self, f: &mut Frame) {
-        let (top, h) = (Self::top(), Self::height());
+        let total = f.height();
+        let (top, h) = (Self::top(), Self::height(total));
         let (mx, mw) = (98.0, 14.0);
         let frame = Path::rounded_rectangle(Point::new(mx, top), Size::new(mw, h), 2.0.into());
         f.fill(&frame, Fill::from(WELL));

@@ -16,7 +16,6 @@ pub const TEXT: Color = Color::from_rgb(0.925, 0.933, 0.945);
 pub const MUTED: Color = Color::from_rgb(0.663, 0.686, 0.718);
 
 pub const STRIP_W: f32 = 124.0;
-pub const STRIP_H: f32 = 300.0;
 pub const PAD: f32 = 18.0;
 pub const MONO: Font = Font::MONOSPACE;
 
