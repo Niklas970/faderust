@@ -12,7 +12,7 @@ export function deviceLabel(name) {
   const n = own.match(/(\d+)\s*$/)?.[1];
   const nr = n && n !== "1" ? ` ${n}` : "";
   const head = name.slice(0, name.toLowerCase().lastIndexOf("(faderust cable")).trim();
-  if (/^(speakers|lautsprecher|headphones|kopfhörer|line|digital)/i.test(head)) return t("cable.playback", { n: nr });
-  if (/^(microphone|mikrofon)/i.test(head)) return t("cable.recording", { n: nr });
+  if (/^(speakers|lautsprecher|headphones|kopfhörer|line|digital|playback)/i.test(head)) return t("cable.playback", { n: nr });
+  if (/^(microphone|mikrofon|recording)/i.test(head)) return t("cable.recording", { n: nr });
   return t("cable.plain", { n: nr });
 }

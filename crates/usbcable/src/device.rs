@@ -41,6 +41,10 @@ fn string_table(index: u8, cable: usize) -> Option<String> {
         1 => Some("Faderust".to_string()),
         2 => Some(product_name(cable)),
         3 => Some(format!("{:04}", cable + 1)),
+        // Terminal names: Windows may use them instead of "Speakers" and
+        // "Microphone" in front of the device name.
+        4 => Some("Playback".to_string()),
+        5 => Some("Recording".to_string()),
         _ => None,
     }
 }
@@ -81,8 +85,8 @@ pub fn configuration_descriptor() -> Vec<u8> {
     let mut control = vec![
         // Input terminal 1: USB stream from the host.
         12, 0x24, 2, 1, 0x01, 0x01, 0, 2, 3, 0, 0, 0, // Output terminal 2: speaker.
-        9, 0x24, 3, 2, 0x01, 0x03, 0, 1, 0, // Input terminal 3: microphone.
-        12, 0x24, 2, 3, 0x01, 0x02, 0, 2, 3, 0, 0, 0,
+        9, 0x24, 3, 2, 0x01, 0x03, 0, 1, 4, // Input terminal 3: microphone.
+        12, 0x24, 2, 3, 0x01, 0x02, 0, 2, 3, 0, 0, 5,
         // Output terminal 4: USB stream to the host.
         9, 0x24, 3, 4, 0x01, 0x01, 0, 3, 0,
     ];
