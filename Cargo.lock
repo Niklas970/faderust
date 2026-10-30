@@ -1197,7 +1197,7 @@ dependencies = [
 
 [[package]]
 name = "faderust-usbcable"
-version = "0.5.7"
+version = "0.5.8"
 
 [[package]]
 name = "fastrand"
