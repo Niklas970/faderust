@@ -7,7 +7,7 @@
 use std::collections::HashSet;
 use std::io::{self, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -30,6 +30,8 @@ fn log(message: impl FnOnce() -> String) {
         eprintln!("usbcable: {}", message());
     }
 }
+
+static SHOWN: AtomicU32 = AtomicU32::new(0);
 
 pub const DEFAULT_PORT: u16 = 3240;
 pub const BUSID: &str = "1-1";
@@ -138,6 +140,16 @@ fn run_urbs(stream: TcpStream, ring: &Arc<Ring>) -> io::Result<()> {
                 let sent = if endpoint == 0 {
                     control(&shared, seq, input, setup, buffer_len)
                 } else {
+                    // The first few only: there are hundreds per second.
+                    if SHOWN.fetch_add(1, Ordering::Relaxed) < 10 {
+                        log(|| {
+                            format!(
+                                "URB {seq} endpoint {endpoint} {}: {} packets, {buffer_len} bytes",
+                                if input { "in" } else { "out" },
+                                iso.len()
+                            )
+                        });
+                    }
                     shared
                         .pending
                         .lock()

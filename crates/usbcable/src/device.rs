@@ -28,7 +28,8 @@ fn string_table(index: u8) -> Option<&'static str> {
 }
 
 pub fn device_descriptor() -> Vec<u8> {
-    let mut d = vec![18, 1, 0x00, 0x02, 0, 0, 0, 64];
+    // USB 1.1: the stream descriptors are written for full speed.
+    let mut d = vec![18, 1, 0x10, 0x01, 0, 0, 0, 64];
     d.extend(VENDOR.to_le_bytes());
     d.extend(PRODUCT.to_le_bytes());
     d.extend([0x00, 0x01, 1, 2, 3, 1]);
@@ -100,7 +101,8 @@ pub fn info(busid: &str) -> DeviceInfo {
         busid: busid.to_string(),
         busnum: 1,
         devnum: 2,
-        speed: 3,
+        // Full speed: 1 ms frames, as the endpoint intervals assume.
+        speed: 2,
         vendor: VENDOR,
         product: PRODUCT,
         bcd_device: 0x0100,
