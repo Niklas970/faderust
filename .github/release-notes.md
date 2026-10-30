@@ -2,6 +2,9 @@
 
 - **Fenster beim Start nicht mehr extrem breit:** Programme, die beim Start still sind, werden sofort ausgeblendet, statt erst nach ein paar Sekunden. Das Fenster öffnet damit gleich in der passenden Breite und schrumpft nicht erst nachträglich
 
+- **Stille Programme einzeln einblenden:** „N still, zeigen“ öffnet eine Liste, aus der du ein Programm nach dem anderen holst (oder „Alle zeigen“)
+- **Ausgänge ausblenden:** Das × am Ausgangs-Streifen blendet ihn samt A-Knöpfen aus, er spielt weiter. „N ausgeblendet“ bringt ihn zurück
+
 ## Installation
 
 `Faderust_*_x64-setup.exe` laden und starten (keine Admin-Rechte nötig). SmartScreen warnt, weil das Setup nicht signiert ist: „Weitere Informationen“ → „Trotzdem ausführen“. Wer Faderust schon hat, bekommt das Update direkt in der App.
