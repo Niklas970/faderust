@@ -162,7 +162,7 @@ export default {
   "side.left": "Links",
   "side.right": "Rechts",
   "strip.hiddenOutputs": "{count} ausgeblendet",
-  "strip.hideOutput": "Ausgang ausblenden (spielt weiter)",
+  "strip.hideOutput": "Ausgang ausblenden (spielt weiter, kommt bei neuem Ton zurück)",
   "strip.showAllSilent": "Alle zeigen",
   "strip.hideSilent": "Stille ausblenden",
   "strip.keepOff": "Bei Stille ausblenden",

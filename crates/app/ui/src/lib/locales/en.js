@@ -162,7 +162,7 @@ export default {
   "side.left": "Left",
   "side.right": "Right",
   "strip.hiddenOutputs": "{count} hidden",
-  "strip.hideOutput": "Hide output (keeps playing)",
+  "strip.hideOutput": "Hide output (keeps playing, returns when sound starts)",
   "strip.showAllSilent": "Show all",
   "strip.hideSilent": "Hide silent",
   "strip.keepOff": "Hide when silent",

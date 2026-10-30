@@ -50,6 +50,17 @@
     save(HIDE_KEY, hiddenOut);
   }
 
+  // A hidden output comes back when sound starts on it again (not while it
+  // keeps playing from before it was hidden).
+  const playing = new Map();
+  $effect(() => {
+    for (const out of outputs) {
+      const now = (out.levelDb ?? -120) > -60;
+      if (now && playing.get(out.label) === false && hiddenOut.includes(out.label)) setHidden(out.label, false);
+      playing.set(out.label, now);
+    }
+  });
+
   // Small menu under a header button: silent programs to show one by one,
   // or hidden outputs to bring back.
   let menu = $state(null);
