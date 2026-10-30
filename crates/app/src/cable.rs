@@ -163,9 +163,41 @@ mod sys {
         c
     }
 
+    /// usbip-win2's entry in Windows' app list is still shown, i.e. it was
+    /// installed before Faderust started hiding it. Running the setup again
+    /// marks it as a system component.
+    fn entry_visible() -> bool {
+        const ROOTS: [&str; 2] = [
+            r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+            r"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+        ];
+        ROOTS.iter().any(|root| {
+            let Ok(found) = hidden("reg")
+                .args(["query", root, "/s", "/f", "USBip", "/d"])
+                .output()
+            else {
+                return false;
+            };
+            let found = String::from_utf8_lossy(&found.stdout);
+            let mut keys: Vec<&str> = found
+                .lines()
+                .map(str::trim)
+                .filter(|l| l.starts_with("HKEY_"))
+                .collect();
+            keys.dedup();
+            keys.into_iter().any(|key| {
+                !hidden("reg")
+                    .args(["query", key, "/v", "SystemComponent"])
+                    .output()
+                    .is_ok_and(|o| o.status.success())
+            })
+        })
+    }
+
     /// usbip-win2 is installed and the tasks of the first `count` cables exist.
     pub fn installed(count: usize) -> bool {
         usbip().exists()
+            && !entry_visible()
             && (0..count.min(MAX_CABLES)).all(|i| {
                 hidden("schtasks")
                     .args(["/query", "/tn", &task_name(i)])

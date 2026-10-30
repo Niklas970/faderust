@@ -222,14 +222,16 @@
     }
   }
 
-  async function save(next) {
+  // Settings saves by itself while it is open; true when it went through.
+  async function apply(next) {
     try {
       await saveConfig(next);
       config = next;
-      settingsOpen = false;
       error = "";
+      return true;
     } catch (e) {
       error = String(e);
+      return false;
     }
   }
 </script>
@@ -386,7 +388,7 @@
 {/if}
 
 {#if settingsOpen && config}
-  <Settings {config} onSave={save} onClose={() => (settingsOpen = false)} />
+  <Settings {config} onApply={apply} onClose={() => (settingsOpen = false)} />
 {/if}
 
 <style>

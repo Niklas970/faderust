@@ -1,12 +1,8 @@
-## Neu in 0.6.3
+## Neu in 0.6.4
 
-- **VB-Cable ist raus:** Faderust bringt seine eigenen virtuellen Kabel mit (Faderust Kabel, bis zu vier). Alle Hinweise, Knöpfe und Texte zu VB-Cable sind entfernt; wer VB-Cable noch hat, kann es weiter als normales Gerät nutzen
-- **Alles unter einem Dach:** usbip-win2 wird bei der Einrichtung im Hintergrund installiert und erscheint nicht mehr als eigene App in Windows. „Entfernen“ unter „Geräte“ → „Faderust Kabel“ nimmt es wieder zurück
-- Die „kein Kabel“-Hinweise haben einen Knopf, der das Faderust Kabel direkt einrichtet
-- **Fenster beim Start nicht mehr extrem breit:** Programme, die beim Start still sind, werden sofort ausgeblendet, statt erst nach ein paar Sekunden. Das Fenster öffnet damit gleich in der passenden Breite und schrumpft nicht erst nachträglich
-- **Stille Programme einzeln einblenden:** „N still, zeigen“ öffnet eine Liste, aus der du ein Programm nach dem anderen holst (oder „Alle zeigen“)
-- **Ausgänge ausblenden:** Das × am Ausgangs-Streifen blendet ihn samt A-Knöpfen aus, er spielt weiter und kommt von selbst zurück, sobald wieder Ton auf ihm spielt. „N ausgeblendet“ bringt ihn zurück
-- **Mehrere Faderust Kabel:** Unter „Geräte“ → „Faderust Kabel (Test)“ lässt sich die Anzahl der Kabel (1 bis 4) einstellen, zum Beispiel eines für das Mikrofon und eines für Programme. Windows zeigt sie als „Faderust Cable“, „Faderust Cable 2“ und so weiter. Wer schon eingerichtet hat und mehr als ein Kabel will, richtet einmal neu ein (eine Administrator-Abfrage)
+- **USBip-Eintrag verschwindet auch bei bestehender Einrichtung:** Wer das Faderust Kabel schon vor 0.6.3 eingerichtet hat, sah usbip-win2 weiter als eigene App in Windows. Faderust erkennt das jetzt und bietet unter „Geräte“ → „Faderust Kabel“ die Einrichtung noch einmal an (eine Administrator-Abfrage), danach ist der Eintrag ausgeblendet
+- **Geräte-Einstellungen speichern von selbst:** Änderungen im Dialog „Geräte“ werden kurz nach der letzten Eingabe übernommen, der Speichern-Knopf entfällt (es bleibt „Schließen“)
+- **Klarere Namen für das Faderust Kabel:** statt „Lautsprecher (Faderust Cable)“ steht in der Oberfläche „Faderust Kabel (Wiedergabe)“ bzw. „(Aufnahme)“, bei mehreren mit Nummer. Das Kabel meldet Windows außerdem die Namen „Playback“ und „Recording“ (Versuch, ob Windows sie statt „Lautsprecher/Mikrofon“ übernimmt)
 
 ## Installation
 

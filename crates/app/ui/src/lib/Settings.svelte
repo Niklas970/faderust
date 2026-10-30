@@ -1,6 +1,7 @@
 <script>
   import { onMount, untrack } from "svelte";
   import { t } from "./i18n.svelte.js";
+  import { deviceLabel } from "./names.js";
   import UsbCableButton from "./UsbCableButton.svelte";
   import Log from "./Log.svelte";
   import Selftest from "./Selftest.svelte";
@@ -18,14 +19,15 @@
     installStreamDeck,
     getWindowsAudio,
     isCable,
+    getConfig,
     setAutostart,
     setDefaultDevice,
   } from "./api.js";
 
   /** Device setup: which inputs and outputs, their names and buffers. */
-  let { config, onSave, onClose } = $props();
+  let { config, onApply, onClose } = $props();
 
-  // Edit a copy; nothing changes until Save.
+  // Edit a copy; changes are saved by themselves a moment after the last one.
   let draft = $state(untrack(() => ({ gains: [], ...$state.snapshot(config) })));
   let devices = $state({ inputs: [], outputs: [] });
   getDevices().then((d) => (devices = d));
@@ -113,6 +115,9 @@
   // step with the lists.
   const matrices = () => [draft.gains, ...(draft.presets ?? []).map((p) => p.gains)];
   const swap = (list, a, b) => ([list[a], list[b]] = [list[b], list[a]]);
+  // Whether the matrices were reshaped since the last save. If not, the
+  // saved ones are newer than the copy here (fader moves while this is open).
+  let reshaped = false;
 
   // Program inputs ("app:…") belong to the program dialog, not to this list.
   const isProgram = (input) => input.device.startsWith("app:");
@@ -123,26 +128,32 @@
   }
 
   function addInput() {
+    reshaped = true;
     draft.inputs.push({ label: t("settings.newInput", { n: draft.inputs.length + 1 }), device: devices.inputs[0].name });
     for (const m of matrices()) m.push(draft.outputs.map(() => ({ db: 0, muted: false })));
   }
   function removeInput(i) {
+    reshaped = true;
     draft.inputs.splice(i, 1);
     for (const m of matrices()) m.splice(i, 1);
   }
   function moveInput(i, by) {
+    reshaped = true;
     swap(draft.inputs, i, i + by);
     for (const m of matrices()) if (m[i] && m[i + by]) swap(m, i, i + by);
   }
   function addOutput() {
+    reshaped = true;
     draft.outputs.push({ label: t("settings.newOutput", { n: draft.outputs.length + 1 }), device: devices.outputs[0].name, bufferMs: 60, releaseSecs: 30 });
     for (const m of matrices()) for (const row of m) row.push({ db: 0, muted: false });
   }
   function removeOutput(o) {
+    reshaped = true;
     draft.outputs.splice(o, 1);
     for (const m of matrices()) for (const row of m) row.splice(o, 1);
   }
   function moveOutput(o, by) {
+    reshaped = true;
     swap(draft.outputs, o, o + by);
     for (const m of matrices()) for (const row of m) if (o + by < row.length) swap(row, o, o + by);
   }
@@ -171,21 +182,59 @@
     // Read before the push: afterwards the cable is taken and `micCable` moves on.
     const cable = micCable.name;
     draft.outputs.push({ label: t("settings.programMic"), device: cable, bufferMs: 30, releaseSecs: 30 });
+    reshaped = true;
     // The first input (usually the microphone) at 0 dB, everything else muted.
     for (const m of matrices()) m.forEach((row, i) => row.push({ db: 0, muted: i !== 0 }));
     micDevice = cableCounterpart(cable, devices.inputs);
   }
 
-  async function save() {
-    if (micDevice && micDefault) {
-      try {
-        const rec = (await getWindowsAudio()).recording?.find((d) => d.name === micDevice);
-        if (rec) await setDefaultDevice(rec.id, true);
-      } catch (e) {
-        micError = t("settings.defaultFailed", { error: e });
+  let saved = JSON.stringify($state.snapshot(draft));
+  let timer;
+  let micApplied = false;
+
+  async function autosave() {
+    const json = JSON.stringify($state.snapshot(draft));
+    const next = $state.snapshot(draft);
+    try {
+      if (!reshaped) {
+        const fresh = await getConfig();
+        if (fresh.inputs.length === next.inputs.length && fresh.outputs.length === next.outputs.length) {
+          next.gains = fresh.gains;
+          next.presets = fresh.presets;
+        }
       }
+      if (micDevice && micDefault && !micApplied) {
+        try {
+          const rec = (await getWindowsAudio()).recording?.find((d) => d.name === micDevice);
+          if (rec) await setDefaultDevice(rec.id, true);
+          micApplied = true;
+          micError = "";
+        } catch (e) {
+          micError = t("settings.defaultFailed", { error: e });
+        }
+      }
+      if (await onApply(next)) {
+        saved = json;
+        reshaped = false;
+      }
+    } catch (e) {
+      micError = String(e);
     }
-    onSave($state.snapshot(draft));
+  }
+
+  $effect(() => {
+    const json = JSON.stringify($state.snapshot(draft));
+    void micDefault;
+    if (json === saved && (micApplied || !micDevice)) return;
+    timer = setTimeout(autosave, 800);
+    return () => clearTimeout(timer);
+  });
+
+  // Whatever is still waiting goes out before the dialog closes.
+  async function close() {
+    clearTimeout(timer);
+    if (JSON.stringify($state.snapshot(draft)) !== saved || (micDevice && !micApplied)) await autosave();
+    onClose();
   }
 
   function selected(list, current) {
@@ -205,7 +254,7 @@
   ];
 </script>
 
-<div class="backdrop" role="presentation" onclick={onClose}></div>
+<div class="backdrop" role="presentation" onclick={close}></div>
 <div class="dialog" role="dialog" aria-modal="true" aria-label={t("settings.title")}>
   <h2>{t("settings.title")}</h2>
 
@@ -219,7 +268,7 @@
         onchange={(e) => (input.device = e.currentTarget.value)}
         aria-label={t("settings.device")}
       >
-        {#each options(devices.inputs, input.device) as name}<option>{name}</option>{/each}
+        {#each options(devices.inputs, input.device) as name}<option value={name}>{deviceLabel(name)}</option>{/each}
       </select>
       <span class="order">
         <button class="icon" title={t("settings.up")} aria-label={t("settings.up")} disabled={neighbor(i, -1) < 0} onclick={() => moveInput(i, neighbor(i, -1) - i)}
@@ -254,7 +303,7 @@
         onchange={(e) => (output.device = e.currentTarget.value)}
         aria-label={t("settings.device")}
       >
-        {#each options(devices.outputs, output.device) as name}<option>{name}</option>{/each}
+        {#each options(devices.outputs, output.device) as name}<option value={name}>{deviceLabel(name)}</option>{/each}
       </select>
       <label class="buffer" title={t("settings.buffer")}>
         <input type="number" min="10" max="500" step="10" bind:value={output.bufferMs} />
@@ -391,8 +440,7 @@
   </div>
 
   <footer>
-    <button onclick={onClose}>{t("common.cancel")}</button>
-    <button class="primary" onclick={save}>{t("common.save")}</button>
+    <button class="primary" onclick={close}>{t("common.close")}</button>
   </footer>
 </div>
 

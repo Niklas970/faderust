@@ -1,4 +1,5 @@
 <script>
+  import { deviceLabel } from "./names.js";
   import { getWindowsAudio, setDefaultDevice, setDeviceVolume } from "./api.js";
   import Volume from "./Volume.svelte";
   import { t } from "./i18n.svelte.js";
@@ -66,7 +67,7 @@
               onchange={(e) => makeDefault(e.currentTarget.value, false)}
             >
               {#if !list.some((d) => d.isDefault)}<option value="">{t("win.none")}</option>{/if}
-              {#each list as d}<option value={d.id}>{d.name}</option>{/each}
+              {#each list as d}<option value={d.id}>{deviceLabel(d.name)}</option>{/each}
             </select>
           </label>
           <label>
@@ -76,7 +77,7 @@
               onchange={(e) => makeDefault(e.currentTarget.value, true)}
             >
               {#if !list.some((d) => d.isDefaultCommunications)}<option value="">{t("win.none")}</option>{/if}
-              {#each list as d}<option value={d.id}>{d.name}</option>{/each}
+              {#each list as d}<option value={d.id}>{deviceLabel(d.name)}</option>{/each}
             </select>
           </label>
         </div>
@@ -84,14 +85,14 @@
           {#each list as d (d.id)}
             <li>
               <span class="name" title={d.name}>
-                {d.name}
+                {deviceLabel(d.name)}
                 {#if d.isDefault}<em>{t("win.badgeDefault")}</em>{/if}
                 {#if d.isDefaultCommunications && !d.isDefault}<em>{t("win.badgeCalls")}</em>{/if}
               </span>
               <Volume
                 volume={d.volume}
                 muted={d.muted}
-                label={d.name}
+                label={deviceLabel(d.name)}
                 onChange={(v, m) => volume(d.id, v, m)}
               />
             </li>
