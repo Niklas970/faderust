@@ -1,0 +1,15 @@
+# Prototype: desk strips (fader, meter, mute) in iced instead of Tauri/WebView2.
+# Standalone on purpose (not a workspace member): it adds no dependencies to
+# the app, CI or cargo-deny. Run: cargo run --release
+[package]
+name = "faderust-iced-proto"
+version = "0.0.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[workspace]
+
+[dependencies]
+iced = { version = "0.14", features = ["canvas", "tokio", "image"] }
+png = "0.17"
