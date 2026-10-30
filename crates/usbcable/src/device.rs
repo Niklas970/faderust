@@ -163,6 +163,9 @@ impl State {
                 }
             }
             (0, 0x00) => truncated(vec![0, 0]), // GET_STATUS
+            // CLEAR_FEATURE / SET_FEATURE, mostly ENDPOINT_HALT: Windows
+            // clears the halt of each audio endpoint before it streams.
+            (0, 0x01 | 0x03) => Control::Done(Vec::new()),
             (0, 0x08) => truncated(vec![self.configuration]),
             (0, 0x09) => {
                 self.configuration = value as u8;
@@ -250,6 +253,16 @@ mod tests {
         assert!(s.playing() && s.recording());
         s.control(setup(1, 11, 0, 1, 0));
         assert!(!s.playing() && s.recording());
+    }
+
+    #[test]
+    fn host_can_clear_an_endpoint_halt() {
+        let mut s = State::default();
+        // CLEAR_FEATURE(ENDPOINT_HALT) on the playback endpoint.
+        assert!(matches!(
+            s.control(setup(0x02, 1, 0, 1, 0)),
+            Control::Done(d) if d.is_empty()
+        ));
     }
 
     #[test]
