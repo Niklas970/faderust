@@ -14,10 +14,10 @@
     setUsbCable,
     setUsbCableCount,
     setupUsbCable,
+    removeUsbCable,
     installStreamDeck,
     getWindowsAudio,
     isCable,
-    openCablePage,
     setAutostart,
     setDefaultDevice,
   } from "./api.js";
@@ -312,10 +312,8 @@
         {hasCable
           ? t("settings.micNoFreeCable")
           : t("settings.micNoCable")}
-        {t("settings.micInstall")}
       </p>
       <UsbCableButton />
-      <button onclick={() => openCablePage()}>{t("cable.setup")}</button>
     </div>
   {/if}
   {#if micError}<p class="error">{micError}</p>{/if}
@@ -361,6 +359,11 @@
         {#each [1, 2, 3, 4] as n}<option value={n}>{n}</option>{/each}
       </select>
     </label>
+    {#if usb.installed}
+      <button class="remove" disabled={usbBusy} title={t("usbcable.removeHint")} onclick={() => usbAction(removeUsbCable)}>
+        {t("usbcable.remove")}
+      </button>
+    {/if}
     {#if usb.running}
       <p class="note">
         {#each usb.attached as on, i}
@@ -521,6 +524,9 @@
   }
   .error {
     color: var(--danger);
+  }
+  .remove {
+    margin-top: 6px;
   }
   .check select {
     width: auto;

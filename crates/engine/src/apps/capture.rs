@@ -4,7 +4,7 @@
 //! without a virtual cable per program.
 //!
 //! The program keeps playing on its own device too. To hear it only through
-//! Faderust, point it at a device nobody listens to (e.g. a VB-Cable whose
+//! Faderust, point it at a device nobody listens to (e.g. a Faderust Cable whose
 //! other side is no input).
 
 use std::mem::{size_of, ManuallyDrop};

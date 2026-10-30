@@ -2,7 +2,7 @@
 //! program volumes, the default devices and their volume.
 //!
 //! Windows lets every program have its own output device (Settings → Sound →
-//! Volume mixer). Pointing a program at a virtual cable (VB-Cable) and adding
+//! Volume mixer). Pointing a program at a virtual cable (Faderust Cable) and adding
 //! the cable's capture side as an input puts that program on its own fader.
 //! Windows remembers the choice per program, so it survives restarts of both
 //! the program and Faderust.
@@ -23,7 +23,7 @@ pub struct RenderDevice {
 }
 
 impl RenderDevice {
-    /// True for VB-Audio's virtual cables ("CABLE Input", "CABLE-A Input", …).
+    /// True for one of Faderust's own USB cables.
     pub fn is_virtual_cable(&self) -> bool {
         is_virtual_cable(&self.name)
     }
@@ -144,12 +144,9 @@ pub fn own_cable(name: &str) -> Option<String> {
     Some(n[start + 1..end].to_string())
 }
 
-/// True for virtual cables, by device name: VB-Audio's (both sides, "CABLE
-/// Input" for playback, "CABLE Output" for capture, and the A/B cables) and
-/// Faderust's own USB cable.
+/// True for Faderust's own virtual cables (both sides), by device name.
 pub fn is_virtual_cable(name: &str) -> bool {
-    let n = name.to_lowercase();
-    n.contains("vb-audio") || n.starts_with("cable") || own_cable(name).is_some()
+    own_cable(name).is_some()
 }
 
 /// Merges sessions into one entry per executable. A program counts as
@@ -220,9 +217,8 @@ mod tests {
 
     #[test]
     fn recognises_vb_cables() {
-        assert!(is_virtual_cable("CABLE Input (VB-Audio Virtual Cable)"));
-        assert!(is_virtual_cable("CABLE-A Output (VB-Audio Cable A)"));
-        assert!(is_virtual_cable("cable input"));
+        assert!(!is_virtual_cable("CABLE Input (VB-Audio Virtual Cable)"));
+        assert!(!is_virtual_cable("cable input"));
         assert!(is_virtual_cable("Lautsprecher (Faderust Cable)"));
         assert!(is_virtual_cable("Microphone (Faderust Cable)"));
         assert!(is_virtual_cable("Speakers (Faderust Cable 3)"));

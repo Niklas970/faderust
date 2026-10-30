@@ -1,7 +1,7 @@
 <script>
   import UsbCableButton from "./UsbCableButton.svelte";
   import { t } from "./i18n.svelte.js";
-  import { cableCounterpart, ownCable, getApps, getDevices, getWindowsAudio, isCable, openCablePage, setAppOutput } from "./api.js";
+  import { cableCounterpart, ownCable, getApps, getDevices, getWindowsAudio, isCable, setAppOutput } from "./api.js";
 
   /**
    * Which program plays on which device, and which programs Faderust records
@@ -116,7 +116,6 @@
         <strong>{t("apps.noCable")}</strong>
         {t("apps.noCableText")}
         <UsbCableButton />
-        <button onclick={() => openCablePage()}>{t("cable.setup")}</button>
       </div>
     {/if}
     {#each unusedCables as cable}
@@ -162,7 +161,7 @@
               {#if quietCable}
                 <button class="primary" onclick={() => change(app, quietCable.id)}>{t("apps.moveTo", { name: quietCable.name })}</button>
               {:else}
-                <button onclick={() => openCablePage()}>{t("cable.setup")}</button>
+                <UsbCableButton />
               {/if}
             </li>
           {/if}

@@ -65,16 +65,19 @@ Voraussetzung: Windows 10 (ab Version 2004) oder Windows 11.
 
 **+ Programm** im Pult zeigt alle Programme, die gerade Ton abspielen. **+ Eingang** nimmt eines direkt auf. Damit du es nicht doppelt hörst, stellt Faderust das Programm zuerst auf ein freies virtuelles Kabel, das du nicht hörst (falls eins da ist), und nimmt es dann auf.
 
-Ohne Prozess-Aufnahme geht es auch klassisch über [VB-Cable](https://vb-audio.com/Cable/): Programm auf „CABLE Input“ stellen und „CABLE Output“ als Eingang anlegen. Windows merkt sich das Gerät pro Programm.
 
 ### Mikrofon für Discord, Teams & Co.
 
 Unter **Geräte** legt **+ Programm-Mikro** einen Ausgang auf einem freien virtuellen Kabel an, auf dem nur das Mikrofon mit seinen Effekten liegt. Im Programm wählst du die andere Seite des Kabels als Mikrofon. Rückkopplungen (ein Ausgang spielt auf das Kabel, von dem ein Eingang kommt) schaltet Faderust stumm und zeigt „Schleife“.
 
+### Faderust Kabel
+
+Unter **Geräte** → **Faderust Kabel** auf **Einrichten** klicken (einmalig, mit einer Administrator-Abfrage). Danach lassen sich ein bis vier virtuelle Kabel einschalten, zum Beispiel eines für das Mikrofon und eines für Programme. Windows zeigt sie als „Faderust Cable“, „Faderust Cable 2“ und so weiter. **Entfernen** nimmt die Einrichtung wieder zurück.
+
 ## Grenzen
 
 - Programme merken sich Fader, Ausgänge und Effekte, solange ihr Streifen im Pult bleibt: Startet Discord neu, kommt es mit seinen alten Einstellungen zurück. Entfernst du den Streifen unter „Geräte“, sind sie weg.
-- Kein eigener Treiber. Virtuelle Geräte kommen von VB-Cable.
+- Kein eigener Kernel-Treiber. Die virtuellen Kabel („Faderust Kabel“, bis zu vier) sind USB-Soundgeräte, die Faderust selbst per USB/IP bereitstellt. Windows bindet dafür seinen eingebauten USB-Audiotreiber; der USB/IP-Teil ist [usbip-win2](https://github.com/vadimgrn/usbip-win2) (BSD-2, von Microsoft signiert), das die Einrichtung einmalig installiert.
 - Windows liefert den Ton pro Programm, nicht pro Browser-Tab oder Web-App. Alles aus einem Browser läuft über denselben Audio-Prozess.
 - Bluetooth braucht nach einer Freigabe etwa eine Sekunde, bis wieder Ton kommt. Wer das nicht will, stellt den Ausgang auf „Nie frei“.
 - Die Zuordnung „Programm → Gerät“ nutzt dieselbe nicht dokumentierte Windows-Schnittstelle wie der Lautstärkemixer in den Einstellungen.
