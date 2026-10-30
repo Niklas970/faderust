@@ -1,6 +1,7 @@
-## Neu in 0.5.8
+## Neu in 0.5.9
 
-- **Genauere „Du hörst es doppelt“-Meldung:** Sie erscheint nur noch, wenn der Programm-Eingang wirklich zu einem Ausgang geht (nicht stumm, Fader oben) und das Programm auf einem Gerät läuft, das du hörst: ein Kabel mit Zuhörer, ein Gerät, auf dem Faderust auch ausgibt, oder das Windows-Standardgerät. Läuft das Programm auf einem anderen Gerät (zum Beispiel Lautsprecher, während du Kopfhörer trägst), bleibt die Meldung weg
+- **Sicherung der Einstellungen:** Vor jedem Speichern legt Faderust die bisherige `config.toml` als `config.toml.bak` daneben. Geht mal etwas schief, lässt sich der letzte Stand zurückholen
+- Intern: schnellere Tests und eine schnellere Prüfung bei jeder Änderung (keine Auswirkung auf die App)
 
 ## Installation
 

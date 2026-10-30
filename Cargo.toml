@@ -3,8 +3,22 @@ resolver = "2"
 members = ["crates/engine", "crates/app", "crates/usbcable"]
 
 [workspace.package]
-version = "0.5.8"
+version = "0.5.9"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/Niklas970/faderust"
 rust-version = "1.87"
+
+# The engine tests simulate minutes of audio through the resampler and the
+# effects; unoptimized that took 17 s. Only the audio crates are optimized, so
+# the rest still builds fast (and `cargo run` keeps debuggable engine code).
+[profile.test.package.faderust-engine]
+opt-level = 3
+[profile.test.package.rubato]
+opt-level = 3
+[profile.test.package.rustfft]
+opt-level = 3
+[profile.test.package.realfft]
+opt-level = 3
+[profile.test.package.audioadapter-buffers]
+opt-level = 3
