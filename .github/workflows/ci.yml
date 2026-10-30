@@ -60,6 +60,29 @@ jobs:
           path: target/release/examples/serve.exe
           if-no-files-found: error
 
+  # Prototype only (not a workspace member): a test build to measure on Windows.
+  iced-proto:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: prototypes/iced-gui
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: prototypes/iced-gui
+      - run: cargo fmt -- --check
+      - run: cargo clippy --release -- -D warnings
+      - run: cargo build --release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: faderust-iced-proto
+          path: prototypes/iced-gui/target/release/faderust-iced-proto.exe
+          if-no-files-found: error
+
   streamdeck:
     runs-on: ubuntu-latest
     defaults:
