@@ -506,14 +506,15 @@ mod tests {
 
     #[test]
     fn recording_keeps_packet_offsets_and_start_frame() {
+        const ASKED: usize = PACKET_BYTES + crate::device::FRAME_BYTES;
         let server = start();
         let mut s = connect(&server);
-        // The host asks for 196 bytes per packet but the cable gives 192:
+        // The host asks for one sample more per packet than the cable gives:
         // the descriptors must keep the host's offsets, the data is packed.
-        let mut submit = cmd_submit(1, true, EP_REC, [0; 8], 2 * 196, 2);
+        let mut submit = cmd_submit(1, true, EP_REC, [0; 8], 2 * ASKED as u32, 2);
         submit[28..32].copy_from_slice(&1234u32.to_be_bytes());
         s.write_all(&submit).unwrap();
-        s.write_all(&iso_descs(2, 196)).unwrap();
+        s.write_all(&iso_descs(2, ASKED as u32)).unwrap();
         let h = read_reply_header(&mut s);
         assert_eq!(u32::from_be_bytes(h[28..32].try_into().unwrap()), 1234);
         let actual = u32::from_be_bytes(h[24..28].try_into().unwrap()) as usize;
@@ -523,7 +524,7 @@ mod tests {
         let descs = &rest[actual..];
         let offset = |i: usize| u32::from_be_bytes(descs[i * 16..i * 16 + 4].try_into().unwrap());
         let got = |i: usize| u32::from_be_bytes(descs[i * 16 + 8..i * 16 + 12].try_into().unwrap());
-        assert_eq!((offset(0), offset(1)), (0, 196));
+        assert_eq!((offset(0), offset(1)), (0, ASKED as u32));
         assert_eq!((got(0), got(1)), (PACKET_BYTES as u32, PACKET_BYTES as u32));
     }
 

@@ -1,12 +1,13 @@
 //! The virtual device: a USB Audio Class 1.0 sound card with one stereo
 //! speaker (endpoint 1 OUT) and one stereo microphone (endpoint 2 IN), 48 kHz,
-//! 16 bit. What is played into the speaker comes out of the microphone, like
+//! 24 bit. What is played into the speaker comes out of the microphone, like
 //! a cable.
 
 use crate::wire::DeviceInfo;
 
 pub const RATE: u32 = 48_000;
-pub const FRAME_BYTES: usize = 4; // 2 channels * 16 bit
+pub const BYTES_PER_SAMPLE: usize = 3; // 24 bit
+pub const FRAME_BYTES: usize = 2 * BYTES_PER_SAMPLE; // stereo
 /// Bytes of one 1 ms USB frame.
 pub const PACKET_BYTES: usize = RATE as usize / 1000 * FRAME_BYTES;
 /// One more sample than average, so a rate that drifts upward still fits.
@@ -15,13 +16,16 @@ const MAX_PACKET: u16 = (PACKET_BYTES + FRAME_BYTES) as u16;
 pub const EP_PLAY: u32 = 1;
 pub const EP_REC: u32 = 2;
 
+/// Windows shows this in the device names ("Speakers (Faderust Cable)").
+pub const PRODUCT_NAME: &str = "Faderust Cable";
+
 const VENDOR: u16 = 0x1209; // pid.codes test range
 const PRODUCT: u16 = 0x0001;
 
 fn string_table(index: u8) -> Option<&'static str> {
     match index {
         1 => Some("Faderust"),
-        2 => Some("Faderust Cable"),
+        2 => Some(PRODUCT_NAME),
         3 => Some("0001"),
         _ => None,
     }
@@ -44,8 +48,8 @@ fn streaming_interface(number: u8, terminal: u8, endpoint: u8, attributes: u8) -
     d.extend([9, 4, number, 1, 1, 1, 2, 0, 0]);
     // AS general: terminal link, delay 1, PCM.
     d.extend([7, 0x24, 1, terminal, 1, 1, 0]);
-    // Format type I: 2 channels, 2 bytes, 16 bit, one fixed rate.
-    d.extend([11, 0x24, 2, 1, 2, 2, 16, 1]);
+    // Format type I: 2 channels, 3 bytes, 24 bit, one fixed rate.
+    d.extend([11, 0x24, 2, 1, 2, BYTES_PER_SAMPLE as u8, 24, 1]);
     d.extend(&RATE.to_le_bytes()[..3]);
     // Isochronous endpoint, 1 ms interval.
     d.extend([9, 5, endpoint, attributes]);

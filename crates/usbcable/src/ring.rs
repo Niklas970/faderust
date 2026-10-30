@@ -96,17 +96,17 @@ mod tests {
     #[test]
     fn a_short_gap_holds_the_last_frame_and_a_long_one_is_silent() {
         let r = Ring::new();
-        r.write(&[1, 2, 3, 4]);
-        let mut out = [0u8; 8];
+        r.write(&[1, 2, 3, 4, 5, 6]);
+        let mut out = [0u8; 12];
         r.read(&mut out);
-        assert_eq!(out, [1, 2, 3, 4, 1, 2, 3, 4]);
+        assert_eq!(out, [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6]);
         // Hold lasts a few reads only; with nothing written the last frame is
         // gone, so the following reads start from silence.
         for _ in 0..HOLD_READS {
             r.read(&mut out);
         }
         r.read(&mut out);
-        assert_eq!(out, [0; 8]);
+        assert_eq!(out, [0; 12]);
     }
 
     #[test]
