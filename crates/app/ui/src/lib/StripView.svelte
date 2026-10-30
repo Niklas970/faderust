@@ -42,13 +42,20 @@
   // yet counts as heard a moment ago only, so after a start the silent ones
   // are gone after a few seconds instead of after the full time.
   const GRACE = 5000;
+  // Programs first seen while the app starts are not given the grace: the
+  // window would open wide for all of them and shrink a moment later.
+  const STARTUP = 4000;
+  const mounted = Date.now();
   const heard = new Map();
   let showAll = $state(false);
   const audible = $derived.by(() => {
     const now = Date.now();
     for (const { input } of allPrograms) {
       if (input.connected && input.levelDb > -60) heard.set(input.device, now);
-      else if (!heard.has(input.device)) heard.set(input.device, now - Math.max(0, hideAfter * 1000 - GRACE));
+      else if (!heard.has(input.device)) {
+        const grace = now - mounted < STARTUP ? 0 : GRACE;
+        heard.set(input.device, now - Math.max(0, hideAfter * 1000 - grace));
+      }
     }
     if (!hideAfter) return allPrograms;
     return allPrograms.filter(
