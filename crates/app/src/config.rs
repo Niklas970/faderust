@@ -206,6 +206,9 @@ impl Config {
     }
 
     /// Writes atomically, so a crash never leaves half a file.
+    /// Vor dem Überschreiben wird die vorhandene Config neben der Originaldatei
+    /// als `config.toml.bak` gesichert (Issue #91), damit ein Konfigurations-
+    /// Bruch rückgängig gemacht werden kann.
     pub fn save(&self, path: &Path) -> io::Result<()> {
         if let Some(dir) = path.parent() {
             fs::create_dir_all(dir)?;
@@ -213,6 +216,11 @@ impl Config {
         let text = toml::to_string_pretty(self).map_err(io::Error::other)?;
         let tmp = path.with_extension("toml.tmp");
         fs::write(&tmp, text)?;
+        // Bestehende Config vor dem Überschreiben sichern.
+        if path.exists() {
+            let bak = path.with_extension("toml.bak");
+            fs::copy(path, &bak)?;
+        }
         fs::rename(&tmp, path)
     }
 }
@@ -278,6 +286,33 @@ mod tests {
         c.save_preset("Abend");
         c.save(&path).unwrap();
         assert_eq!(Config::load(&path).unwrap(), Some(c));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn save_creates_backup_of_previous_config() {
+        let dir = std::env::temp_dir().join(format!("faderust-test-bak-{}", std::process::id()));
+        let path = dir.join("config.toml");
+        let mut c = sample();
+        c.save(&path).unwrap();
+        // Erste Speicherung: noch nichts zu sichern, also kein Backup.
+        assert!(!path.with_extension("toml.bak").exists());
+
+        c.gains[0][0] = Gain {
+            db: -6.5,
+            muted: true,
+        };
+        c.save(&path).unwrap();
+        // Zweite Speicherung: altes config.toml muss als .bak daneben liegen.
+        let bak = path.with_extension("toml.bak");
+        assert!(bak.exists());
+        let back: Config = Config::load(&bak).unwrap().unwrap();
+        assert_eq!(back.gains[0][0], Gain::default());
+        // Aktuelle Datei hat den neuen Wert.
+        let current = Config::load(&path).unwrap().unwrap();
+        assert_eq!(current.gains[0][0].db, -6.5);
+        assert!(current.gains[0][0].muted);
+
         fs::remove_dir_all(dir).unwrap();
     }
 
