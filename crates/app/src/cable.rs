@@ -1,8 +1,9 @@
 //! Faderust's own virtual cable: a USB sound card served over USB/IP by
 //! [`faderust_usbcable`], so no audio driver of ours is needed. Windows
 //! attaches it through usbip-win2 (BSD-2, signed by Microsoft), which a
-//! one-time setup installs together with a scheduled task that attaches the
-//! cable without asking for administrator rights again.
+//! one-time setup installs (without an entry of its own in Windows' app list)
+//! together with scheduled tasks that attach the cables without asking for
+//! administrator rights again. Faderust can remove it all again.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -183,7 +184,7 @@ mod sys {
     /// Runs elevated; writes what went wrong to `result.txt` next to it.
     const SCRIPT: &str = include_str!("cable-setup.ps1");
 
-    pub fn setup() -> Result<(), String> {
+    pub fn run_script(action: &str) -> Result<(), String> {
         let dir = std::env::temp_dir().join("faderust-cable-setup");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -200,11 +201,12 @@ mod sys {
         let quote = |s: &str| s.replace('\'', "''");
         let command = format!(
             "$p = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden \
-             -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"{}\"','\"{}\"','{}'; \
+             -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"{}\"','\"{}\"','{}','{}'; \
              exit $p.ExitCode",
             quote(&script.to_string_lossy()),
             quote(&user),
-            MAX_CABLES
+            MAX_CABLES,
+            quote(action)
         );
         let output = hidden("powershell")
             .args(["-NoProfile", "-NonInteractive", "-Command", &command])
@@ -230,7 +232,7 @@ mod sys {
         false
     }
     pub fn attach(_cable: usize) {}
-    pub fn setup() -> Result<(), String> {
+    pub fn run_script(_action: &str) -> Result<(), String> {
         Err(faderust_engine::lang::tr(
             "Das USB-Kabel gibt es nur unter Windows.",
             "The USB cable is only available on Windows.",
@@ -260,12 +262,24 @@ fn attach(cable: usize) {
 /// Blocks until the setup is done.
 pub fn setup() -> Result<(), String> {
     log::write("USB-Kabel: Einrichtung gestartet");
-    let result = sys::setup();
+    let result = sys::run_script("install");
     // The tasks are new: look again at once.
     *INSTALLED.lock().unwrap_or_else(|e| e.into_inner()) = None;
     match &result {
         Ok(()) => log::write("USB-Kabel: Einrichtung fertig"),
         Err(e) => log::write(&format!("USB-Kabel: Einrichtung fehlgeschlagen: {e}")),
+    }
+    result
+}
+
+/// Removes usbip-win2 and the attach tasks (one administrator prompt).
+pub fn remove() -> Result<(), String> {
+    log::write("USB-Kabel: Entfernen gestartet");
+    let result = sys::run_script("remove");
+    *INSTALLED.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    match &result {
+        Ok(()) => log::write("USB-Kabel: entfernt"),
+        Err(e) => log::write(&format!("USB-Kabel: Entfernen fehlgeschlagen: {e}")),
     }
     result
 }

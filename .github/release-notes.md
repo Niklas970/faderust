@@ -1,6 +1,8 @@
-## Neu in 0.6.2
+## Neu in 0.6.3
 
-- **Mehrere Faderust Kabel:** Unter „Geräte“ → „Faderust Kabel (Test)“ lässt sich die Anzahl der Kabel (1 bis 4) einstellen, zum Beispiel eines für das Mikrofon und eines für Programme. Windows zeigt sie als „Faderust Cable“, „Faderust Cable 2“ und so weiter. Wer schon eingerichtet hat und mehr als ein Kabel will, richtet einmal neu ein (eine Administrator-Abfrage)
+- **VB-Cable ist raus:** Faderust bringt seine eigenen virtuellen Kabel mit (Faderust Kabel, bis zu vier). Alle Hinweise, Knöpfe und Texte zu VB-Cable sind entfernt; wer VB-Cable noch hat, kann es weiter als normales Gerät nutzen
+- **Alles unter einem Dach:** usbip-win2 wird bei der Einrichtung im Hintergrund installiert und erscheint nicht mehr als eigene App in Windows. „Entfernen“ unter „Geräte“ → „Faderust Kabel“ nimmt es wieder zurück
+- Die „kein Kabel“-Hinweise haben einen Knopf, der das Faderust Kabel direkt einrichtet
 
 ## Installation
 

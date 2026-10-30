@@ -135,7 +135,6 @@ export async function setDeviceVolume(id, volume, muted) {
   return (await tauri()).invoke("set_device_volume", { id, volume, muted });
 }
 
-/** VB-Audio's virtual cables, by name ("CABLE Input", "CABLE-A Output", …). */
 /** Which Faderust USB cable a device name belongs to ("faderust cable 2"), or null. */
 export function ownCable(name) {
   const n = name.toLowerCase();
@@ -144,18 +143,14 @@ export function ownCable(name) {
   return end < 0 ? null : n.slice(start + 1, end);
 }
 
+/** One of Faderust's own virtual cables, by name. */
 export function isCable(name) {
-  const n = name.toLowerCase();
-  return (
-    n.includes("vb-audio") ||
-    n.startsWith("cable") ||
-    ownCable(name) !== null
-  );
+  return ownCable(name) !== null;
 }
 
 /**
- * The two ends of one virtual cable ("CABLE Input …" plays into
- * "CABLE Output …"), like the engine's `feeds_back`.
+ * The two ends of one virtual cable (playing on "Speakers (Faderust Cable)"
+ * is recorded by "Microphone (Faderust Cable)"), like the engine's `feeds_back`.
  */
 export function feedsBack(output, input) {
   const o = output.toLowerCase();
@@ -201,6 +196,14 @@ export async function setUsbCableCount(count) {
 }
 
 /** Installs usbip-win2 and the attach task; one administrator prompt. */
+export async function removeUsbCable() {
+  if (!inTauri) {
+    mock.usbCable = { ...mock.usbCable, installed: false, running: false, attached: [false] };
+    return;
+  }
+  return (await tauri()).invoke("remove_usb_cable");
+}
+
 export async function setupUsbCable() {
   if (!inTauri) {
     await new Promise((r) => setTimeout(r, 800));
@@ -208,13 +211,6 @@ export async function setupUsbCable() {
     return;
   }
   return (await tauri()).invoke("setup_usb_cable");
-}
-
-/** Opens VB-Audio's VB-Cable download page in the browser. */
-export async function openCablePage() {
-  if (!inTauri)
-    return void window.open("https://vb-audio.com/Cable/", "_blank");
-  return (await tauri()).invoke("open_cable_page");
 }
 
 /** Tells the Rust side the interface language, for the messages it sends. */
@@ -400,16 +396,16 @@ const mock = {
   devices: {
     inputs: [
       { id: "mic", name: "Mikrofon (USB Audio Device)" },
-      { id: "cable", name: "CABLE Output (VB-Audio Virtual Cable)" },
+      { id: "cable", name: "Mikrofon (Faderust Cable)" },
       { id: "ps5", name: "Line In (USB Sound Card)" },
-      { id: "cablea", name: "CABLE-A Output (VB-Audio Cable A)" },
+      { id: "cablea", name: "Mikrofon (Faderust Cable 2)" },
     ],
     outputs: [
       { id: "ps5out", name: "Lautsprecher (USB Sound Card)" },
       { id: "buds", name: "Kopfhörer (Galaxy Buds2 Pro)" },
       { id: "jbl", name: "Lautsprecher (JBL Flip 6)" },
-      { id: "cablein", name: "CABLE Input (VB-Audio Virtual Cable)" },
-      { id: "cableain", name: "CABLE-A Input (VB-Audio Cable A)" },
+      { id: "cablein", name: "Lautsprecher (Faderust Cable)" },
+      { id: "cableain", name: "Lautsprecher (Faderust Cable 2)" },
     ],
   },
   config: {
@@ -427,7 +423,7 @@ const mock = {
           gateDb: -45,
         },
       },
-      { label: "PC", device: "CABLE Output", fx: defaultFx() },
+      { label: "PC", device: "Mikrofon (Faderust Cable)", fx: defaultFx() },
       { label: "PS5", device: "Line In", fx: defaultFx() },
       { label: "Discord", device: "app:discord.exe", fx: defaultFx() },
       { label: "Brave", device: "app:brave.exe", fx: defaultFx() },
@@ -456,13 +452,13 @@ const mock = {
       { id: "ps5out", name: "Lautsprecher (USB Sound Card)", cable: false },
       {
         id: "cable",
-        name: "CABLE Input (VB-Audio Virtual Cable)",
+        name: "Lautsprecher (Faderust Cable)",
         cable: true,
       },
       { id: "buds", name: "Kopfhörer (Galaxy Buds2 Pro)", cable: false },
       {
         id: "cablea",
-        name: "CABLE-A Input (VB-Audio Cable A)",
+        name: "Lautsprecher (Faderust Cable 2)",
         cable: true,
       },
     ],
@@ -506,7 +502,7 @@ const mock = {
       },
       {
         id: "cable",
-        name: "CABLE Input (VB-Audio Virtual Cable)",
+        name: "Lautsprecher (Faderust Cable)",
         isDefault: true,
         isDefaultCommunications: false,
         volume: 1,
@@ -532,7 +528,7 @@ const mock = {
       },
       {
         id: "cableout",
-        name: "CABLE Output (VB-Audio Virtual Cable)",
+        name: "Mikrofon (Faderust Cable)",
         isDefault: false,
         isDefaultCommunications: false,
         volume: 1,
@@ -540,7 +536,7 @@ const mock = {
       },
       {
         id: "cableaout",
-        name: "CABLE-A Output (VB-Audio Cable A)",
+        name: "Mikrofon (Faderust Cable 2)",
         isDefault: false,
         isDefaultCommunications: false,
         volume: 1,
@@ -669,11 +665,7 @@ const mock = {
             correctionPpm: -40,
             underruns: 0,
             // The mock has patterns, not device names.
-            looped:
-              cableCounterpart(output.device)
-                .toLowerCase()
-                .includes(input.device.toLowerCase()) &&
-              /input/i.test(output.device),
+            looped: feedsBack(output.device, input.device),
           })),
         ),
       });

@@ -298,9 +298,6 @@ async fn set_device_volume(
         .map_err(|e| e.to_string())
 }
 
-/// VB-Audio's page with the free VB-Cable download.
-const CABLE_PAGE: &str = "https://vb-audio.com/Cable/";
-
 #[tauri::command]
 fn get_usb_cable(state: State<AppState>) -> cable::Status {
     let configured = state
@@ -345,22 +342,18 @@ async fn setup_usb_cable() -> Result<(), String> {
         .map_err(|e| e.to_string())?
 }
 
-/// Opens the VB-Cable download page in the browser. Faderust must not ship
-/// the driver itself.
+/// Removes usbip-win2 and the attach tasks again; turns the cable off first.
 #[tauri::command]
-fn open_cable_page() -> Result<(), String> {
-    if cfg!(windows) {
-        std::process::Command::new("explorer")
-            .arg(CABLE_PAGE)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    } else {
-        Err(format!(
-            "{} {CABLE_PAGE}",
-            faderust_engine::lang::tr("Bitte im Browser öffnen:", "Please open in your browser:")
-        ))
+async fn remove_usb_cable(state: State<'_, AppState>) -> Result<(), String> {
+    cable::stop();
+    {
+        let mut config = state.config.lock().unwrap_or_else(|e| e.into_inner());
+        config.usb_cable = false;
+        config.save(&state.path).map_err(|e| e.to_string())?;
     }
+    tauri::async_runtime::spawn_blocking(cable::remove)
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Name of the plugin file in the app's resources (put there by the release).
@@ -872,11 +865,11 @@ fn main() {
             open_log_folder,
             get_autostart,
             set_autostart,
-            open_cable_page,
             get_usb_cable,
             set_usb_cable,
             set_usb_cable_count,
             setup_usb_cable,
+            remove_usb_cable,
             get_config,
             save_config,
             set_gain,

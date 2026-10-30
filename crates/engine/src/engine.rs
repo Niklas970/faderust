@@ -707,8 +707,8 @@ impl<B: AudioBackend> Engine<B> {
 }
 
 /// Whether playing on `output` reaches the recording device `input`: the
-/// two ends of one virtual cable, named alike except for "Input"/"Output"
-/// ("CABLE Input (VB-Audio Virtual Cable)", "VoiceMeeter Input" …).
+/// two ends of one virtual cable: Faderust's own (named alike) and, as a
+/// safety net, other cables named alike except for "Input"/"Output".
 pub fn feeds_back(output: &str, input: &str) -> bool {
     let output = output.to_lowercase();
     // Faderust's USB cables: "Speakers (Faderust Cable 2)" / "Microphone (Faderust Cable 2)".
