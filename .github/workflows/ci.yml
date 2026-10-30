@@ -12,7 +12,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
+  # Format and Clippy run next to the tests instead of before them: both need
+  # their own build, so one job spent ~80 s of its 150 s on them in a row.
+  lint:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -32,6 +34,23 @@ jobs:
         working-directory: crates/app/ui
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  # Keeps its name: it is the check a branch rule may require.
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: crates/app/ui/package-lock.json
+      - run: npm ci
+        working-directory: crates/app/ui
+      - run: npm run build
+        working-directory: crates/app/ui
       - run: cargo test --workspace
       # Experimental USB cable: a test build for trying it on a real machine.
       - run: cargo build --release -p faderust-usbcable --example serve
