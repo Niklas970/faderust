@@ -122,6 +122,9 @@ pub struct Config {
     pub gains: Vec<Vec<Gain>>,
     #[serde(default)]
     pub presets: Vec<Preset>,
+    /// Runs Faderust's own USB cable, see [`crate::cable`].
+    #[serde(default)]
+    pub usb_cable: bool,
 }
 
 /// Resizes `gains` to `inputs` × `outputs` (new pairs at 0 dB) and clamps.
@@ -255,6 +258,7 @@ mod tests {
             ],
             gains: vec![],
             presets: vec![],
+            usb_cable: false,
         }
         .normalized()
     }

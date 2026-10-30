@@ -1,6 +1,7 @@
 <script>
   import { onMount, untrack } from "svelte";
   import { t } from "./i18n.svelte.js";
+  import UsbCableButton from "./UsbCableButton.svelte";
   import Log from "./Log.svelte";
   import Selftest from "./Selftest.svelte";
   import {
@@ -8,6 +9,9 @@
     getAutostart,
     getDevices,
     getStreamDeck,
+    getUsbCable,
+    setUsbCable,
+    setupUsbCable,
     installStreamDeck,
     getWindowsAudio,
     isCable,
@@ -49,6 +53,33 @@
     if (deck.update) return t("deck.available", { from: deck.installed ?? t("deck.old"), to: deck.bundled });
     return t("deck.current", { version: deck.installed });
   });
+
+  // Faderust's own USB cable; applies right away, like autostart.
+  let usb = $state(null);
+  let usbError = $state("");
+  let usbBusy = $state(false);
+  const lookAtUsb = () => getUsbCable().then((u) => (usb = u), () => {});
+  lookAtUsb();
+  onMount(() => {
+    const timer = setInterval(lookAtUsb, 2000);
+    return () => clearInterval(timer);
+  });
+  async function usbAction(action) {
+    usbBusy = true;
+    try {
+      await action();
+      usbError = "";
+    } catch (e) {
+      usbError = String(e);
+    }
+    usbBusy = false;
+    lookAtUsb();
+  }
+  const setupUsb = () =>
+    usbAction(async () => {
+      await setupUsbCable();
+      await setUsbCable(true);
+    });
 
   let selftestOpen = $state(false);
   let logOpen = $state(false);
@@ -281,6 +312,7 @@
           : t("settings.micNoCable")}
         {t("settings.micInstall")}
       </p>
+      <UsbCableButton />
       <button onclick={() => openCablePage()}>{t("cable.setup")}</button>
     </div>
   {/if}
@@ -297,6 +329,32 @@
     {t("settings.autostart")}
   </label>
   {#if autostartError}<p class="error">{autostartError}</p>{/if}
+
+  {#if usb?.supported}
+    <h3>{t("usbcable.title")}</h3>
+    {#if usb.installed}
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={usb.running}
+          disabled={usbBusy}
+          onchange={(e) => usbAction(() => setUsbCable(e.currentTarget.checked))}
+        />
+        {t("usbcable.enable")}
+      </label>
+      {#if usb.running}
+        <p class="note">{usb.attached ? t("usbcable.attached") : t("usbcable.waiting")}</p>
+      {/if}
+    {:else}
+      <div class="deck">
+        <span>{t("usbcable.hint")}</span>
+        <button disabled={usbBusy} onclick={setupUsb}>
+          {usbBusy ? t("usbcable.working") : t("usbcable.setup")}
+        </button>
+      </div>
+    {/if}
+    {#if usbError}<p class="error">{usbError}</p>{/if}
+  {/if}
 
   {#if deck?.bundled}
     <h3>Stream Deck</h3>
@@ -448,6 +506,10 @@
   }
   .error {
     color: var(--danger);
+  }
+  .note {
+    color: var(--muted);
+    margin: 4px 0 0;
   }
   footer {
     display: flex;

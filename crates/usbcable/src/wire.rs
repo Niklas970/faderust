@@ -148,6 +148,8 @@ pub enum Command {
         input: bool,
         endpoint: u32,
         buffer_len: u32,
+        /// Frame the host scheduled the first packet for (isochronous).
+        start_frame: u32,
         setup: [u8; 8],
         iso: Vec<IsoPacket>,
         /// Data of an OUT transfer.
@@ -169,6 +171,7 @@ pub fn read_command(r: &mut impl Read) -> io::Result<Command> {
             let input = u32_at(&h, 12) == 1;
             let endpoint = u32_at(&h, 16);
             let buffer_len = u32_at(&h, 24);
+            let start_frame = u32_at(&h, 28);
             let packets = u32_at(&h, 32);
             let mut setup = [0u8; 8];
             setup.copy_from_slice(&h[40..48]);
@@ -196,6 +199,7 @@ pub fn read_command(r: &mut impl Read) -> io::Result<Command> {
                 input,
                 endpoint,
                 buffer_len,
+                start_frame,
                 setup,
                 iso,
                 data,
@@ -228,6 +232,8 @@ pub struct RetSubmit<'a> {
     pub endpoint: u32,
     pub status: i32,
     pub actual: u32,
+    /// Echoed from the command; the host reads it back for isochronous URBs.
+    pub start_frame: u32,
     pub data: &'a [u8],
     /// Packet descriptors of an isochronous transfer; `None` for the others.
     pub iso: Option<&'a [IsoPacket]>,
@@ -237,7 +243,7 @@ pub fn encode_ret_submit(r: &RetSubmit) -> Vec<u8> {
     let mut out = ret_header(RET_SUBMIT, r.seq, r.input, r.endpoint);
     out.extend(r.status.to_be_bytes());
     out.extend(r.actual.to_be_bytes());
-    out.extend(0u32.to_be_bytes()); // start_frame
+    out.extend(r.start_frame.to_be_bytes());
     out.extend(r.iso.map_or(NO_PACKETS, |p| p.len() as u32).to_be_bytes());
     out.extend(0u32.to_be_bytes()); // error_count
     out.extend([0u8; 8]);
@@ -348,6 +354,7 @@ mod tests {
             endpoint: 0,
             status: 0,
             actual: 0,
+            start_frame: 0,
             data: &[],
             iso: None,
         };

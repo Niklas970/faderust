@@ -134,11 +134,15 @@ pub trait SystemAudio: Send + Sync {
     ) -> Result<(), RouterError>;
 }
 
-/// True for VB-Audio's virtual cables, by device name. Matches both sides
-/// ("CABLE Input" for playback, "CABLE Output" for capture) and the A/B cables.
+/// Bracketed part of the device names of Faderust's USB cable.
+const OWN_CABLE: &str = "(faderust cable)";
+
+/// True for virtual cables, by device name: VB-Audio's (both sides, "CABLE
+/// Input" for playback, "CABLE Output" for capture, and the A/B cables) and
+/// Faderust's own USB cable.
 pub fn is_virtual_cable(name: &str) -> bool {
     let n = name.to_lowercase();
-    n.contains("vb-audio") || n.starts_with("cable")
+    n.contains("vb-audio") || n.starts_with("cable") || n.contains(OWN_CABLE)
 }
 
 /// Merges sessions into one entry per executable. A program counts as
@@ -212,6 +216,8 @@ mod tests {
         assert!(is_virtual_cable("CABLE Input (VB-Audio Virtual Cable)"));
         assert!(is_virtual_cable("CABLE-A Output (VB-Audio Cable A)"));
         assert!(is_virtual_cable("cable input"));
+        assert!(is_virtual_cable("Lautsprecher (Faderust Cable)"));
+        assert!(is_virtual_cable("Microphone (Faderust Cable)"));
         assert!(!is_virtual_cable("Lautsprecher (USB Sound Card)"));
         assert!(!is_virtual_cable("Kopfhörer (Cable Guy Headset)"));
     }

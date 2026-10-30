@@ -1,12 +1,13 @@
 //! The virtual device: a USB Audio Class 1.0 sound card with one stereo
 //! speaker (endpoint 1 OUT) and one stereo microphone (endpoint 2 IN), 48 kHz,
-//! 16 bit. What is played into the speaker comes out of the microphone, like
+//! 24 bit. What is played into the speaker comes out of the microphone, like
 //! a cable.
 
 use crate::wire::DeviceInfo;
 
 pub const RATE: u32 = 48_000;
-pub const FRAME_BYTES: usize = 4; // 2 channels * 16 bit
+pub const BYTES_PER_SAMPLE: usize = 3; // 24 bit
+pub const FRAME_BYTES: usize = 2 * BYTES_PER_SAMPLE; // stereo
 /// Bytes of one 1 ms USB frame.
 pub const PACKET_BYTES: usize = RATE as usize / 1000 * FRAME_BYTES;
 /// One more sample than average, so a rate that drifts upward still fits.
@@ -15,20 +16,24 @@ const MAX_PACKET: u16 = (PACKET_BYTES + FRAME_BYTES) as u16;
 pub const EP_PLAY: u32 = 1;
 pub const EP_REC: u32 = 2;
 
+/// Windows shows this in the device names ("Speakers (Faderust Cable)").
+pub const PRODUCT_NAME: &str = "Faderust Cable";
+
 const VENDOR: u16 = 0x1209; // pid.codes test range
 const PRODUCT: u16 = 0x0001;
 
 fn string_table(index: u8) -> Option<&'static str> {
     match index {
         1 => Some("Faderust"),
-        2 => Some("Faderust Cable"),
+        2 => Some(PRODUCT_NAME),
         3 => Some("0001"),
         _ => None,
     }
 }
 
 pub fn device_descriptor() -> Vec<u8> {
-    let mut d = vec![18, 1, 0x00, 0x02, 0, 0, 0, 64];
+    // USB 1.1: the stream descriptors are written for full speed.
+    let mut d = vec![18, 1, 0x10, 0x01, 0, 0, 0, 64];
     d.extend(VENDOR.to_le_bytes());
     d.extend(PRODUCT.to_le_bytes());
     d.extend([0x00, 0x01, 1, 2, 3, 1]);
@@ -43,8 +48,8 @@ fn streaming_interface(number: u8, terminal: u8, endpoint: u8, attributes: u8) -
     d.extend([9, 4, number, 1, 1, 1, 2, 0, 0]);
     // AS general: terminal link, delay 1, PCM.
     d.extend([7, 0x24, 1, terminal, 1, 1, 0]);
-    // Format type I: 2 channels, 2 bytes, 16 bit, one fixed rate.
-    d.extend([11, 0x24, 2, 1, 2, 2, 16, 1]);
+    // Format type I: 2 channels, 3 bytes, 24 bit, one fixed rate.
+    d.extend([11, 0x24, 2, 1, 2, BYTES_PER_SAMPLE as u8, 24, 1]);
     d.extend(&RATE.to_le_bytes()[..3]);
     // Isochronous endpoint, 1 ms interval.
     d.extend([9, 5, endpoint, attributes]);
@@ -100,7 +105,8 @@ pub fn info(busid: &str) -> DeviceInfo {
         busid: busid.to_string(),
         busnum: 1,
         devnum: 2,
-        speed: 3,
+        // Full speed: 1 ms frames, as the endpoint intervals assume.
+        speed: 2,
         vendor: VENDOR,
         product: PRODUCT,
         bcd_device: 0x0100,
@@ -163,6 +169,9 @@ impl State {
                 }
             }
             (0, 0x00) => truncated(vec![0, 0]), // GET_STATUS
+            // CLEAR_FEATURE / SET_FEATURE, mostly ENDPOINT_HALT: Windows
+            // clears the halt of each audio endpoint before it streams.
+            (0, 0x01 | 0x03) => Control::Done(Vec::new()),
             (0, 0x08) => truncated(vec![self.configuration]),
             (0, 0x09) => {
                 self.configuration = value as u8;
@@ -250,6 +259,16 @@ mod tests {
         assert!(s.playing() && s.recording());
         s.control(setup(1, 11, 0, 1, 0));
         assert!(!s.playing() && s.recording());
+    }
+
+    #[test]
+    fn host_can_clear_an_endpoint_halt() {
+        let mut s = State::default();
+        // CLEAR_FEATURE(ENDPOINT_HALT) on the playback endpoint.
+        assert!(matches!(
+            s.control(setup(0x02, 1, 0, 1, 0)),
+            Control::Done(d) if d.is_empty()
+        ));
     }
 
     #[test]

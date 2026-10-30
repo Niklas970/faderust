@@ -7,6 +7,7 @@
 use std::collections::HashSet;
 use std::io::{self, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -20,12 +21,54 @@ use crate::wire::{self, Command, IsoPacket, Request, RetSubmit};
 const EPIPE: i32 = -32;
 const ECONNRESET: i32 = -104;
 
+/// Writes what the host does to stderr: every control request, and a summary
+/// of the isochronous traffic once a second.
+pub static VERBOSE: AtomicBool = AtomicBool::new(false);
+
+fn log(message: impl FnOnce() -> String) {
+    if VERBOSE.load(Ordering::Relaxed) {
+        eprintln!("usbcable: {}", message());
+    }
+}
+
+static SHOWN: AtomicU32 = AtomicU32::new(0);
+
 pub const DEFAULT_PORT: u16 = 3240;
 pub const BUSID: &str = "1-1";
 
 pub struct Server {
     pub ring: Arc<Ring>,
     listener: TcpListener,
+    stop: Arc<AtomicBool>,
+    /// The attached host's connection, so that stopping can end it.
+    active: Arc<Mutex<Option<TcpStream>>>,
+}
+
+/// Stops a running [`Server`] from another thread.
+#[derive(Clone)]
+pub struct Stopper {
+    stop: Arc<AtomicBool>,
+    active: Arc<Mutex<Option<TcpStream>>>,
+    port: u16,
+}
+
+impl Stopper {
+    /// Whether a host (Windows) is attached right now.
+    pub fn attached(&self) -> bool {
+        self.active
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_some()
+    }
+
+    pub fn stop(&self) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(s) = self.active.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            let _ = s.shutdown(Shutdown::Both);
+        }
+        // Wakes the accept call.
+        let _ = TcpStream::connect(("127.0.0.1", self.port));
+    }
 }
 
 impl Server {
@@ -34,18 +77,32 @@ impl Server {
             ring: Arc::new(Ring::new()),
             // Local only: nobody else on the network may attach.
             listener: TcpListener::bind(("127.0.0.1", port))?,
+            stop: Arc::new(AtomicBool::new(false)),
+            active: Arc::new(Mutex::new(None)),
         })
+    }
+
+    pub fn stopper(&self) -> Stopper {
+        Stopper {
+            stop: self.stop.clone(),
+            active: self.active.clone(),
+            port: self.port(),
+        }
     }
 
     pub fn port(&self) -> u16 {
         self.listener.local_addr().map_or(0, |a| a.port())
     }
 
-    /// Serves connections one after the other until the listener fails.
+    /// Serves connections one after the other until the listener fails or
+    /// [`Stopper::stop`] is called.
     pub fn run(&self) -> io::Result<()> {
         for stream in self.listener.incoming() {
             let stream = stream?;
-            if let Err(e) = serve(stream, &self.ring) {
+            if self.stop.load(Ordering::SeqCst) {
+                break;
+            }
+            if let Err(e) = serve(stream, &self.ring, &self.active, &self.stop) {
                 // A closed connection is the normal way to detach.
                 if e.kind() != io::ErrorKind::UnexpectedEof {
                     eprintln!("usbcable: connection ended: {e}");
@@ -72,6 +129,7 @@ impl Shared {
 }
 
 struct IsoJob {
+    start_frame: u32,
     seq: u32,
     input: bool,
     endpoint: u32,
@@ -79,7 +137,12 @@ struct IsoJob {
     data: Vec<u8>,
 }
 
-fn serve(mut stream: TcpStream, ring: &Arc<Ring>) -> io::Result<()> {
+fn serve(
+    mut stream: TcpStream,
+    ring: &Arc<Ring>,
+    active: &Mutex<Option<TcpStream>>,
+    stop: &AtomicBool,
+) -> io::Result<()> {
     stream.set_nodelay(true)?;
     let dev = device::info(BUSID);
     match wire::read_request(&mut stream)? {
@@ -90,7 +153,15 @@ fn serve(mut stream: TcpStream, ring: &Arc<Ring>) -> io::Result<()> {
         }
         Request::Import { busid } if busid == BUSID => {
             wire::write_all(&mut stream, &wire::encode_import_reply(&dev))?;
-            run_urbs(stream, ring)
+            *active.lock().unwrap_or_else(|e| e.into_inner()) = stream.try_clone().ok();
+            // A stop that came before the connection was registered would
+            // otherwise leave it running.
+            if stop.load(Ordering::SeqCst) {
+                let _ = stream.shutdown(Shutdown::Both);
+            }
+            let result = run_urbs(stream, ring);
+            *active.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            result
         }
         Request::Import { .. } => wire::write_all(&mut stream, &wire::encode_import_error()),
     }
@@ -121,16 +192,28 @@ fn run_urbs(stream: TcpStream, ring: &Arc<Ring>) -> io::Result<()> {
                 iso,
                 data,
                 buffer_len,
+                start_frame,
             }) => {
                 let sent = if endpoint == 0 {
                     control(&shared, seq, input, setup, buffer_len)
                 } else {
+                    // The first few only: there are hundreds per second.
+                    if SHOWN.fetch_add(1, Ordering::Relaxed) < 10 {
+                        log(|| {
+                            format!(
+                                "URB {seq} endpoint {endpoint} {}: {} packets, {buffer_len} bytes",
+                                if input { "in" } else { "out" },
+                                iso.len()
+                            )
+                        });
+                    }
                     shared
                         .pending
                         .lock()
                         .unwrap_or_else(|e| e.into_inner())
                         .insert(seq);
                     let job = IsoJob {
+                        start_frame,
                         seq,
                         input,
                         endpoint,
@@ -184,6 +267,21 @@ fn control(
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .control(setup);
+    log(|| {
+        format!(
+            "control {:02x} {:02x} value {:#06x} index {} length {} -> {}",
+            setup[0],
+            setup[1],
+            u16::from_le_bytes([setup[2], setup[3]]),
+            u16::from_le_bytes([setup[4], setup[5]]),
+            u16::from_le_bytes([setup[6], setup[7]]),
+            if matches!(outcome, Control::Done(_)) {
+                "ok"
+            } else {
+                "stall"
+            },
+        )
+    });
     let reply = match outcome {
         Control::Done(mut data) => {
             data.truncate(buffer_len as usize);
@@ -194,6 +292,7 @@ fn control(
                 endpoint: 0,
                 status: 0,
                 actual,
+                start_frame: 0,
                 data: &data,
                 iso: None,
             })
@@ -204,6 +303,7 @@ fn control(
             endpoint: 0,
             status: EPIPE,
             actual: 0,
+            start_frame: 0,
             data: &[],
             iso: None,
         }),
@@ -216,14 +316,42 @@ fn spawn_pacer(shared: Arc<Shared>, jobs: Receiver<IsoJob>) -> thread::JoinHandl
     thread::spawn(move || {
         // The moment up to which this endpoint's frames are already spoken for.
         let mut clock: Option<Instant> = None;
+        let (mut urbs, mut packets, mut late_ms) = (0u32, 0u32, 0u128);
+        let mut report = Instant::now();
         for job in jobs {
+            urbs += 1;
+            packets += job.iso.len() as u32;
+            if urbs == 1 {
+                log(|| {
+                    format!(
+                        "first URB on endpoint {}: {} packets of {:?} bytes, start frame {}",
+                        job.endpoint,
+                        job.iso.len(),
+                        job.iso.first().map(|p| p.length),
+                        job.start_frame
+                    )
+                });
+            }
             let frames = job.iso.len().max(1) as u64;
             let now = Instant::now();
-            let start = clock.filter(|&c| c > now).unwrap_or(now);
+            // Keep to one absolute schedule so that late wake-ups are made up
+            // for; only a long stall (the host paused) starts a new one.
+            let start = clock
+                .filter(|&c| now.duration_since(c.min(now)) < Duration::from_millis(50))
+                .unwrap_or(now);
             let due = start + Duration::from_millis(frames);
             clock = Some(due);
             if let Some(wait) = due.checked_duration_since(Instant::now()) {
                 thread::sleep(wait);
+            } else {
+                late_ms += Instant::now().duration_since(due).as_millis();
+            }
+            if report.elapsed() >= Duration::from_secs(1) {
+                log(|| {
+                    format!("endpoint {}: {urbs} URBs, {packets} packets, {late_ms} ms late in the last second", job.endpoint)
+                });
+                (urbs, packets, late_ms) = (0, 0, 0);
+                report = Instant::now();
             }
             if complete(&shared, job).is_err() {
                 return;
@@ -250,7 +378,6 @@ fn complete(shared: &Shared, job: IsoJob) -> io::Result<()> {
     let mut out = Vec::new();
     if job.input {
         // Microphone: one packet of the wire per frame.
-        let mut total = 0u32;
         for p in &mut iso {
             let len = (p.length as usize).min(PACKET_BYTES);
             let mut chunk = vec![0u8; len];
@@ -258,10 +385,10 @@ fn complete(shared: &Shared, job: IsoJob) -> io::Result<()> {
                 shared.ring.read(&mut chunk);
             }
             out.extend(&chunk);
-            p.offset = total;
+            // The offset stays where the host put the packet: the data is
+            // sent packed and the host spreads it out again with it.
             p.actual = len as u32;
             p.status = 0;
-            total += len as u32;
         }
     } else {
         // Speaker: hand the samples to the wire.
@@ -286,6 +413,7 @@ fn complete(shared: &Shared, job: IsoJob) -> io::Result<()> {
         endpoint: job.endpoint,
         status: 0,
         actual,
+        start_frame: job.start_frame,
         data: &out,
         iso: Some(&iso),
     });
@@ -434,6 +562,30 @@ mod tests {
     }
 
     #[test]
+    fn recording_keeps_packet_offsets_and_start_frame() {
+        const ASKED: usize = PACKET_BYTES + crate::device::FRAME_BYTES;
+        let server = start();
+        let mut s = connect(&server);
+        // The host asks for one sample more per packet than the cable gives:
+        // the descriptors must keep the host's offsets, the data is packed.
+        let mut submit = cmd_submit(1, true, EP_REC, [0; 8], 2 * ASKED as u32, 2);
+        submit[28..32].copy_from_slice(&1234u32.to_be_bytes());
+        s.write_all(&submit).unwrap();
+        s.write_all(&iso_descs(2, ASKED as u32)).unwrap();
+        let h = read_reply_header(&mut s);
+        assert_eq!(u32::from_be_bytes(h[28..32].try_into().unwrap()), 1234);
+        let actual = u32::from_be_bytes(h[24..28].try_into().unwrap()) as usize;
+        assert_eq!(actual, 2 * PACKET_BYTES);
+        let mut rest = vec![0u8; actual + 32];
+        s.read_exact(&mut rest).unwrap();
+        let descs = &rest[actual..];
+        let offset = |i: usize| u32::from_be_bytes(descs[i * 16..i * 16 + 4].try_into().unwrap());
+        let got = |i: usize| u32::from_be_bytes(descs[i * 16 + 8..i * 16 + 12].try_into().unwrap());
+        assert_eq!((offset(0), offset(1)), (0, ASKED as u32));
+        assert_eq!((got(0), got(1)), (PACKET_BYTES as u32, PACKET_BYTES as u32));
+    }
+
+    #[test]
     fn iso_urbs_are_paced_like_usb_frames() {
         let server = start();
         let mut s = connect(&server);
@@ -505,6 +657,23 @@ mod tests {
             s.read(&mut extra).is_err(),
             "the cancelled URB was answered"
         );
+    }
+
+    #[test]
+    fn stopper_ends_the_server_and_the_attached_host() {
+        let server = Arc::new(Server::bind(0).unwrap());
+        let stopper = server.stopper();
+        let runner = server.clone();
+        let done = thread::spawn(move || runner.run());
+        let mut s = connect(&server);
+        // A failure should show as an error, not as a test that never ends.
+        s.set_read_timeout(Some(std::time::Duration::from_secs(10)))
+            .unwrap();
+        stopper.stop();
+        // The host's connection is closed and run() returns.
+        let mut byte = [0u8; 1];
+        assert!(matches!(s.read(&mut byte), Ok(0) | Err(_)));
+        assert!(done.join().unwrap().is_ok());
     }
 
     #[test]
