@@ -1,114 +1,159 @@
-//! iced prototype of the desk strips: fader with scale, LED meter, readout and
-//! mute. Meant to judge look and CPU, not to be wired to the engine.
+//! iced prototype of the Faderust window: title bar, desk (strips for inputs
+//! and output masters with A1-A3), matrix and the dialogs. Not connected to
+//! the engine; the meters show made-up levels. Meant to judge look and CPU.
 //!
-//! `FADERUST_SHOT=out.png` saves one screenshot after a moment and exits.
+//! `FADERUST_SHOT=out.png` saves one screenshot after a moment and exits;
+//! `FADERUST_VIEW=matrix` and `FADERUST_DIALOG=<name>` pick what it shows.
 
+mod dialogs;
+mod fader;
 mod scale;
+mod style;
 
 use std::time::{Duration, Instant};
 
 use iced::alignment::{Horizontal, Vertical};
 use iced::gradient;
-use iced::mouse;
-use iced::widget::canvas::{self, Canvas, Fill, Frame, Geometry, Path, Stroke, Text};
-use iced::widget::{
-    button, checkbox, column, container, mouse_area, opaque, pick_list, row, space, stack, text,
-    text_input,
-};
+use iced::widget::canvas::{self, Canvas};
+use iced::widget::{button, column, container, row, space, stack, text};
 use iced::{
-    window, Background, Border, Color, Element, Font, Length, Pixels, Point, Rectangle, Renderer,
-    Shadow, Size, Subscription, Task, Theme,
+    window, Background, Border, Color, Element, Length, Shadow, Size, Subscription, Task, Theme,
 };
 
-const ACCENT: Color = Color::from_rgb(0.851, 0.514, 0.310);
-const ACCENT_LIGHT: Color = Color::from_rgb(0.918, 0.708, 0.576);
-const SIGNAL: Color = Color::from_rgb(0.361, 0.812, 0.416);
-const AMBER: Color = Color::from_rgb(0.886, 0.694, 0.235);
-const DANGER: Color = Color::from_rgb(0.878, 0.322, 0.294);
-const BG: Color = Color::BLACK;
-const PANEL_2: Color = Color::from_rgb(0.090, 0.098, 0.110);
-const WELL: Color = Color::from_rgb(0.020, 0.020, 0.024);
-const BORDER: Color = Color::from_rgb(0.200, 0.216, 0.239);
-const TEXT: Color = Color::from_rgb(0.925, 0.933, 0.945);
-const MUTED: Color = Color::from_rgb(0.663, 0.686, 0.718);
+use fader::{Fader, Kind};
+use style::*;
 
-const STRIP_W: f32 = 124.0;
-const STRIP_H: f32 = 330.0;
-const PAD: f32 = 18.0;
-const MONO: Font = Font::MONOSPACE;
+pub const OUT_NAMES: [&str; 3] = ["Lautsprecher", "Kopfhörer", "Stream"];
+pub const DEV_OUT: &[&str] = &[
+    "Lautsprecher (Realtek Audio)",
+    "Kopfhörer (WH-1000XM5)",
+    "CABLE Input (VB-Audio)",
+    "Stream (Elgato Wave:3)",
+];
+pub const DEV_IN: &[&str] = &[
+    "Mikrofon (Blue Yeti)",
+    "CABLE Output (VB-Audio)",
+    "Programm: Spiel",
+    "Programm: Browser",
+];
+pub const APP_OUT: &[&str] = &[
+    "Windows-Standard",
+    "CABLE Input (VB-Audio)",
+    "Kopfhörer (WH-1000XM5)",
+];
+pub const RELEASE: &[&str] = &["Nie", "Nach 5 s", "Nach 30 s", "Nach 2 min"];
+pub const HIDE_AFTER: &[&str] = &["Nie", "Nach 5 s", "Nach 2 min"];
 
-fn rgb(r: u8, g: u8, b: u8) -> Color {
-    Color::from_rgb8(r, g, b)
+pub struct Strip {
+    pub cache: canvas::Cache,
+    pub label: &'static str,
+    pub db: f32,
+    pub muted: bool,
+    pub shown: f32,
+    phase: f32,
+    pub routes: [bool; 3],
 }
 
-struct Strip {
-    /// Everything but the meter; redrawn only when the fader or mute changes.
-    cache: canvas::Cache,
-    label: &'static str,
-    db: f32,
-    muted: bool,
-    /// Simulated source level in dBFS.
-    shown: f32,
+pub struct Out {
+    pub cache: canvas::Cache,
+    pub label: &'static str,
+    pub db: f32,
+    pub muted: bool,
+    pub shown: f32,
     phase: f32,
 }
 
+#[derive(Clone, PartialEq)]
+pub struct Fx {
+    pub denoise: bool,
+    pub low_cut: u16,
+    pub eq: [f32; 3],
+    pub gate: bool,
+    pub gate_db: f32,
+}
+
+pub struct AppRow {
+    pub name: &'static str,
+    pub device: &'static str,
+    pub input: bool,
+}
+
+pub struct Settings {
+    pub autostart: bool,
+    pub inputs: Vec<(String, &'static str)>,
+    pub outputs: Vec<(String, &'static str, String, &'static str)>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum View {
+pub enum View {
     Desk,
     Matrix,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Lang {
-    System,
-    German,
-    English,
+pub enum Dialog {
+    Presets,
+    Windows,
+    Settings,
+    Design,
+    Apps,
+    Fx(usize),
 }
 
-impl std::fmt::Display for Lang {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.write_str(match self {
-            Lang::System => "Wie Windows",
-            Lang::German => "Deutsch",
-            Lang::English => "English",
-        })
-    }
-}
-
-struct Settings {
-    autostart: bool,
-    bt_release: bool,
-    release_secs: String,
-    hide_quiet: bool,
-    lang: Lang,
-}
-
-const OUTPUTS: [&str; 3] = ["Lautsprecher", "Kopfhörer", "Stream"];
-
-struct App {
-    view: View,
-    dialog: bool,
-    settings: Settings,
-    /// Matrix gain per input and output in dB; `OFF` = not routed.
-    matrix: [[f32; 3]; 4],
-    strips: Vec<Strip>,
+pub struct App {
+    pub view: View,
+    pub masters_left: bool,
+    pub hide_after: &'static str,
+    pub dialog: Option<Dialog>,
+    pub strips: Vec<Strip>,
+    pub outs: Vec<Out>,
+    pub fx: Vec<Fx>,
+    pub apps: Vec<AppRow>,
+    pub settings: Settings,
+    pub presets: Vec<String>,
+    pub new_preset: String,
+    pub win_default: usize,
+    pub win_volume: [f32; 3],
     last: Instant,
     started: Instant,
     shot: Option<String>,
 }
 
 #[derive(Debug, Clone)]
-enum Message {
-    SetView(View),
-    Dialog(bool),
+pub enum Edit {
+    Denoise(usize, bool),
+    LowCut(usize, u16),
+    Eq(usize, usize, f32),
+    Gate(usize, bool),
+    GateDb(usize, f32),
+    ResetFx(usize),
+    AppDevice(usize, &'static str),
+    AppInput(usize),
     Autostart(bool),
-    BtRelease(bool),
-    ReleaseSecs(String),
-    HideQuiet(bool),
-    Language(Lang),
-    Cell(usize, usize),
+    InLabel(usize, String),
+    InDevice(usize, &'static str),
+    OutLabel(usize, String),
+    OutDevice(usize, &'static str),
+    OutBuffer(usize, String),
+    OutRelease(usize, &'static str),
+    MastersLeft(bool),
+    HideAfter(&'static str),
+    NewPreset(String),
+    SavePreset,
+    WinDefault(usize),
+    WinVolume(usize, f32),
+}
+
+#[derive(Debug, Clone)]
+pub enum Message {
+    SetView(View),
+    Open(Option<Dialog>),
+    Edit(Edit),
+    Route(usize, usize),
     Level(usize, f32),
+    Master(usize, f32),
     Mute(usize),
+    MasterMute(usize),
     Frame(Instant),
     Shot(window::Screenshot),
     Id(Option<window::Id>),
@@ -116,7 +161,16 @@ enum Message {
 
 impl App {
     fn new() -> (Self, Task<Message>) {
-        let strip = |label, db, phase| Strip {
+        let strip = |label, db, phase, routes| Strip {
+            cache: canvas::Cache::new(),
+            label,
+            db,
+            muted: false,
+            shown: -120.0,
+            phase,
+            routes,
+        };
+        let out = |label, db, phase| Out {
             cache: canvas::Cache::new(),
             label,
             db,
@@ -125,33 +179,80 @@ impl App {
             phase,
         };
         let mut strips = vec![
-            strip("Spiel", -6.0, 0.0),
-            strip("Voice", 0.0, 1.7),
-            strip("Musik", -14.0, 3.1),
-            strip("Browser", -24.0, 4.4),
+            strip("Mikrofon", 0.0, 1.7, [true, false, true]),
+            strip("Spiel", -6.0, 0.0, [true, true, false]),
+            strip("Musik", -14.0, 3.1, [true, false, true]),
+            strip("Browser", -24.0, 4.4, [false, true, false]),
         ];
         strips[3].muted = true;
+        let dialog = std::env::var("FADERUST_DIALOG")
+            .ok()
+            .and_then(|d| match d.as_str() {
+                "presets" => Some(Dialog::Presets),
+                "windows" => Some(Dialog::Windows),
+                "settings" => Some(Dialog::Settings),
+                "design" => Some(Dialog::Design),
+                "apps" => Some(Dialog::Apps),
+                "fx" => Some(Dialog::Fx(0)),
+                _ => None,
+            });
+        let fx = Fx {
+            denoise: true,
+            low_cut: 80,
+            eq: [0.0, 1.5, 0.0],
+            gate: true,
+            gate_db: -48.0,
+        };
         let app = App {
             view: if std::env::var("FADERUST_VIEW").as_deref() == Ok("matrix") {
                 View::Matrix
             } else {
                 View::Desk
             },
-            dialog: std::env::var("FADERUST_DIALOG").is_ok(),
+            masters_left: true,
+            hide_after: HIDE_AFTER[2],
+            dialog,
+            strips,
+            outs: vec![
+                out("Lautsprecher", 0.0, 0.4),
+                out("Kopfhörer", -3.0, 2.2),
+                out("Stream", 0.0, 3.6),
+            ],
+            fx: vec![fx.clone(), fx.clone(), fx.clone(), fx],
+            apps: vec![
+                AppRow {
+                    name: "Spiel (forza.exe)",
+                    device: APP_OUT[1],
+                    input: true,
+                },
+                AppRow {
+                    name: "Browser (brave.exe)",
+                    device: APP_OUT[0],
+                    input: true,
+                },
+                AppRow {
+                    name: "Spotify.exe",
+                    device: APP_OUT[0],
+                    input: false,
+                },
+                AppRow {
+                    name: "Discord.exe",
+                    device: APP_OUT[2],
+                    input: false,
+                },
+            ],
             settings: Settings {
                 autostart: true,
-                bt_release: true,
-                release_secs: "30".into(),
-                hide_quiet: true,
-                lang: Lang::System,
+                inputs: vec![("Mikrofon".into(), DEV_IN[0]), ("Spiel".into(), DEV_IN[2])],
+                outputs: vec![
+                    ("Lautsprecher".into(), DEV_OUT[0], "60".into(), RELEASE[0]),
+                    ("Kopfhörer".into(), DEV_OUT[1], "60".into(), RELEASE[2]),
+                ],
             },
-            matrix: [
-                [-6.0, -6.0, scale::OFF],
-                [0.0, 0.0, 0.0],
-                [-14.0, scale::OFF, -14.0],
-                [scale::OFF, -24.0, scale::OFF],
-            ],
-            strips,
+            presets: vec!["Spielen".into(), "Streamen".into(), "Nur Kopfhörer".into()],
+            new_preset: String::new(),
+            win_default: 0,
+            win_volume: [80.0, 55.0, 100.0],
             last: Instant::now(),
             started: Instant::now(),
             shot: std::env::var("FADERUST_SHOT").ok(),
@@ -162,41 +263,45 @@ impl App {
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::SetView(v) => self.view = v,
-            Message::Dialog(open) => self.dialog = open,
-            Message::Autostart(on) => self.settings.autostart = on,
-            Message::BtRelease(on) => self.settings.bt_release = on,
-            Message::ReleaseSecs(t) => {
-                if t.len() <= 3 && t.chars().all(|c| c.is_ascii_digit()) {
-                    self.settings.release_secs = t;
-                }
-            }
-            Message::HideQuiet(on) => self.settings.hide_quiet = on,
-            Message::Language(l) => self.settings.lang = l,
-            Message::Cell(i, o) => {
-                let g = &mut self.matrix[i][o];
-                *g = if *g <= scale::OFF { 0.0 } else { scale::OFF };
+            Message::Open(d) => self.dialog = d,
+            Message::Edit(e) => self.edit(e),
+            Message::Route(i, o) => {
+                self.strips[i].routes[o] = !self.strips[i].routes[o];
             }
             Message::Level(i, db) => {
                 self.strips[i].db = db;
                 self.strips[i].cache.clear();
             }
+            Message::Master(o, db) => {
+                self.outs[o].db = db;
+                self.outs[o].cache.clear();
+            }
             Message::Mute(i) => {
                 self.strips[i].muted = !self.strips[i].muted;
                 self.strips[i].cache.clear();
+            }
+            Message::MasterMute(o) => {
+                self.outs[o].muted = !self.outs[o].muted;
+                self.outs[o].cache.clear();
             }
             Message::Frame(now) => {
                 let dt = now.duration_since(self.last).as_secs_f32().min(0.1);
                 self.last = now;
                 let t = now.duration_since(self.started).as_secs_f32();
-                for s in &mut self.strips {
+                let ease = |shown: f32, phase: f32| {
                     // A made-up program level that breathes between -40 and -4 dB.
-                    let target =
-                        -22.0 + 18.0 * (t * 1.3 + s.phase).sin() * (t * 0.37 + s.phase).cos();
-                    s.shown = if target > s.shown {
-                        s.shown + (target - s.shown) * (1.0 - (-dt / 0.06).exp())
+                    let target = -22.0 + 18.0 * (t * 1.3 + phase).sin() * (t * 0.37 + phase).cos();
+                    if target > shown {
+                        shown + (target - shown) * (1.0 - (-dt / 0.06).exp())
                     } else {
-                        target.max(s.shown - 12.0 * dt)
-                    };
+                        target.max(shown - 12.0 * dt)
+                    }
+                };
+                for s in &mut self.strips {
+                    s.shown = ease(s.shown, s.phase);
+                }
+                for o in &mut self.outs {
+                    o.shown = ease(o.shown, o.phase);
                 }
                 if self.shot.is_some() && t > 1.5 {
                     return window::latest().map(Message::Id);
@@ -214,88 +319,300 @@ impl App {
         Task::none()
     }
 
-    fn desk(&self) -> Element<'_, Message> {
-        let strips =
-            self.strips.iter().enumerate().map(|(i, s)| {
-                let fader = Canvas::new(Fader {
-                    cache: &s.cache,
-                    db: s.db,
-                    muted: s.muted,
-                    level: s.shown,
-                    index: i,
+    fn edit(&mut self, e: Edit) {
+        match e {
+            Edit::Denoise(i, on) => self.fx[i].denoise = on,
+            Edit::LowCut(i, hz) => self.fx[i].low_cut = hz,
+            Edit::Eq(i, b, v) => self.fx[i].eq[b] = v,
+            Edit::Gate(i, on) => self.fx[i].gate = on,
+            Edit::GateDb(i, v) => self.fx[i].gate_db = v,
+            Edit::ResetFx(i) => {
+                self.fx[i] = Fx {
+                    denoise: false,
+                    low_cut: 0,
+                    eq: [0.0; 3],
+                    gate: false,
+                    gate_db: -50.0,
+                }
+            }
+            Edit::AppDevice(i, d) => self.apps[i].device = d,
+            Edit::AppInput(i) => self.apps[i].input = true,
+            Edit::Autostart(on) => self.settings.autostart = on,
+            Edit::InLabel(i, t) => self.settings.inputs[i].0 = t,
+            Edit::InDevice(i, d) => self.settings.inputs[i].1 = d,
+            Edit::OutLabel(i, t) => self.settings.outputs[i].0 = t,
+            Edit::OutDevice(i, d) => self.settings.outputs[i].1 = d,
+            Edit::OutBuffer(i, t) => {
+                if t.len() <= 3 && t.chars().all(|c| c.is_ascii_digit()) {
+                    self.settings.outputs[i].2 = t;
+                }
+            }
+            Edit::OutRelease(i, r) => self.settings.outputs[i].3 = r,
+            Edit::MastersLeft(l) => self.masters_left = l,
+            Edit::HideAfter(h) => self.hide_after = h,
+            Edit::NewPreset(t) => self.new_preset = t,
+            Edit::SavePreset => {
+                if !self.new_preset.trim().is_empty() {
+                    self.presets.push(std::mem::take(&mut self.new_preset));
+                }
+            }
+            Edit::WinDefault(i) => self.win_default = i,
+            Edit::WinVolume(i, v) => self.win_volume[i] = v.round(),
+        }
+    }
+
+    // --- title bar -------------------------------------------------------
+
+    fn titlebar(&self) -> Element<'_, Message> {
+        let nav = |icon: &'static str, label: &'static str, d: Dialog| {
+            let on = self.dialog == Some(d);
+            button(
+                row![
+                    text(icon)
+                        .size(13)
+                        .color(if on { ACCENT_LIGHT } else { MUTED }),
+                    text(label).size(13).color(TEXT)
+                ]
+                .spacing(6)
+                .align_y(Vertical::Center),
+            )
+            .padding([5, 10])
+            .on_press(Message::Open(Some(d)))
+            .style(move |_, status| nav_style(on, matches!(status, button::Status::Hovered)))
+        };
+        let win = |label: &'static str, close: bool| {
+            button(text(label).size(12).color(TEXT).center())
+                .width(34)
+                .height(28)
+                .style(move |_, status| {
+                    let hot = matches!(status, button::Status::Hovered);
+                    let mut s = nav_style(false, hot);
+                    if hot && close {
+                        s.background = Some(Background::Color(DANGER));
+                    }
+                    s
                 })
-                .width(STRIP_W)
-                .height(STRIP_H);
-                let readout = text(if s.db <= scale::OFF {
-                    "−∞ dB".to_string()
-                } else {
-                    format!("{} dB", scale::format(s.db))
-                })
-                .font(MONO)
-                .size(13)
-                .color(if s.muted { MUTED } else { ACCENT_LIGHT });
-                let label = container(text(s.label.to_uppercase()).size(12).color(TEXT).font(
-                    Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Font::DEFAULT
-                    },
-                ))
-                .width(Length::Fill)
-                .padding([3, 4])
-                .align_x(Horizontal::Center)
+        };
+        let brand = row![
+            container(space())
+                .width(18)
+                .height(18)
                 .style(|_| container::Style {
-                    background: Some(Background::Color(PANEL_2)),
+                    background: Some(Background::Color(ACCENT)),
                     border: Border {
-                        radius: 3.0.into(),
+                        radius: 4.0.into(),
                         ..Border::default()
                     },
                     ..container::Style::default()
-                });
-                let mute = button(
-                    text("MUTE")
-                        .size(12)
-                        .color(if s.muted {
-                            Color::WHITE
-                        } else {
-                            rgb(174, 180, 187)
-                        })
-                        .center(),
-                )
-                .width(72)
-                .height(32)
-                .on_press(Message::Mute(i))
-                .style(mute_style(s.muted));
-                column![label, fader, readout, mute]
-                    .spacing(8)
-                    .width(STRIP_W)
-                    .align_x(Horizontal::Center)
-                    .into()
+                }),
+            text("Faderust").size(15).font(BOLD).color(TEXT),
+            button(text("v0.5.8").size(11).color(MUTED))
+                .padding([2, 6])
+                .style(|_, _| nav_style(false, false)),
+        ]
+        .spacing(8)
+        .align_y(Vertical::Center);
+        container(
+            row![
+                brand,
+                space().width(Length::Fill),
+                nav("★", "Presets", Dialog::Presets),
+                nav("♪", "Windows-Sound", Dialog::Windows),
+                nav("⚙", "Einstellungen", Dialog::Settings),
+                nav("◐", "Design", Dialog::Design),
+                space().width(16),
+                win("–", false),
+                win("▢", false),
+                win("✕", true),
+            ]
+            .spacing(4)
+            .align_y(Vertical::Center),
+        )
+        .padding([6, 12])
+        .width(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(Background::Color(PANEL)),
+            border: Border {
+                color: BORDER,
+                width: 1.0,
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .into()
+    }
+
+    // --- desk ------------------------------------------------------------
+
+    fn label(text_: &str) -> Element<'static, Message> {
+        container(text(text_.to_uppercase()).size(12).color(TEXT).font(BOLD))
+            .width(Length::Fill)
+            .padding([3, 4])
+            .align_x(Horizontal::Center)
+            .style(|_| container::Style {
+                background: Some(Background::Color(PANEL_2)),
+                border: Border {
+                    radius: 3.0.into(),
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            })
+            .into()
+    }
+
+    fn readout(db: f32, muted: bool) -> Element<'static, Message> {
+        text(if db <= scale::OFF {
+            "−∞ dB".to_string()
+        } else {
+            format!("{} dB", scale::format(db))
+        })
+        .font(MONO)
+        .size(13)
+        .color(if muted { MUTED } else { ACCENT_LIGHT })
+        .into()
+    }
+
+    fn mute_button(on: bool, msg: Message, label: &'static str) -> Element<'static, Message> {
+        button(
+            text(label)
+                .size(12)
+                .color(if on { Color::WHITE } else { rgb(174, 180, 187) })
+                .center(),
+        )
+        .width(72)
+        .height(32)
+        .on_press(msg)
+        .style(mute_style(on))
+        .into()
+    }
+
+    fn strip(&self, i: usize) -> Element<'_, Message> {
+        let s = &self.strips[i];
+        let fader = Canvas::new(Fader {
+            cache: &s.cache,
+            db: s.db,
+            muted: s.muted,
+            level: s.shown,
+            kind: Kind::Input(i),
+            post_fader: false,
+        })
+        .width(STRIP_W)
+        .height(STRIP_H);
+        let routes = row((0..3).map(|o| {
+            let on = s.routes[o];
+            button(
+                text(format!("A{}", o + 1))
+                    .size(11)
+                    .color(if on { Color::BLACK } else { MUTED })
+                    .center(),
+            )
+            .width(30)
+            .height(22)
+            .padding(0)
+            .on_press(Message::Route(i, o))
+            .style(move |_, _| small_toggle(on))
+            .into()
+        }))
+        .spacing(4);
+        let fx = button(text("FX").size(11).color(TEXT).center())
+            .width(30)
+            .height(22)
+            .padding(0)
+            .on_press(Message::Open(Some(Dialog::Fx(i))))
+            .style(|_, _| small_toggle(false));
+        column![
+            Self::label(s.label),
+            fader,
+            Self::readout(s.db, s.muted),
+            Self::mute_button(s.muted, Message::Mute(i), "MUTE"),
+            routes,
+            fx,
+        ]
+        .spacing(8)
+        .width(STRIP_W)
+        .align_x(Horizontal::Center)
+        .into()
+    }
+
+    fn master(&self, o: usize) -> Element<'_, Message> {
+        let m = &self.outs[o];
+        let fader = Canvas::new(Fader {
+            cache: &m.cache,
+            db: m.db,
+            muted: m.muted,
+            level: m.shown,
+            kind: Kind::Master(o),
+            post_fader: true,
+        })
+        .width(STRIP_W)
+        .height(STRIP_H);
+        column![
+            Self::label(m.label),
+            fader,
+            Self::readout(m.db, m.muted),
+            Self::mute_button(m.muted, Message::MasterMute(o), "M"),
+            space().height(22 + 8 + 22),
+        ]
+        .spacing(8)
+        .width(STRIP_W)
+        .align_x(Horizontal::Center)
+        .into()
+    }
+
+    fn desk(&self) -> Element<'_, Message> {
+        let masters = row((0..self.outs.len()).map(|o| self.master(o))).spacing(18);
+        let inputs = row((0..self.strips.len()).map(|i| self.strip(i))).spacing(18);
+        let add = button(
+            text("+ Programm")
+                .size(13)
+                .color(TEXT)
+                .center()
+                .wrapping(iced::widget::text::Wrapping::None),
+        )
+        .width(110)
+        .padding([8, 14])
+        .on_press(Message::Open(Some(Dialog::Apps)))
+        .style(|_, _| flat(PANEL_2));
+        let divider = container(space())
+            .width(1)
+            .height(STRIP_H + 120.0)
+            .style(|_| container::Style {
+                background: Some(Background::Color(BORDER)),
+                ..container::Style::default()
             });
-        row(strips).spacing(18).into()
+        let inputs = row![inputs, add].spacing(18).align_y(Vertical::Top);
+        if self.masters_left {
+            row![masters, divider, inputs].spacing(24).into()
+        } else {
+            row![inputs, divider, masters].spacing(24).into()
+        }
     }
 
     fn matrix(&self) -> Element<'_, Message> {
-        let head = row![space().width(110)].extend(OUTPUTS.iter().map(|o| {
-            container(text(o.to_uppercase()).size(12).color(TEXT))
+        let head = row![space().width(110)].extend(OUT_NAMES.iter().map(|o| {
+            container(text(o.to_uppercase()).size(12).color(TEXT).font(BOLD))
                 .width(110)
                 .align_x(Horizontal::Center)
                 .into()
         }));
         let mut rows = column![head].spacing(10);
         for (i, s) in self.strips.iter().enumerate() {
-            let cells = (0..OUTPUTS.len()).map(|o| {
-                let g = self.matrix[i][o];
-                let on = g > scale::OFF;
+            let cells = (0..OUT_NAMES.len()).map(|o| {
+                let on = s.routes[o];
                 button(
-                    text(if on { scale::format(g) } else { "AUS".into() })
-                        .font(MONO)
-                        .size(13)
-                        .color(if on { Color::BLACK } else { MUTED })
-                        .center(),
+                    text(if on {
+                        scale::format(s.db)
+                    } else {
+                        "AUS".into()
+                    })
+                    .font(MONO)
+                    .size(13)
+                    .color(if on { Color::BLACK } else { MUTED })
+                    .center(),
                 )
                 .width(110)
                 .height(40)
-                .on_press(Message::Cell(i, o))
+                .on_press(Message::Route(i, o))
                 .style(move |_, _| button::Style {
                     background: Some(Background::Color(if on { SIGNAL } else { PANEL_2 })),
                     text_color: Color::WHITE,
@@ -309,15 +626,18 @@ impl App {
                 .into()
             });
             rows = rows.push(
-                row![container(text(s.label.to_uppercase()).size(12).color(TEXT)).width(110)]
-                    .extend(cells)
-                    .align_y(Vertical::Center),
+                row![
+                    container(text(s.label.to_uppercase()).size(12).color(TEXT).font(BOLD))
+                        .width(110)
+                ]
+                .extend(cells)
+                .align_y(Vertical::Center),
             );
         }
         rows.into()
     }
 
-    fn header(&self) -> Element<'_, Message> {
+    fn view(&self) -> Element<'_, Message> {
         let tab = |label: &'static str, v: View| {
             let on = self.view == v;
             button(
@@ -329,124 +649,33 @@ impl App {
             .on_press(Message::SetView(v))
             .style(move |_, _| flat(if on { ACCENT } else { PANEL_2 }))
         };
-        let action = |label: &'static str, msg: Message| {
-            button(text(label).size(13).color(TEXT))
-                .padding([5, 14])
-                .on_press(msg)
-                .style(|_, _| flat(PANEL_2))
-        };
-        row![
-            text("FADERUST").size(15).color(ACCENT_LIGHT).font(Font {
-                weight: iced::font::Weight::Bold,
-                ..Font::DEFAULT
-            }),
-            space().width(12),
-            tab("Pult", View::Desk),
-            tab("Matrix", View::Matrix),
-            space().width(Length::Fill),
-            action("+ Programm", Message::Dialog(false)),
-            action("Geräte", Message::Dialog(false)),
-            action("Design", Message::Dialog(false)),
-            action("Einstellungen", Message::Dialog(true)),
-        ]
-        .spacing(6)
-        .align_y(Vertical::Center)
-        .into()
-    }
-
-    fn dialog_view(&self) -> Element<'_, Message> {
-        let s = &self.settings;
-        let line = |label: &'static str, control: Element<'static, Message>| {
-            row![
-                container(text(label).size(13).color(TEXT)).width(220),
-                control
-            ]
-            .align_y(Vertical::Center)
-            .spacing(12)
-        };
-        let card = container(
-            column![
-                row![
-                    text("Einstellungen").size(16).color(TEXT),
-                    space().width(Length::Fill),
-                    button(text("✕").size(13).color(TEXT))
-                        .on_press(Message::Dialog(false))
-                        .style(|_, _| flat(PANEL_2)),
-                ]
-                .align_y(Vertical::Center),
-                checkbox(s.autostart)
-                    .label("Mit Windows starten")
-                    .on_toggle(Message::Autostart),
-                checkbox(s.bt_release)
-                    .label("Bluetooth-Ausgänge freigeben, wenn still")
-                    .on_toggle(Message::BtRelease),
-                line(
-                    "Freigabe nach (Sekunden)",
-                    text_input("30", &s.release_secs)
-                        .on_input(Message::ReleaseSecs)
-                        .width(80)
-                        .into()
-                ),
-                checkbox(s.hide_quiet)
-                    .label("Stille Programme ausblenden")
-                    .on_toggle(Message::HideQuiet),
-                line(
-                    "Sprache",
-                    pick_list(
-                        [Lang::System, Lang::German, Lang::English],
-                        Some(s.lang),
-                        Message::Language
-                    )
-                    .into()
-                ),
-            ]
-            .spacing(14),
-        )
-        .padding(20)
-        .width(520)
-        .style(|_| container::Style {
-            background: Some(Background::Color(PANEL_2)),
-            border: Border {
-                color: BORDER,
-                width: 1.0,
-                radius: 6.0.into(),
-            },
-            ..container::Style::default()
-        });
-        // The backdrop swallows clicks; a click on it closes the dialog.
-        let backdrop =
-            mouse_area(
-                container(opaque(card))
-                    .center(Length::Fill)
-                    .style(|_| container::Style {
-                        background: Some(Background::Color(Color {
-                            a: 0.65,
-                            ..Color::BLACK
-                        })),
-                        ..container::Style::default()
-                    }),
-            )
-            .on_press(Message::Dialog(false));
-        opaque(backdrop)
-    }
-
-    fn view(&self) -> Element<'_, Message> {
         let body = match self.view {
             View::Desk => self.desk(),
             View::Matrix => self.matrix(),
         };
-        let page = container(column![self.header(), body].spacing(18))
+        let page = column![
+            self.titlebar(),
+            container(
+                column![
+                    row![tab("Pult", View::Desk), tab("Matrix", View::Matrix)].spacing(6),
+                    body
+                ]
+                .spacing(18)
+            )
             .padding(24)
+            .width(Length::Fill)
+            .height(Length::Fill),
+        ];
+        let page = container(page)
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_| container::Style {
                 background: Some(Background::Color(BG)),
                 ..container::Style::default()
             });
-        if self.dialog {
-            stack![page, self.dialog_view()].into()
-        } else {
-            page.into()
+        match self.dialog {
+            Some(d) => stack![page, dialogs::view(self, d)].into(),
+            None => page.into(),
         }
     }
 
@@ -455,7 +684,24 @@ impl App {
     }
 }
 
-fn flat(color: Color) -> button::Style {
+fn nav_style(active: bool, hot: bool) -> button::Style {
+    button::Style {
+        background: if active || hot {
+            Some(Background::Color(PANEL_2))
+        } else {
+            None
+        },
+        text_color: TEXT,
+        border: Border {
+            color: if active { ACCENT } else { Color::TRANSPARENT },
+            width: 1.0,
+            radius: 4.0.into(),
+        },
+        ..button::Style::default()
+    }
+}
+
+pub fn flat(color: Color) -> button::Style {
     button::Style {
         background: Some(Background::Color(color)),
         text_color: Color::WHITE,
@@ -463,6 +709,19 @@ fn flat(color: Color) -> button::Style {
             color: BORDER,
             width: 1.0,
             radius: 4.0.into(),
+        },
+        ..button::Style::default()
+    }
+}
+
+fn small_toggle(on: bool) -> button::Style {
+    button::Style {
+        background: Some(Background::Color(if on { SIGNAL } else { PANEL_2 })),
+        text_color: Color::WHITE,
+        border: Border {
+            color: if on { SIGNAL } else { BORDER },
+            width: 1.0,
+            radius: 3.0.into(),
         },
         ..button::Style::default()
     }
@@ -503,317 +762,6 @@ fn mute_style(on: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     }
 }
 
-/// Fader track, scale, cap and LED meter of one strip in a single canvas.
-struct Fader<'a> {
-    cache: &'a canvas::Cache,
-    db: f32,
-    muted: bool,
-    level: f32,
-    index: usize,
-}
-
-#[derive(Default)]
-struct Drag {
-    active: bool,
-    grab: f32,
-    last_click: Option<Instant>,
-}
-
-impl Fader<'_> {
-    fn top() -> f32 {
-        PAD
-    }
-    fn height() -> f32 {
-        STRIP_H - 2.0 * PAD
-    }
-    fn pos_at(y: f32) -> f32 {
-        (1.0 - (y - Self::top()) / Self::height()).clamp(0.0, 1.0)
-    }
-    fn y_of(pos: f32) -> f32 {
-        Self::top() + (1.0 - pos) * Self::height()
-    }
-}
-
-impl canvas::Program<Message> for Fader<'_> {
-    type State = Drag;
-
-    fn update(
-        &self,
-        state: &mut Drag,
-        event: &canvas::Event,
-        bounds: Rectangle,
-        cursor: mouse::Cursor,
-    ) -> Option<canvas::Action<Message>> {
-        use iced::Event::Mouse;
-        let pos = scale::to_pos(self.db);
-        let set = |db: f32| canvas::Action::publish(Message::Level(self.index, scale::clamp(db)));
-        match event {
-            Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                let p = cursor.position_in(bounds)?;
-                if p.x > 94.0 {
-                    return None;
-                }
-                let now = Instant::now();
-                if state
-                    .last_click
-                    .is_some_and(|t| now.duration_since(t) < Duration::from_millis(350))
-                {
-                    state.last_click = None;
-                    return Some(set(0.0).and_capture());
-                }
-                state.last_click = Some(now);
-                state.active = true;
-                let at = Self::pos_at(p.y);
-                let cap_half = 20.0 / Self::height();
-                state.grab = if (at - pos).abs() <= cap_half {
-                    pos - at
-                } else {
-                    0.0
-                };
-                if state.grab == 0.0 {
-                    return Some(set(scale::from_pos(at)).and_capture());
-                }
-                Some(canvas::Action::capture())
-            }
-            Mouse(mouse::Event::CursorMoved { .. }) if state.active => {
-                let p = cursor.position_in(bounds).or_else(|| {
-                    cursor
-                        .position()
-                        .map(|c| Point::new(c.x - bounds.x, c.y - bounds.y))
-                })?;
-                Some(
-                    set(scale::from_pos(
-                        (Self::pos_at(p.y) + state.grab).clamp(0.0, 1.0),
-                    ))
-                    .and_capture(),
-                )
-            }
-            Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if state.active => {
-                state.active = false;
-                Some(canvas::Action::capture())
-            }
-            Mouse(mouse::Event::WheelScrolled { delta }) if cursor.is_over(bounds) => {
-                let y = match delta {
-                    mouse::ScrollDelta::Lines { y, .. } | mouse::ScrollDelta::Pixels { y, .. } => {
-                        *y
-                    }
-                };
-                let step = if y > 0.0 { 1.0 } else { -1.0 };
-                let next = if self.db <= scale::OFF {
-                    if step > 0.0 {
-                        -59.0
-                    } else {
-                        scale::OFF
-                    }
-                } else {
-                    self.db + step
-                };
-                Some(set(next).and_capture())
-            }
-            _ => None,
-        }
-    }
-
-    fn draw(
-        &self,
-        _state: &Drag,
-        renderer: &Renderer,
-        _theme: &Theme,
-        bounds: Rectangle,
-        _cursor: mouse::Cursor,
-    ) -> Vec<Geometry> {
-        let body = self
-            .cache
-            .draw(renderer, bounds.size(), |f| self.draw_body(f));
-        let mut f = Frame::new(renderer, bounds.size());
-        self.draw_meter(&mut f);
-        vec![body, f.into_geometry()]
-    }
-
-    fn mouse_interaction(
-        &self,
-        state: &Drag,
-        bounds: Rectangle,
-        cursor: mouse::Cursor,
-    ) -> mouse::Interaction {
-        if state.active || cursor.position_in(bounds).is_some_and(|p| p.x <= 94.0) {
-            mouse::Interaction::ResizingVertically
-        } else {
-            mouse::Interaction::default()
-        }
-    }
-}
-
-impl Fader<'_> {
-    fn draw_body(&self, f: &mut Frame) {
-        let pos = scale::to_pos(self.db);
-        let cap_y = Fader::y_of(pos);
-        let off = self.db <= scale::OFF;
-        let (top, h) = (Fader::top(), Fader::height());
-
-        // Scale: numbers on the left, small marks beside the slot.
-        for (d, label) in scale::TICKS {
-            let y = Fader::y_of(scale::to_pos(d));
-            let zero = d == 0.0;
-            f.fill_text(Text {
-                content: label.to_string(),
-                position: Point::new(26.0, y),
-                color: if zero { TEXT } else { MUTED },
-                size: Pixels(11.0),
-                font: MONO,
-                align_x: Horizontal::Right.into(),
-                align_y: Vertical::Center,
-                ..Text::default()
-            });
-            let mark = if zero { MUTED } else { BORDER };
-            for x in [29.0, 47.0] {
-                f.fill_rectangle(Point::new(x, y - 0.5), Size::new(7.0, 1.0), mark);
-            }
-        }
-
-        // Slot with a recessed look and the accent bar up to the cap.
-        let slot = Path::rounded_rectangle(Point::new(53.0, top), Size::new(10.0, h), 5.0.into());
-        f.fill(&slot, Fill::from(Color::from_rgb8(5, 5, 5)));
-        f.stroke(
-            &slot,
-            Stroke::default()
-                .with_color(rgb(44, 47, 51))
-                .with_width(1.0),
-        );
-        let fill_h = (STRIP_H - PAD - 3.0 - cap_y).max(0.0);
-        if fill_h > 0.0 {
-            let (core, glow) = if self.muted {
-                (rgb(85, 90, 97), None)
-            } else {
-                (ACCENT, Some(ACCENT))
-            };
-            if let Some(g) = glow {
-                for (grow, alpha) in [(4.0, 0.06), (2.5, 0.10), (1.0, 0.16)] {
-                    f.fill(
-                        &Path::rounded_rectangle(
-                            Point::new(56.0 - grow, cap_y - grow),
-                            Size::new(4.0 + 2.0 * grow, fill_h + 2.0 * grow),
-                            (2.0 + grow).into(),
-                        ),
-                        Fill::from(Color { a: alpha, ..g }),
-                    );
-                }
-            }
-            f.fill(
-                &Path::rounded_rectangle(
-                    Point::new(56.0, cap_y),
-                    Size::new(4.0, fill_h),
-                    2.0.into(),
-                ),
-                Fill::from(core),
-            );
-        }
-
-        // Cap: graphite gradient, accent edges, index line and a value window.
-        let (cx, cw, ch) = (29.0, 58.0, 40.0);
-        let cy = cap_y - ch / 2.0;
-        let cap = Path::rounded_rectangle(Point::new(cx, cy), Size::new(cw, ch), 4.0.into());
-        for (grow, alpha) in [(6.0, 0.10), (3.0, 0.18), (1.0, 0.30)] {
-            f.fill(
-                &Path::rounded_rectangle(
-                    Point::new(cx - grow, cy - grow + 3.0),
-                    Size::new(cw + 2.0 * grow, ch + 2.0 * grow),
-                    (4.0 + grow).into(),
-                ),
-                Fill::from(Color {
-                    a: alpha * 0.5,
-                    ..Color::BLACK
-                }),
-            );
-        }
-        let body = canvas::gradient::Linear::new(Point::new(0.0, cy), Point::new(0.0, cy + ch))
-            .add_stop(0.0, rgb(85, 89, 95))
-            .add_stop(0.45, rgb(47, 51, 56))
-            .add_stop(0.55, rgb(35, 38, 42))
-            .add_stop(1.0, rgb(51, 55, 60));
-        f.fill(
-            &cap,
-            Fill {
-                style: canvas::Style::Gradient(canvas::Gradient::Linear(body)),
-                ..Fill::default()
-            },
-        );
-        f.stroke(
-            &cap,
-            Stroke::default()
-                .with_color(rgb(12, 13, 15))
-                .with_width(1.0),
-        );
-        let edge = if off { rgb(85, 90, 97) } else { ACCENT };
-        f.fill_rectangle(Point::new(cx, cy + 1.0), Size::new(3.0, ch - 2.0), edge);
-        f.fill_rectangle(
-            Point::new(cx + cw - 3.0, cy + 1.0),
-            Size::new(3.0, ch - 2.0),
-            edge,
-        );
-        f.fill_rectangle(
-            Point::new(cx, cap_y - 1.0),
-            Size::new(cw, 2.0),
-            if off {
-                rgb(133, 139, 147)
-            } else {
-                ACCENT_LIGHT
-            },
-        );
-        let win = Path::rounded_rectangle(
-            Point::new(cx + cw / 2.0 - 23.0, cap_y - 9.0),
-            Size::new(46.0, 18.0),
-            2.0.into(),
-        );
-        f.fill(&win, Fill::from(rgb(11, 12, 14)));
-        f.fill_text(Text {
-            content: scale::format(self.db),
-            position: Point::new(cx + cw / 2.0, cap_y),
-            color: if off { MUTED } else { rgb(241, 243, 245) },
-            size: Pixels(12.0),
-            font: MONO,
-            align_x: Horizontal::Center.into(),
-            align_y: Vertical::Center,
-            ..Text::default()
-        });
-    }
-
-    /// LED meter: 4 px on, 2 px off, signal / amber / clip like the web one.
-    fn draw_meter(&self, f: &mut Frame) {
-        let (top, h) = (Self::top(), Self::height());
-        let (mx, mw) = (98.0, 14.0);
-        let frame = Path::rounded_rectangle(Point::new(mx, top), Size::new(mw, h), 2.0.into());
-        f.fill(&frame, Fill::from(WELL));
-        f.stroke(&frame, Stroke::default().with_color(BORDER).with_width(1.0));
-        let shown = if self.muted {
-            scale::OFF
-        } else {
-            self.level + self.db.max(scale::OFF)
-        };
-        let lit = ((shown + 60.0) / 60.0).clamp(0.0, 1.0);
-        let inner = h - 2.0;
-        let mut y = top + h - 1.0;
-        while y - 4.0 >= top + 1.0 {
-            let frac = (top + h - 1.0 - y + 4.0) / inner;
-            if frac - 4.0 / inner < lit {
-                let color = if frac > 0.95 {
-                    DANGER
-                } else if frac > 0.80 {
-                    AMBER
-                } else {
-                    SIGNAL
-                };
-                f.fill_rectangle(
-                    Point::new(mx + 1.0, y - 4.0),
-                    Size::new(mw - 2.0, 4.0),
-                    color,
-                );
-            }
-            y -= 6.0;
-        }
-    }
-}
-
 fn save_png(path: &str, shot: &window::Screenshot) {
     let file = std::fs::File::create(path).expect("create png");
     let mut enc = png::Encoder::new(
@@ -830,14 +778,24 @@ fn save_png(path: &str, shot: &window::Screenshot) {
 }
 
 fn theme(_: &App) -> Theme {
-    Theme::Dark
+    Theme::custom(
+        "Faderust".to_string(),
+        iced::theme::Palette {
+            background: BG,
+            text: TEXT,
+            primary: ACCENT,
+            success: SIGNAL,
+            warning: AMBER,
+            danger: DANGER,
+        },
+    )
 }
 
 fn main() -> iced::Result {
     iced::application(App::new, App::update, App::view)
         .subscription(App::subscription)
         .theme(theme)
-        .window_size(Size::new(720.0, 600.0))
+        .window_size(Size::new(1180.0, 700.0))
         .title("Faderust – iced Prototyp")
         .run()
 }

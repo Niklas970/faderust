@@ -10,6 +10,7 @@ cd prototypes/iced-gui
 cargo run --release
 ```
 
-Drag the cap, scroll to nudge, double-click for 0 dB. Header with Pult/Matrix switch, a routing matrix (click a cell to toggle) and a settings dialog (`FADERUST_VIEW=matrix`, `FADERUST_DIALOG=1` for screenshots).
+Window like the real one: title bar, desk (output masters left, inputs with A1-A3 and FX), matrix and the dialogs (Programme, Effekte, Presets, Windows-Sound, Design, Einstellungen). Drag the cap, scroll to nudge, double-click for 0 dB.
+`FADERUST_VIEW=matrix` and `FADERUST_DIALOG=fx|apps|presets|windows|design|settings` pick what a screenshot shows.
 `FADERUST_SHOT=out.png` saves a screenshot and exits (set `ICED_BACKEND=tiny-skia`
 for the software renderer, e.g. under Xvfb).
