@@ -134,15 +134,22 @@ pub trait SystemAudio: Send + Sync {
     ) -> Result<(), RouterError>;
 }
 
-/// Bracketed part of the device names of Faderust's USB cable.
-const OWN_CABLE: &str = "(faderust cable)";
+/// Which of Faderust's own USB cables a device name belongs to: the bracketed
+/// product name ("faderust cable", "faderust cable 2" …), lowercase. The
+/// playback and the recording side of one cable give the same value.
+pub fn own_cable(name: &str) -> Option<String> {
+    let n = name.to_lowercase();
+    let start = n.rfind("(faderust cable")?;
+    let end = n[start..].find(')')? + start;
+    Some(n[start + 1..end].to_string())
+}
 
 /// True for virtual cables, by device name: VB-Audio's (both sides, "CABLE
 /// Input" for playback, "CABLE Output" for capture, and the A/B cables) and
 /// Faderust's own USB cable.
 pub fn is_virtual_cable(name: &str) -> bool {
     let n = name.to_lowercase();
-    n.contains("vb-audio") || n.starts_with("cable") || n.contains(OWN_CABLE)
+    n.contains("vb-audio") || n.starts_with("cable") || own_cable(name).is_some()
 }
 
 /// Merges sessions into one entry per executable. A program counts as
@@ -218,6 +225,7 @@ mod tests {
         assert!(is_virtual_cable("cable input"));
         assert!(is_virtual_cable("Lautsprecher (Faderust Cable)"));
         assert!(is_virtual_cable("Microphone (Faderust Cable)"));
+        assert!(is_virtual_cable("Speakers (Faderust Cable 3)"));
         assert!(!is_virtual_cable("Lautsprecher (USB Sound Card)"));
         assert!(!is_virtual_cable("Kopfhörer (Cable Guy Headset)"));
     }

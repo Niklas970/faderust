@@ -1,7 +1,7 @@
 <script>
   import UsbCableButton from "./UsbCableButton.svelte";
   import { t } from "./i18n.svelte.js";
-  import { cableCounterpart, getApps, getDevices, getWindowsAudio, isCable, openCablePage, setAppOutput } from "./api.js";
+  import { cableCounterpart, ownCable, getApps, getDevices, getWindowsAudio, isCable, openCablePage, setAppOutput } from "./api.js";
 
   /**
    * Which program plays on which device, and which programs Faderust records
@@ -30,16 +30,22 @@
     .catch(() => {});
 
   let hasCable = $derived(data?.devices.some((d) => d.cable));
+  // The playback end of the cable whose recording end is `c`.
+  const playbackOf = (c) => {
+    const own = ownCable(c.name);
+    if (own === null) return c.name.replace(/output/i, "Input");
+    return data?.devices.find((d) => ownCable(d.name) === own)?.name ?? "";
+  };
   // Cable capture devices no input uses yet.
   // Not offered when Faderust plays on the cable's other end (that would loop).
   let unusedCables = $derived(
     cableInputs.filter(
       (c) =>
         !inputs.some((i) => i.device && c.name.toLowerCase().includes(i.device.toLowerCase())) &&
-        !outputs.some((o) => o.device && c.name.replace(/output/i, "Input").toLowerCase().includes(o.device.toLowerCase())) &&
+        !outputs.some((o) => o.device && playbackOf(c).toLowerCase().includes(o.device.toLowerCase())) &&
         // Nor when a program input is parked on the cable (heard twice).
         !data?.apps.some(
-          (a) => isInput(a) && cableCounterpart(data.devices.find((d) => d.id === a.device)?.name ?? "") === c.name,
+          (a) => isInput(a) && cableCounterpart(data.devices.find((d) => d.id === a.device)?.name ?? "", cableInputs) === c.name,
         ),
     ),
   );
@@ -53,7 +59,7 @@
   const matches = (name, pattern) => !!pattern && name.toLowerCase().includes(pattern.toLowerCase());
   const silent = (d) =>
     !!d?.cable &&
-    !inputs.some((i) => matches(cableCounterpart(d.name), i.device)) &&
+    !inputs.some((i) => matches(cableCounterpart(d.name, cableInputs), i.device)) &&
     !outputs.some((o) => matches(d.name, o.device));
   let quietCable = $derived(data?.devices.find(silent));
   // The input reaches an output: not muted and at least one fader up.

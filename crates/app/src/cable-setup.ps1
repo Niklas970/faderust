@@ -1,7 +1,8 @@
 # Installs usbip-win2 (BSD-2-Clause, signed by Microsoft) and registers the
 # scheduled task that attaches Faderust's USB cable. Started elevated by
-# Faderust; the arguments are the user to run the task as and the bus id.
-param([string]$User, [string]$BusId)
+# Faderust; the arguments are the user to run the tasks as and the number of
+# cables (one task and one bus id, 1-1, 1-2, …, each).
+param([string]$User, [int]$Cables)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -20,10 +21,13 @@ try {
         if ($p.ExitCode -ne 0) { throw "The usbip-win2 setup failed (exit code $($p.ExitCode))." }
         if (-not (Test-Path $usbip)) { throw 'usbip.exe not found after the setup.' }
     }
-    $action = New-ScheduledTaskAction -Execute $usbip -Argument "attach -r 127.0.0.1 -b $BusId"
     $principal = New-ScheduledTaskPrincipal -UserId $User -LogonType Interactive -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
-    Register-ScheduledTask -TaskName 'Faderust Cable' -Action $action -Principal $principal -Settings $settings -Force | Out-Null
+    for ($i = 1; $i -le $Cables; $i++) {
+        $name = if ($i -eq 1) { 'Faderust Cable' } else { "Faderust Cable $i" }
+        $action = New-ScheduledTaskAction -Execute $usbip -Argument "attach -r 127.0.0.1 -b 1-$i"
+        Register-ScheduledTask -TaskName $name -Action $action -Principal $principal -Settings $settings -Force | Out-Null
+    }
 } catch {
     $_.Exception.Message | Set-Content -Path $result -Encoding UTF8
     exit 1

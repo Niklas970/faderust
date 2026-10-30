@@ -125,6 +125,9 @@ pub struct Config {
     /// Runs Faderust's own USB cable, see [`crate::cable`].
     #[serde(default)]
     pub usb_cable: bool,
+    /// How many USB cables it offers (1 to 4; 0 counts as 1).
+    #[serde(default)]
+    pub usb_cables: u8,
 }
 
 /// Resizes `gains` to `inputs` × `outputs` (new pairs at 0 dB) and clamps.
@@ -259,6 +262,7 @@ mod tests {
             gains: vec![],
             presets: vec![],
             usb_cable: false,
+            usb_cables: 1,
         }
         .normalized()
     }

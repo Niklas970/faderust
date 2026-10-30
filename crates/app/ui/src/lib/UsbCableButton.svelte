@@ -28,7 +28,7 @@
     {busy ? t("usbcable.working") : t("usbcable.setupButton")}
   </button>
   {#if error}<span class="error">{error}</span>{/if}
-{:else if usb?.running && !usb.attached}
+{:else if usb?.running && !usb.attached.some(Boolean)}
   <span>{t("usbcable.waiting")}</span>
 {/if}
 

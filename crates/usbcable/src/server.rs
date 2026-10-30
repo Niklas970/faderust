@@ -34,37 +34,67 @@ fn log(message: impl FnOnce() -> String) {
 static SHOWN: AtomicU32 = AtomicU32::new(0);
 
 pub const DEFAULT_PORT: u16 = 3240;
-pub const BUSID: &str = "1-1";
 
-pub struct Server {
+/// Bus id of cable `cable` (counted from 0): "1-1", "1-2", …
+pub fn busid(cable: usize) -> String {
+    format!("1-{}", cable + 1)
+}
+
+/// One virtual cable: what is played into it comes out of its recording side.
+pub struct Cable {
     pub ring: Arc<Ring>,
-    listener: TcpListener,
-    stop: Arc<AtomicBool>,
     /// The attached host's connection, so that stopping can end it.
-    active: Arc<Mutex<Option<TcpStream>>>,
+    active: Mutex<Option<TcpStream>>,
 }
 
-/// Stops a running [`Server`] from another thread.
-#[derive(Clone)]
-pub struct Stopper {
-    stop: Arc<AtomicBool>,
-    active: Arc<Mutex<Option<TcpStream>>>,
-    port: u16,
-}
+impl Cable {
+    fn new() -> Self {
+        Self {
+            ring: Arc::new(Ring::new()),
+            active: Mutex::new(None),
+        }
+    }
 
-impl Stopper {
-    /// Whether a host (Windows) is attached right now.
-    pub fn attached(&self) -> bool {
+    fn attached(&self) -> bool {
         self.active
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .is_some()
     }
+}
+
+pub struct Server {
+    cables: Vec<Arc<Cable>>,
+    listener: TcpListener,
+    stop: Arc<AtomicBool>,
+}
+
+/// Stops a running [`Server`] from another thread, and tells which of its
+/// cables a host is attached to.
+#[derive(Clone)]
+pub struct Stopper {
+    stop: Arc<AtomicBool>,
+    cables: Vec<Arc<Cable>>,
+    port: u16,
+}
+
+impl Stopper {
+    /// Whether a host (Windows) is attached to cable `cable` right now.
+    pub fn attached(&self, cable: usize) -> bool {
+        self.cables.get(cable).is_some_and(|c| c.attached())
+    }
 
     pub fn stop(&self) {
         self.stop.store(true, Ordering::SeqCst);
-        if let Some(s) = self.active.lock().unwrap_or_else(|e| e.into_inner()).take() {
-            let _ = s.shutdown(Shutdown::Both);
+        for cable in &self.cables {
+            let active = cable
+                .active
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take();
+            if let Some(s) = active {
+                let _ = s.shutdown(Shutdown::Both);
+            }
         }
         // Wakes the accept call.
         let _ = TcpStream::connect(("127.0.0.1", self.port));
@@ -72,42 +102,59 @@ impl Stopper {
 }
 
 impl Server {
+    /// A server with one cable.
     pub fn bind(port: u16) -> io::Result<Self> {
+        Self::bind_cables(port, 1)
+    }
+
+    /// A server with `count` cables (1 to [`device::MAX_CABLES`]).
+    pub fn bind_cables(port: u16, count: usize) -> io::Result<Self> {
+        let count = count.clamp(1, device::MAX_CABLES);
         Ok(Self {
-            ring: Arc::new(Ring::new()),
+            cables: (0..count).map(|_| Arc::new(Cable::new())).collect(),
             // Local only: nobody else on the network may attach.
             listener: TcpListener::bind(("127.0.0.1", port))?,
             stop: Arc::new(AtomicBool::new(false)),
-            active: Arc::new(Mutex::new(None)),
         })
     }
 
     pub fn stopper(&self) -> Stopper {
         Stopper {
             stop: self.stop.clone(),
-            active: self.active.clone(),
+            cables: self.cables.clone(),
             port: self.port(),
         }
+    }
+
+    /// The ring buffer of cable `cable`.
+    pub fn ring(&self, cable: usize) -> Arc<Ring> {
+        self.cables[cable].ring.clone()
     }
 
     pub fn port(&self) -> u16 {
         self.listener.local_addr().map_or(0, |a| a.port())
     }
 
-    /// Serves connections one after the other until the listener fails or
-    /// [`Stopper::stop`] is called.
+    /// Serves connections (one per attached cable) until the listener fails
+    /// or [`Stopper::stop`] is called.
     pub fn run(&self) -> io::Result<()> {
         for stream in self.listener.incoming() {
             let stream = stream?;
             if self.stop.load(Ordering::SeqCst) {
                 break;
             }
-            if let Err(e) = serve(stream, &self.ring, &self.active, &self.stop) {
-                // A closed connection is the normal way to detach.
-                if e.kind() != io::ErrorKind::UnexpectedEof {
-                    eprintln!("usbcable: connection ended: {e}");
-                }
-            }
+            let cables = self.cables.clone();
+            let stop = self.stop.clone();
+            thread::Builder::new()
+                .name("usbcable-connection".into())
+                .spawn(move || {
+                    if let Err(e) = serve(stream, &cables, &stop) {
+                        // A closed connection is the normal way to detach.
+                        if e.kind() != io::ErrorKind::UnexpectedEof {
+                            eprintln!("usbcable: connection ended: {e}");
+                        }
+                    }
+                })?;
         }
         Ok(())
     }
@@ -137,40 +184,44 @@ struct IsoJob {
     data: Vec<u8>,
 }
 
-fn serve(
-    mut stream: TcpStream,
-    ring: &Arc<Ring>,
-    active: &Mutex<Option<TcpStream>>,
-    stop: &AtomicBool,
-) -> io::Result<()> {
+fn serve(mut stream: TcpStream, cables: &[Arc<Cable>], stop: &AtomicBool) -> io::Result<()> {
     stream.set_nodelay(true)?;
-    let dev = device::info(BUSID);
     match wire::read_request(&mut stream)? {
         Request::DevList => {
-            wire::write_all(&mut stream, &wire::encode_devlist_reply(&dev))?;
+            let devices: Vec<_> = (0..cables.len())
+                .map(|i| device::info(&busid(i), i))
+                .collect();
+            wire::write_all(&mut stream, &wire::encode_devlist_reply(&devices))?;
             let _ = stream.shutdown(Shutdown::Both);
             Ok(())
         }
-        Request::Import { busid } if busid == BUSID => {
+        Request::Import { busid: wanted } => {
+            let Some(index) = (0..cables.len()).find(|&i| busid(i) == wanted) else {
+                return wire::write_all(&mut stream, &wire::encode_import_error());
+            };
+            let cable = &cables[index];
+            let dev = device::info(&wanted, index);
             wire::write_all(&mut stream, &wire::encode_import_reply(&dev))?;
-            *active.lock().unwrap_or_else(|e| e.into_inner()) = stream.try_clone().ok();
+            *cable.active.lock().unwrap_or_else(|e| e.into_inner()) = stream.try_clone().ok();
             // A stop that came before the connection was registered would
             // otherwise leave it running.
             if stop.load(Ordering::SeqCst) {
                 let _ = stream.shutdown(Shutdown::Both);
             }
-            let result = run_urbs(stream, ring);
-            *active.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            let result = run_urbs(stream, &cable.ring, index);
+            *cable.active.lock().unwrap_or_else(|e| e.into_inner()) = None;
             result
         }
-        Request::Import { .. } => wire::write_all(&mut stream, &wire::encode_import_error()),
     }
 }
 
-fn run_urbs(stream: TcpStream, ring: &Arc<Ring>) -> io::Result<()> {
+fn run_urbs(stream: TcpStream, ring: &Arc<Ring>, cable: usize) -> io::Result<()> {
     let shared = Arc::new(Shared {
         writer: Mutex::new(stream.try_clone()?),
-        state: Mutex::new(State::default()),
+        state: Mutex::new(State {
+            cable,
+            ..State::default()
+        }),
         pending: Mutex::new(HashSet::new()),
         ring: ring.clone(),
     });
@@ -461,10 +512,14 @@ mod tests {
     }
 
     fn connect(server: &Server) -> TcpStream {
+        connect_to(server, "1-1")
+    }
+
+    fn connect_to(server: &Server, wanted: &str) -> TcpStream {
         let mut s = TcpStream::connect(("127.0.0.1", server.port())).unwrap();
         let mut req = vec![0x01, 0x11, 0x80, 0x03, 0, 0, 0, 0];
         let mut busid = [0u8; 32];
-        busid[..3].copy_from_slice(b"1-1");
+        busid[..wanted.len()].copy_from_slice(wanted.as_bytes());
         req.extend(busid);
         s.write_all(&req).unwrap();
         let mut reply = [0u8; 8 + 312];
@@ -685,5 +740,33 @@ mod tests {
         s.read_to_end(&mut all).unwrap();
         assert_eq!(&all[2..4], &[0x00, 0x05]);
         assert!(all.windows(3).any(|w| w == b"1-1"));
+    }
+
+    #[test]
+    fn two_cables_attach_at_once_with_their_own_buffers() {
+        let server = Arc::new(Server::bind_cables(0, 2).unwrap());
+        let stopper = server.stopper();
+        let runner = server.clone();
+        let done = thread::spawn(move || runner.run());
+        let mut first = connect_to(&server, "1-1");
+        let mut second = connect_to(&server, "1-2");
+        for s in [&first, &second] {
+            s.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        }
+        assert!(!Arc::ptr_eq(&server.ring(0), &server.ring(1)));
+        // The second host is registered a moment after its reply.
+        for _ in 0..200 {
+            if stopper.attached(0) && stopper.attached(1) {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(stopper.attached(0) && stopper.attached(1));
+        assert!(!stopper.attached(2));
+        stopper.stop();
+        let mut byte = [0u8; 1];
+        assert!(matches!(first.read(&mut byte), Ok(0)));
+        assert!(matches!(second.read(&mut byte), Ok(0)));
+        assert!(done.join().unwrap().is_ok());
     }
 }
