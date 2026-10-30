@@ -7,6 +7,7 @@
 use std::collections::HashSet;
 use std::io::{self, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -19,6 +20,16 @@ use crate::wire::{self, Command, IsoPacket, Request, RetSubmit};
 /// Linux errno values the USB/IP protocol uses for URB status.
 const EPIPE: i32 = -32;
 const ECONNRESET: i32 = -104;
+
+/// Writes what the host does to stderr: every control request, and a summary
+/// of the isochronous traffic once a second.
+pub static VERBOSE: AtomicBool = AtomicBool::new(false);
+
+fn log(message: impl FnOnce() -> String) {
+    if VERBOSE.load(Ordering::Relaxed) {
+        eprintln!("usbcable: {}", message());
+    }
+}
 
 pub const DEFAULT_PORT: u16 = 3240;
 pub const BUSID: &str = "1-1";
@@ -72,6 +83,7 @@ impl Shared {
 }
 
 struct IsoJob {
+    start_frame: u32,
     seq: u32,
     input: bool,
     endpoint: u32,
@@ -121,6 +133,7 @@ fn run_urbs(stream: TcpStream, ring: &Arc<Ring>) -> io::Result<()> {
                 iso,
                 data,
                 buffer_len,
+                start_frame,
             }) => {
                 let sent = if endpoint == 0 {
                     control(&shared, seq, input, setup, buffer_len)
@@ -131,6 +144,7 @@ fn run_urbs(stream: TcpStream, ring: &Arc<Ring>) -> io::Result<()> {
                         .unwrap_or_else(|e| e.into_inner())
                         .insert(seq);
                     let job = IsoJob {
+                        start_frame,
                         seq,
                         input,
                         endpoint,
@@ -184,6 +198,21 @@ fn control(
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .control(setup);
+    log(|| {
+        format!(
+            "control {:02x} {:02x} value {:#06x} index {} length {} -> {}",
+            setup[0],
+            setup[1],
+            u16::from_le_bytes([setup[2], setup[3]]),
+            u16::from_le_bytes([setup[4], setup[5]]),
+            u16::from_le_bytes([setup[6], setup[7]]),
+            if matches!(outcome, Control::Done(_)) {
+                "ok"
+            } else {
+                "stall"
+            },
+        )
+    });
     let reply = match outcome {
         Control::Done(mut data) => {
             data.truncate(buffer_len as usize);
@@ -194,6 +223,7 @@ fn control(
                 endpoint: 0,
                 status: 0,
                 actual,
+                start_frame: 0,
                 data: &data,
                 iso: None,
             })
@@ -204,6 +234,7 @@ fn control(
             endpoint: 0,
             status: EPIPE,
             actual: 0,
+            start_frame: 0,
             data: &[],
             iso: None,
         }),
@@ -216,7 +247,22 @@ fn spawn_pacer(shared: Arc<Shared>, jobs: Receiver<IsoJob>) -> thread::JoinHandl
     thread::spawn(move || {
         // The moment up to which this endpoint's frames are already spoken for.
         let mut clock: Option<Instant> = None;
+        let (mut urbs, mut packets, mut late_ms) = (0u32, 0u32, 0u128);
+        let mut report = Instant::now();
         for job in jobs {
+            urbs += 1;
+            packets += job.iso.len() as u32;
+            if urbs == 1 {
+                log(|| {
+                    format!(
+                        "first URB on endpoint {}: {} packets of {:?} bytes, start frame {}",
+                        job.endpoint,
+                        job.iso.len(),
+                        job.iso.first().map(|p| p.length),
+                        job.start_frame
+                    )
+                });
+            }
             let frames = job.iso.len().max(1) as u64;
             let now = Instant::now();
             let start = clock.filter(|&c| c > now).unwrap_or(now);
@@ -224,6 +270,15 @@ fn spawn_pacer(shared: Arc<Shared>, jobs: Receiver<IsoJob>) -> thread::JoinHandl
             clock = Some(due);
             if let Some(wait) = due.checked_duration_since(Instant::now()) {
                 thread::sleep(wait);
+            } else {
+                late_ms += Instant::now().duration_since(due).as_millis();
+            }
+            if report.elapsed() >= Duration::from_secs(1) {
+                log(|| {
+                    format!("endpoint {}: {urbs} URBs, {packets} packets, {late_ms} ms late in the last second", job.endpoint)
+                });
+                (urbs, packets, late_ms) = (0, 0, 0);
+                report = Instant::now();
             }
             if complete(&shared, job).is_err() {
                 return;
@@ -250,7 +305,6 @@ fn complete(shared: &Shared, job: IsoJob) -> io::Result<()> {
     let mut out = Vec::new();
     if job.input {
         // Microphone: one packet of the wire per frame.
-        let mut total = 0u32;
         for p in &mut iso {
             let len = (p.length as usize).min(PACKET_BYTES);
             let mut chunk = vec![0u8; len];
@@ -258,10 +312,10 @@ fn complete(shared: &Shared, job: IsoJob) -> io::Result<()> {
                 shared.ring.read(&mut chunk);
             }
             out.extend(&chunk);
-            p.offset = total;
+            // The offset stays where the host put the packet: the data is
+            // sent packed and the host spreads it out again with it.
             p.actual = len as u32;
             p.status = 0;
-            total += len as u32;
         }
     } else {
         // Speaker: hand the samples to the wire.
@@ -286,6 +340,7 @@ fn complete(shared: &Shared, job: IsoJob) -> io::Result<()> {
         endpoint: job.endpoint,
         status: 0,
         actual,
+        start_frame: job.start_frame,
         data: &out,
         iso: Some(&iso),
     });
@@ -431,6 +486,29 @@ mod tests {
         assert_eq!(&audio[..signal.len()], &signal[..]);
         // Beyond what was played there is silence.
         assert!(audio[signal.len()..].iter().all(|&b| b == 0));
+    }
+
+    #[test]
+    fn recording_keeps_packet_offsets_and_start_frame() {
+        let server = start();
+        let mut s = connect(&server);
+        // The host asks for 196 bytes per packet but the cable gives 192:
+        // the descriptors must keep the host's offsets, the data is packed.
+        let mut submit = cmd_submit(1, true, EP_REC, [0; 8], 2 * 196, 2);
+        submit[28..32].copy_from_slice(&1234u32.to_be_bytes());
+        s.write_all(&submit).unwrap();
+        s.write_all(&iso_descs(2, 196)).unwrap();
+        let h = read_reply_header(&mut s);
+        assert_eq!(u32::from_be_bytes(h[28..32].try_into().unwrap()), 1234);
+        let actual = u32::from_be_bytes(h[24..28].try_into().unwrap()) as usize;
+        assert_eq!(actual, 2 * PACKET_BYTES);
+        let mut rest = vec![0u8; actual + 32];
+        s.read_exact(&mut rest).unwrap();
+        let descs = &rest[actual..];
+        let offset = |i: usize| u32::from_be_bytes(descs[i * 16..i * 16 + 4].try_into().unwrap());
+        let got = |i: usize| u32::from_be_bytes(descs[i * 16 + 8..i * 16 + 12].try_into().unwrap());
+        assert_eq!((offset(0), offset(1)), (0, 196));
+        assert_eq!((got(0), got(1)), (PACKET_BYTES as u32, PACKET_BYTES as u32));
     }
 
     #[test]

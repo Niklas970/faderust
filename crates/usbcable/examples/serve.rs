@@ -9,9 +9,14 @@
 use std::thread;
 use std::time::Duration;
 
-use faderust_usbcable::server::{Server, DEFAULT_PORT};
+use faderust_usbcable::server::{self, Server, DEFAULT_PORT};
 
 fn main() -> std::io::Result<()> {
+    // Full protocol log; `--quiet` turns it off.
+    server::VERBOSE.store(
+        !std::env::args().any(|a| a == "--quiet"),
+        std::sync::atomic::Ordering::Relaxed,
+    );
     let server = Server::bind(DEFAULT_PORT)?;
     println!("USB/IP server on 127.0.0.1:{}, bus id 1-1", server.port());
     let ring = server.ring.clone();
