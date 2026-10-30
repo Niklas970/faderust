@@ -39,6 +39,28 @@ pub const BUSID: &str = "1-1";
 pub struct Server {
     pub ring: Arc<Ring>,
     listener: TcpListener,
+    stop: Arc<AtomicBool>,
+    /// The attached host's connection, so that stopping can end it.
+    active: Arc<Mutex<Option<TcpStream>>>,
+}
+
+/// Stops a running [`Server`] from another thread.
+#[derive(Clone)]
+pub struct Stopper {
+    stop: Arc<AtomicBool>,
+    active: Arc<Mutex<Option<TcpStream>>>,
+    port: u16,
+}
+
+impl Stopper {
+    pub fn stop(&self) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(s) = self.active.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            let _ = s.shutdown(Shutdown::Both);
+        }
+        // Wakes the accept call.
+        let _ = TcpStream::connect(("127.0.0.1", self.port));
+    }
 }
 
 impl Server {
@@ -47,18 +69,32 @@ impl Server {
             ring: Arc::new(Ring::new()),
             // Local only: nobody else on the network may attach.
             listener: TcpListener::bind(("127.0.0.1", port))?,
+            stop: Arc::new(AtomicBool::new(false)),
+            active: Arc::new(Mutex::new(None)),
         })
+    }
+
+    pub fn stopper(&self) -> Stopper {
+        Stopper {
+            stop: self.stop.clone(),
+            active: self.active.clone(),
+            port: self.port(),
+        }
     }
 
     pub fn port(&self) -> u16 {
         self.listener.local_addr().map_or(0, |a| a.port())
     }
 
-    /// Serves connections one after the other until the listener fails.
+    /// Serves connections one after the other until the listener fails or
+    /// [`Stopper::stop`] is called.
     pub fn run(&self) -> io::Result<()> {
         for stream in self.listener.incoming() {
             let stream = stream?;
-            if let Err(e) = serve(stream, &self.ring) {
+            if self.stop.load(Ordering::SeqCst) {
+                break;
+            }
+            if let Err(e) = serve(stream, &self.ring, &self.active) {
                 // A closed connection is the normal way to detach.
                 if e.kind() != io::ErrorKind::UnexpectedEof {
                     eprintln!("usbcable: connection ended: {e}");
@@ -93,7 +129,11 @@ struct IsoJob {
     data: Vec<u8>,
 }
 
-fn serve(mut stream: TcpStream, ring: &Arc<Ring>) -> io::Result<()> {
+fn serve(
+    mut stream: TcpStream,
+    ring: &Arc<Ring>,
+    active: &Mutex<Option<TcpStream>>,
+) -> io::Result<()> {
     stream.set_nodelay(true)?;
     let dev = device::info(BUSID);
     match wire::read_request(&mut stream)? {
@@ -104,7 +144,10 @@ fn serve(mut stream: TcpStream, ring: &Arc<Ring>) -> io::Result<()> {
         }
         Request::Import { busid } if busid == BUSID => {
             wire::write_all(&mut stream, &wire::encode_import_reply(&dev))?;
-            run_urbs(stream, ring)
+            *active.lock().unwrap_or_else(|e| e.into_inner()) = stream.try_clone().ok();
+            let result = run_urbs(stream, ring);
+            *active.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            result
         }
         Request::Import { .. } => wire::write_all(&mut stream, &wire::encode_import_error()),
     }
@@ -600,6 +643,20 @@ mod tests {
             s.read(&mut extra).is_err(),
             "the cancelled URB was answered"
         );
+    }
+
+    #[test]
+    fn stopper_ends_the_server_and_the_attached_host() {
+        let server = Arc::new(Server::bind(0).unwrap());
+        let stopper = server.stopper();
+        let runner = server.clone();
+        let done = thread::spawn(move || runner.run());
+        let mut s = connect(&server);
+        stopper.stop();
+        // The host's connection is closed and run() returns.
+        let mut byte = [0u8; 1];
+        assert!(matches!(s.read(&mut byte), Ok(0) | Err(_)));
+        assert!(done.join().unwrap().is_ok());
     }
 
     #[test]
