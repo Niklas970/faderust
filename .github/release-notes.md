@@ -1,6 +1,8 @@
 ## Neu in 0.6.4
 
 - **USBip-Eintrag verschwindet auch bei bestehender Einrichtung:** Wer das Faderust Kabel schon vor 0.6.3 eingerichtet hat, sah usbip-win2 weiter als eigene App in Windows. Faderust erkennt das jetzt und bietet unter „Geräte“ → „Faderust Kabel“ die Einrichtung noch einmal an (eine Administrator-Abfrage), danach ist der Eintrag ausgeblendet
+- **Geräte-Einstellungen speichern von selbst:** Änderungen im Dialog „Geräte“ werden kurz nach der letzten Eingabe übernommen, der Speichern-Knopf entfällt (es bleibt „Schließen“)
+- **Klarere Namen für das Faderust Kabel:** statt „Lautsprecher (Faderust Cable)“ steht in der Oberfläche „Faderust Kabel (Wiedergabe)“ bzw. „(Aufnahme)“, bei mehreren mit Nummer
 
 ## Installation
 

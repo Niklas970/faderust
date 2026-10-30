@@ -1,6 +1,7 @@
 <script>
   import UsbCableButton from "./UsbCableButton.svelte";
   import { t } from "./i18n.svelte.js";
+  import { deviceLabel } from "./names.js";
   import { cableCounterpart, ownCable, getApps, getDevices, getWindowsAudio, isCable, setAppOutput } from "./api.js";
 
   /**
@@ -120,7 +121,7 @@
     {/if}
     {#each unusedCables as cable}
       <div class="hint">
-        <span><strong>{cable.name}</strong> {t("apps.cableUnused")}</span>
+        <span><strong>{deviceLabel(cable.name)}</strong> {t("apps.cableUnused")}</span>
         <button class="primary" onclick={() => onAddInput(cable.name)}>{t("apps.makeInput")}</button>
       </div>
     {/each}
@@ -138,7 +139,7 @@
             >
               <option value="">{t("apps.winDefault")}</option>
               {#each data.devices as d}
-                <option value={d.id}>{d.cable ? t("apps.cableSuffix", { name: d.name }) : d.name}</option>
+                <option value={d.id}>{d.cable ? t("apps.cableSuffix", { name: deviceLabel(d.name) }) : d.name}</option>
               {/each}
               {#if app.device && !data.devices.some((d) => d.id === app.device)}
                 <option value={app.device}>{t("apps.disconnected")}</option>
@@ -149,7 +150,7 @@
             {:else}
               <button
                 title={quietCable
-                  ? t("apps.addParked", { name: quietCable.name })
+                  ? t("apps.addParked", { name: deviceLabel(quietCable.name) })
                   : t("apps.add")}
                 onclick={() => addAsInput(app)}>{t("apps.addButton")}</button
               >
@@ -159,7 +160,7 @@
             <li class="double">
               <span>{t("apps.doubled", { name: app.name })}</span>
               {#if quietCable}
-                <button class="primary" onclick={() => change(app, quietCable.id)}>{t("apps.moveTo", { name: quietCable.name })}</button>
+                <button class="primary" onclick={() => change(app, quietCable.id)}>{t("apps.moveTo", { name: deviceLabel(quietCable.name) })}</button>
               {:else}
                 <UsbCableButton />
               {/if}
