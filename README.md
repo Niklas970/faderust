@@ -15,6 +15,8 @@
 
 ![Faderust im Pult mit Geräten, Programmen und drei Ausgängen](assets/screenshot.png)
 
+[Kurzvideo ansehen (40 s)](assets/faderust-reel.mp4)
+
 > **Alpha.** Faderust läuft, ist aber noch kaum auf echter Hardware erprobt. Fehler bitte als [Issue](https://github.com/Niklas970/faderust/issues) melden.
 
 ## Was Faderust kann
