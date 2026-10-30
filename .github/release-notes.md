@@ -1,8 +1,9 @@
-## Neu in 0.6.0
+## Neu in 0.6.1
 
-- **Faderust Kabel (Test):** Ein eigenes virtuelles Kabel ohne VB-Cable. Unter „Geräte“ auf „Einrichten“ klicken (einmalig, installiert usbip-win2 und fragt einmal nach Administratorrechten), dann „Faderust Kabel verwenden“ einschalten. Windows zeigt es als „Faderust Cable“. Es arbeitet mit 24 Bit und zählt wie ein VB-Kabel. Noch ein Test: bitte Fehler als Issue melden
-- Die Meldung „kein freies Kabel“ hat einen Knopf zum Einrichten des Faderust Kabels
-- Sicherung der Einstellungen als `config.toml.bak`, schnellere Tests (aus 0.5.9)
+- **Fenster beim Start nicht mehr extrem breit:** Programme, die beim Start still sind, werden sofort ausgeblendet, statt erst nach ein paar Sekunden. Das Fenster öffnet damit gleich in der passenden Breite und schrumpft nicht erst nachträglich
+
+- **Stille Programme einzeln einblenden:** „N still, zeigen“ öffnet eine Liste, aus der du ein Programm nach dem anderen holst (oder „Alle zeigen“)
+- **Ausgänge ausblenden:** Das × am Ausgangs-Streifen blendet ihn samt A-Knöpfen aus, er spielt weiter und kommt von selbst zurück, sobald wieder Ton auf ihm spielt. „N ausgeblendet“ bringt ihn zurück
 
 ## Installation
 
