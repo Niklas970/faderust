@@ -102,7 +102,7 @@ impl Server {
             if self.stop.load(Ordering::SeqCst) {
                 break;
             }
-            if let Err(e) = serve(stream, &self.ring, &self.active) {
+            if let Err(e) = serve(stream, &self.ring, &self.active, &self.stop) {
                 // A closed connection is the normal way to detach.
                 if e.kind() != io::ErrorKind::UnexpectedEof {
                     eprintln!("usbcable: connection ended: {e}");
@@ -141,6 +141,7 @@ fn serve(
     mut stream: TcpStream,
     ring: &Arc<Ring>,
     active: &Mutex<Option<TcpStream>>,
+    stop: &AtomicBool,
 ) -> io::Result<()> {
     stream.set_nodelay(true)?;
     let dev = device::info(BUSID);
@@ -153,6 +154,11 @@ fn serve(
         Request::Import { busid } if busid == BUSID => {
             wire::write_all(&mut stream, &wire::encode_import_reply(&dev))?;
             *active.lock().unwrap_or_else(|e| e.into_inner()) = stream.try_clone().ok();
+            // A stop that came before the connection was registered would
+            // otherwise leave it running.
+            if stop.load(Ordering::SeqCst) {
+                let _ = stream.shutdown(Shutdown::Both);
+            }
             let result = run_urbs(stream, ring);
             *active.lock().unwrap_or_else(|e| e.into_inner()) = None;
             result
@@ -660,6 +666,9 @@ mod tests {
         let runner = server.clone();
         let done = thread::spawn(move || runner.run());
         let mut s = connect(&server);
+        // A failure should show as an error, not as a test that never ends.
+        s.set_read_timeout(Some(std::time::Duration::from_secs(10)))
+            .unwrap();
         stopper.stop();
         // The host's connection is closed and run() returns.
         let mut byte = [0u8; 1];
