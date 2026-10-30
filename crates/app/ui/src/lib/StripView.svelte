@@ -20,43 +20,87 @@
 
   // Programs the user wants to stay on the desk even when silent.
   const KEEP_KEY = "faderust.keepShown";
-  let keep = $state(load());
-  function load() {
+  // Outputs hidden from the desk (by label); they keep playing.
+  const HIDE_KEY = "faderust.hiddenOutputs";
+  const load = (key) => {
     try {
-      const v = JSON.parse(localStorage.getItem(KEEP_KEY) ?? "[]");
+      const v = JSON.parse(localStorage.getItem(key) ?? "[]");
       return Array.isArray(v) ? v : [];
     } catch {
       return [];
     }
-  }
-  function toggleKeep(device) {
-    keep = keep.includes(device) ? keep.filter((d) => d !== device) : [...keep, device];
+  };
+  const save = (key, list) => {
     try {
-      localStorage.setItem(KEEP_KEY, JSON.stringify(keep));
+      localStorage.setItem(key, JSON.stringify(list));
     } catch {
       // Not saved; it still applies until the window closes.
     }
+  };
+  let keep = $state(load(KEEP_KEY));
+  let hiddenOut = $state(load(HIDE_KEY));
+  function toggleKeep(device) {
+    keep = keep.includes(device) ? keep.filter((d) => d !== device) : [...keep, device];
+    save(KEEP_KEY, keep);
   }
+  const hidden = (o) => hiddenOut.includes(outputs[o]?.label);
+  const hiddenCount = $derived(outputs.filter((out) => hiddenOut.includes(out.label)).length);
+  function setHidden(label, value) {
+    hiddenOut = value ? [...hiddenOut, label] : hiddenOut.filter((l) => l !== label);
+    save(HIDE_KEY, hiddenOut);
+  }
+
+  // A hidden output comes back when sound starts on it again (not while it
+  // keeps playing from before it was hidden).
+  const playing = new Map();
+  $effect(() => {
+    for (const out of outputs) {
+      const now = (out.levelDb ?? -120) > -60;
+      if (now && playing.get(out.label) === false && hiddenOut.includes(out.label)) setHidden(out.label, false);
+      playing.set(out.label, now);
+    }
+  });
+
+  // Small menu under a header button: silent programs to show one by one,
+  // or hidden outputs to bring back.
+  let menu = $state(null);
+  function openMenu(e, kind) {
+    e.stopPropagation();
+    if (menu?.kind === kind) return void (menu = null);
+    const r = e.currentTarget.getBoundingClientRect();
+    menu = { kind, x: r.left, y: r.bottom + 4 };
+  }
+  // Silent programs shown on request, until the window closes.
+  let revealed = $state([]);
 
   // When each program was last heard; silent ones hide. A program not heard
   // yet counts as heard a moment ago only, so after a start the silent ones
   // are gone after a few seconds instead of after the full time.
   const GRACE = 5000;
+  // Programs first seen while the app starts are not given the grace: the
+  // window would open wide for all of them and shrink a moment later.
+  const STARTUP = 4000;
+  const mounted = Date.now();
   const heard = new Map();
   let showAll = $state(false);
   const audible = $derived.by(() => {
     const now = Date.now();
     for (const { input } of allPrograms) {
       if (input.connected && input.levelDb > -60) heard.set(input.device, now);
-      else if (!heard.has(input.device)) heard.set(input.device, now - Math.max(0, hideAfter * 1000 - GRACE));
+      else if (!heard.has(input.device)) {
+        const grace = now - mounted < STARTUP ? 0 : GRACE;
+        heard.set(input.device, now - Math.max(0, hideAfter * 1000 - grace));
+      }
     }
     if (!hideAfter) return allPrograms;
     return allPrograms.filter(
-      ({ input }) => keep.includes(input.device) || now - heard.get(input.device) < hideAfter * 1000,
+      ({ input }) =>
+        keep.includes(input.device) || revealed.includes(input.device) || now - heard.get(input.device) < hideAfter * 1000,
     );
   });
   const programs = $derived(showAll ? allPrograms : audible);
-  const silent = $derived(allPrograms.length - audible.length);
+  const silentList = $derived(allPrograms.filter((p) => !audible.includes(p)));
+  const silent = $derived(silentList.length);
 
   const row = (i) => outputs.map((_, o) => gains[i]?.[o] ?? { db: 0, muted: true });
 
@@ -64,7 +108,7 @@
   // one goes. Measured after the DOM has the new strips.
   let stripsEl = $state();
   $effect(() => {
-    const key = `${outputs.length}/${devices.length}/${programs.length}/${side}/${compact}`;
+    const key = `${outputs.length - hiddenCount}/${devices.length}/${programs.length}/${side}/${compact}`;
     if (!stripsEl || !key) return;
     tick().then(() => {
       if (!stripsEl) return;
@@ -111,6 +155,7 @@
   <section class="strip panel" class:narrow>
     <div class="buses">
       {#each outputs as output, o}
+        {#if !hidden(o)}
         {@const on = !(gains[i]?.[o]?.muted ?? true)}
         {@const looped = lanes[i]?.[o]?.looped ?? false}
         <button
@@ -121,6 +166,7 @@
           title={looped ? t("strip.loopHint", { output: output.label }) : t(on ? "strip.off" : "strip.on", { output: output.label })}
           onclick={() => toggle(i, o)}>A{o + 1}</button
         >
+        {/if}
       {/each}
     </div>
     <div class="grow">
@@ -159,15 +205,41 @@
   </section>
 {/snippet}
 
+<svelte:window onclick={() => (menu = null)} />
+
+{#if menu}
+  <div class="menu panel" style="left: {menu.x}px; top: {menu.y}px">
+    {#if menu.kind === "silent"}
+      {#each silentList as { input } (input.device)}
+        <button onclick={() => (revealed = [...revealed, input.device])}>{input.label}</button>
+      {/each}
+      <button class="all" onclick={() => (showAll = true)}>{t("strip.showAllSilent")}</button>
+    {:else}
+      {#each outputs.filter((out) => hiddenOut.includes(out.label)) as out (out.label)}
+        <button onclick={() => setHidden(out.label, false)}>{out.label}</button>
+      {/each}
+    {/if}
+  </div>
+{/if}
+
 <div class="desk" class:compact>
   <div class="strips" bind:this={stripsEl}>
     <div class="group outs" class:left={side === "left"}>
-      <h2>{t("settings.outputs")}</h2>
+      <h2>
+        {t("settings.outputs")}
+        {#if hiddenCount}
+          <button class="more" onclick={(e) => openMenu(e, "outputs")}>{t("strip.hiddenOutputs", { count: hiddenCount })}</button>
+        {/if}
+      </h2>
       <div class="row">
         {#each outputs as output, o}
+          {#if !hidden(o)}
           {@const m = output.master ?? { db: 0, muted: false }}
           <section class="strip panel">
-            <span class="tag">A{o + 1}</span>
+            <div class="tagrow">
+              <span class="tag">A{o + 1}</span>
+              <button class="hide" title={t("strip.hideOutput")} aria-label={t("strip.hideOutput")} onclick={() => setHidden(output.label, true)}>×</button>
+            </div>
             <div class="grow">
               <Fader
                 label={output.label}
@@ -187,6 +259,7 @@
             <!-- Keeps the fader level with the inputs' "Effekte" row. -->
             <span class="fx spacer" aria-hidden="true">{t("fx.title")}</span>
           </section>
+          {/if}
         {/each}
       </div>
     </div>
@@ -203,9 +276,7 @@
         {t("programs.title")}
         <button class="add" onclick={onPrograms} title={t("programs.addHint")}>{t("programs.add")}</button>
         {#if silent}
-          <button class="more" onclick={() => (showAll = !showAll)}
-            >{showAll ? t("strip.hideSilent") : t("strip.showSilent", { count: silent })}</button
-          >
+          <button class="more" onclick={(e) => openMenu(e, "silent")}>{t("strip.showSilent", { count: silent })}</button>
         {/if}
       </h2>
       <div class="row">
@@ -357,6 +428,46 @@
     background: none;
     border: 1px dashed var(--border);
     border-radius: var(--radius-sm);
+  }
+  .tagrow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .hide {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    line-height: 1;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .menu {
+    position: fixed;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .menu button {
+    padding: 5px 12px;
+    text-align: left;
+    font-size: 13px;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+  }
+  .menu button:hover {
+    background: var(--panel-2);
+  }
+  .menu .all {
+    color: var(--muted);
+    border-top: 1px solid var(--border);
   }
   .foot {
     display: flex;
