@@ -126,6 +126,7 @@ export default {
   "settings.addOutput": "+ Output",
   "usbcable.title": "Faderust Cable (test)",
   "usbcable.hint": "A virtual cable without VB-Cable: a USB sound device that Faderust provides itself. The setup installs usbip-win2 once (free, signed by Microsoft) and asks for administrator rights once.",
+  "usbcable.setupButton": "Set up Faderust Cable",
   "usbcable.setup": "Set up",
   "usbcable.working": "Setting up …",
   "usbcable.enable": "Use Faderust Cable",

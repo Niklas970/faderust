@@ -126,6 +126,7 @@ export default {
   "settings.addOutput": "+ Ausgang",
   "usbcable.title": "Faderust Kabel (Test)",
   "usbcable.hint": "Virtuelles Kabel ohne VB-Cable: ein USB-Soundgerät, das Faderust selbst bereitstellt. Die Einrichtung installiert einmalig usbip-win2 (frei, von Microsoft signiert) und fragt einmal nach Administratorrechten.",
+  "usbcable.setupButton": "Faderust Kabel einrichten",
   "usbcable.setup": "Einrichten",
   "usbcable.working": "Richte ein …",
   "usbcable.enable": "Faderust Kabel verwenden",

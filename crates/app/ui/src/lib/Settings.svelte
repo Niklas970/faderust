@@ -1,6 +1,7 @@
 <script>
   import { onMount, untrack } from "svelte";
   import { t } from "./i18n.svelte.js";
+  import UsbCableButton from "./UsbCableButton.svelte";
   import Log from "./Log.svelte";
   import Selftest from "./Selftest.svelte";
   import {
@@ -311,6 +312,7 @@
           : t("settings.micNoCable")}
         {t("settings.micInstall")}
       </p>
+      <UsbCableButton />
       <button onclick={() => openCablePage()}>{t("cable.setup")}</button>
     </div>
   {/if}

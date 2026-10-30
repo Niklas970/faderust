@@ -1,4 +1,5 @@
 <script>
+  import UsbCableButton from "./UsbCableButton.svelte";
   import { t } from "./i18n.svelte.js";
   import { cableCounterpart, getApps, getDevices, getWindowsAudio, isCable, openCablePage, setAppOutput } from "./api.js";
 
@@ -108,6 +109,7 @@
       <div class="hint">
         <strong>{t("apps.noCable")}</strong>
         {t("apps.noCableText")}
+        <UsbCableButton />
         <button onclick={() => openCablePage()}>{t("cable.setup")}</button>
       </div>
     {/if}
