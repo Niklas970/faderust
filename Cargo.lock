@@ -1170,6 +1170,7 @@ name = "faderust"
 version = "0.5.8"
 dependencies = [
  "faderust-engine",
+ "faderust-usbcable",
  "getrandom 0.4.3",
  "serde",
  "serde_json",

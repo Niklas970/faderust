@@ -138,7 +138,11 @@ export async function setDeviceVolume(id, volume, muted) {
 /** VB-Audio's virtual cables, by name ("CABLE Input", "CABLE-A Output", …). */
 export function isCable(name) {
   const n = name.toLowerCase();
-  return n.includes("vb-audio") || n.startsWith("cable");
+  return (
+    n.includes("vb-audio") ||
+    n.startsWith("cable") ||
+    n.includes("(faderust cable)")
+  );
 }
 
 /**
@@ -147,6 +151,8 @@ export function isCable(name) {
  */
 export function feedsBack(output, input) {
   const o = output.toLowerCase();
+  if (o.includes("(faderust cable)"))
+    return input.toLowerCase().includes("(faderust cable)");
   return (
     o.includes("input") && o.replace("input", "output") === input.toLowerCase()
   );
@@ -155,6 +161,30 @@ export function feedsBack(output, input) {
 /** The recording end of the cable that `output` plays into. */
 export function cableCounterpart(output) {
   return output.replace(/input/i, (m) => (m[0] === "I" ? "Output" : "output"));
+}
+
+/** Faderust's own USB cable: `{ supported, installed, running, attached }`. */
+export async function getUsbCable() {
+  if (!inTauri) return mock.usbCable;
+  return (await tauri()).invoke("get_usb_cable");
+}
+
+export async function setUsbCable(enabled) {
+  if (!inTauri) {
+    mock.usbCable = { ...mock.usbCable, running: enabled, attached: enabled };
+    return;
+  }
+  return (await tauri()).invoke("set_usb_cable", { enabled });
+}
+
+/** Installs usbip-win2 and the attach task; one administrator prompt. */
+export async function setupUsbCable() {
+  if (!inTauri) {
+    await new Promise((r) => setTimeout(r, 800));
+    mock.usbCable = { ...mock.usbCable, installed: true };
+    return;
+  }
+  return (await tauri()).invoke("setup_usb_cable");
 }
 
 /** Opens VB-Audio's VB-Cable download page in the browser. */
@@ -396,6 +426,7 @@ const mock = {
   },
   gains: [],
   autostart: false,
+  usbCable: { supported: true, installed: false, running: false, attached: false },
   apps: {
     supported: true,
     devices: [

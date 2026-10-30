@@ -711,6 +711,10 @@ impl<B: AudioBackend> Engine<B> {
 /// ("CABLE Input (VB-Audio Virtual Cable)", "VoiceMeeter Input" …).
 pub fn feeds_back(output: &str, input: &str) -> bool {
     let output = output.to_lowercase();
+    // Faderust's USB cable: "Speakers (Faderust Cable)" / "Microphone (Faderust Cable)".
+    if output.contains("(faderust cable)") {
+        return input.to_lowercase().contains("(faderust cable)");
+    }
     output.contains("input") && output.replacen("input", "output", 1) == input.to_lowercase()
 }
 
@@ -1283,6 +1287,14 @@ mod tests {
         assert!(!feeds_back(
             "CABLE-A Input (VB-Audio Cable A)",
             "CABLE-B Output (VB-Audio Cable B)"
+        ));
+        assert!(feeds_back(
+            "Lautsprecher (Faderust Cable)",
+            "Mikrofon (Faderust Cable)"
+        ));
+        assert!(!feeds_back(
+            "Lautsprecher (Faderust Cable)",
+            "CABLE Output (VB-Audio Virtual Cable)"
         ));
         assert!(!feeds_back(
             "Lautsprecher (USB Audio)",

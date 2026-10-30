@@ -53,6 +53,14 @@ pub struct Stopper {
 }
 
 impl Stopper {
+    /// Whether a host (Windows) is attached right now.
+    pub fn attached(&self) -> bool {
+        self.active
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_some()
+    }
+
     pub fn stop(&self) {
         self.stop.store(true, Ordering::SeqCst);
         if let Some(s) = self.active.lock().unwrap_or_else(|e| e.into_inner()).take() {

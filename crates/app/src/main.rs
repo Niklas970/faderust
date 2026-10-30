@@ -4,6 +4,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod audio;
+mod cable;
 mod config;
 mod log;
 mod remote;
@@ -299,6 +300,32 @@ async fn set_device_volume(
 
 /// VB-Audio's page with the free VB-Cable download.
 const CABLE_PAGE: &str = "https://vb-audio.com/Cable/";
+
+#[tauri::command]
+fn get_usb_cable() -> cable::Status {
+    cable::status()
+}
+
+/// Turns Faderust's USB cable on or off and remembers the choice.
+#[tauri::command]
+fn set_usb_cable(enabled: bool, state: State<AppState>) -> Result<(), String> {
+    if enabled {
+        cable::start()?;
+    } else {
+        cable::stop();
+    }
+    let mut config = state.config.lock().unwrap_or_else(|e| e.into_inner());
+    config.usb_cable = enabled;
+    config.save(&state.path).map_err(|e| e.to_string())
+}
+
+/// One-time setup of the USB cable: installs usbip-win2 and the attach task.
+#[tauri::command]
+async fn setup_usb_cable() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(cable::setup)
+        .await
+        .map_err(|e| e.to_string())?
+}
 
 /// Opens the VB-Cable download page in the browser. Faderust must not ship
 /// the driver itself.
@@ -688,6 +715,7 @@ fn initial_config() -> Config {
             .collect(),
         gains: vec![],
         presets: vec![],
+        usb_cable: false,
     }
     .normalized()
 }
@@ -738,6 +766,11 @@ fn main() {
                     first_start()
                 }
             };
+            if config.usb_cable {
+                if let Err(e) = cable::start() {
+                    log::write(&format!("USB-Kabel: {e}"));
+                }
+            }
             let config = Arc::new(Mutex::new(config));
             let audio = audio::spawn(app.handle().clone(), Arc::clone(&config), path.clone());
             let token = app
@@ -821,6 +854,9 @@ fn main() {
             get_autostart,
             set_autostart,
             open_cable_page,
+            get_usb_cable,
+            set_usb_cable,
+            setup_usb_cable,
             get_config,
             save_config,
             set_gain,
@@ -874,6 +910,7 @@ mod tests {
             }],
             gains: vec![],
             presets: vec![],
+            usb_cable: false,
         }
         .normalized()
     }
