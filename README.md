@@ -3,8 +3,8 @@
 <h1 align="center">Faderust</h1>
 
 <p align="center">
-  Audio-Mixer für Windows, als schlanker Ersatz für Voicemeeter.<br>
-  Jeder Ausgang bekommt seine eigene Mischung, Geräte dürfen im Betrieb kommen und gehen.
+  Audio-Mixer für Windows, als schlanker, offener Ersatz für Voicemeeter.<br>
+  Jeder Ausgang bekommt seine eigene Mischung, Geräte dürfen im Betrieb kommen und gehen, virtuelle Kabel bringt Faderust selbst mit.
 </p>
 
 <p align="center">
@@ -21,11 +21,14 @@
 
 - **Pult wie bei Voicemeeter.** Jedes Gerät und jedes Programm bekommt einen Streifen mit Fader, MUTE und den Knöpfen A1, A2, A3 für die Ausgänge. Jeder Ausgang hat einen eigenen Master-Fader.
 - **Matrix für Feinarbeit.** Alternativ als Tabelle: jeder Eingang auf jedem Ausgang einzeln geregelt, z. B. das Mikro leiser auf dem Kopfhörer als im Stream.
-- **Programme direkt aufnehmen.** Discord, Spotify oder der Browser bekommen einen eigenen Streifen mit Effekten, ganz ohne virtuelles Kabel pro Programm. Stille Programme blendet Faderust nach einer einstellbaren Zeit aus.
+- **Programme direkt aufnehmen.** Discord, Spotify oder der Browser bekommen einen eigenen Streifen mit Effekten, ganz ohne virtuelles Kabel pro Programm. Stille Programme blendet Faderust aus und holt sie auf Wunsch einzeln zurück („N still, zeigen“).
+- **Eigene virtuelle Kabel, kein Zusatz-Treiber.** Das „Faderust Kabel“ (bis zu vier) richtet die App selbst ein, zum Beispiel eines für das Mikrofon und eines für Programme. Details unter [Faderust Kabel](#faderust-kabel).
+- **Aufgeräumt.** Ausgänge lassen sich mit dem × ausblenden und kommen von selbst zurück, sobald wieder Ton auf ihnen spielt.
 - **Geräte kommen und gehen.** Bluetooth-Kopfhörer aus- und wieder einschalten, USB-Gerät abziehen: Faderust verbindet neu, ohne die anderen Geräte zu unterbrechen.
 - **Multipoint-freundlich.** Bluetooth-Ausgänge gibt Faderust bei Stille frei (nach 30 s, pro Ausgang einstellbar), damit die Kopfhörer zum Handy wechseln können. Kommt wieder Ton, öffnen sie sich von selbst.
 - **Effekte pro Eingang:** Rauschunterdrückung ([RNNoise](https://jmvalin.ca/demo/rnnoise/), gegen Tastatur und Lüfter), Low-Cut, Drei-Band-EQ und Gate. Die Rauschunterdrückung läuft bei Geräten mit 48 kHz und verzögert den Ton um 10 ms.
 - **Deutsch und Englisch.** Die Sprache folgt Windows und lässt sich unter „Design“ umstellen.
+- **Einstellungen speichern sich selbst.** Der Geräte-Dialog übernimmt Änderungen kurz nach der letzten Eingabe.
 - **Selbsttest.** Unter „Geräte“ prüft Faderust Geräte, Puffer, Rückkopplung, Fernsteuerung und Stream-Deck-Plugin und zeigt, was in Ordnung ist und was nicht. Der Bericht lässt sich für ein Issue kopieren.
 - **Windows-Sound aus einer Hand:** Standardgeräte für Wiedergabe, Aufnahme und Anrufe sowie die Lautstärke pro Gerät.
 - **Presets, Autostart im Tray, Updates in der App** (mit Signaturprüfung) und ein **Stream-Deck-Plugin**.
@@ -55,7 +58,7 @@ Voraussetzung: Windows 10 (ab Version 2004) oder Windows 11.
 
 ## Erste Schritte
 
-1. **Geräte** öffnen und Eingänge (Mikrofon, Line-In, virtuelles Kabel) und Ausgänge (Kopfhörer, Lautsprecher, Stream) anlegen. Bluetooth braucht etwa 80 ms Puffer, USB meist 30 bis 60 ms.
+1. **Geräte** öffnen und Eingänge (Mikrofon, Line-In, Faderust Kabel) und Ausgänge (Kopfhörer, Lautsprecher, Stream) anlegen. Bluetooth braucht etwa 80 ms Puffer, USB meist 30 bis 60 ms.
 2. Im **Pult** mit A1–A3 wählen, wohin ein Eingang spielt. Der Fader regelt alle eingeschalteten Ausgänge gemeinsam.
 3. Fader bedienen: ziehen, Mausrad (mit Shift feiner), Doppelklick auf 0 dB, oder auf die dB-Zahl darunter klicken und einen Wert eintippen.
 4. **Effekte** unter einem Streifen öffnet Low-Cut, EQ und Gate.
@@ -63,16 +66,21 @@ Voraussetzung: Windows 10 (ab Version 2004) oder Windows 11.
 
 ### Programme
 
-**+ Programm** im Pult zeigt alle Programme, die gerade Ton abspielen. **+ Eingang** nimmt eines direkt auf. Damit du es nicht doppelt hörst, stellt Faderust das Programm zuerst auf ein freies virtuelles Kabel, das du nicht hörst (falls eins da ist), und nimmt es dann auf.
-
+**+ Programm** im Pult zeigt alle Programme, die gerade Ton abspielen. **+ Eingang** nimmt eines direkt auf. Damit du es nicht doppelt hörst, stellt Faderust das Programm zuerst auf ein freies Faderust Kabel, das du nicht hörst (falls eingerichtet), und nimmt es dann auf. Ein Programm, das gerade still ist, blendet Faderust aus; **N still, zeigen** holt es zurück.
 
 ### Mikrofon für Discord, Teams & Co.
 
-Unter **Geräte** legt **+ Programm-Mikro** einen Ausgang auf einem freien virtuellen Kabel an, auf dem nur das Mikrofon mit seinen Effekten liegt. Im Programm wählst du die andere Seite des Kabels als Mikrofon. Rückkopplungen (ein Ausgang spielt auf das Kabel, von dem ein Eingang kommt) schaltet Faderust stumm und zeigt „Schleife“.
+Unter **Geräte** legt **+ Programm-Mikro** einen Ausgang auf einem freien Faderust Kabel an, auf dem nur das Mikrofon mit seinen Effekten liegt. Im Programm wählst du die Aufnahme-Seite desselben Kabels als Mikrofon. Rückkopplungen (ein Ausgang spielt auf das Kabel, von dem ein Eingang kommt) schaltet Faderust stumm und zeigt „Schleife“.
 
 ### Faderust Kabel
 
-Unter **Geräte** → **Faderust Kabel** auf **Einrichten** klicken (einmalig, mit einer Administrator-Abfrage). Danach lassen sich ein bis vier virtuelle Kabel einschalten, zum Beispiel eines für das Mikrofon und eines für Programme. Windows zeigt sie als „Faderust Cable“, „Faderust Cable 2“ und so weiter. **Entfernen** nimmt die Einrichtung wieder zurück.
+Das Faderust Kabel ist ein virtuelles USB-Soundgerät (Stereo, 48 kHz, 24 Bit), das Faderust selbst bereitstellt. Faderust zeigt es als „Faderust Kabel (Wiedergabe)“ und „Faderust Kabel (Aufnahme)“; was ein Programm auf die Wiedergabe-Seite spielt, kommt auf der Aufnahme-Seite wieder heraus.
+
+1. Unter **Geräte** → **Faderust Kabel** auf **Einrichten** klicken (einmalig, mit einer Administrator-Abfrage). Faderust lädt dabei [usbip-win2](https://github.com/vadimgrn/usbip-win2) herunter, prüft die Prüfsumme und installiert es im Hintergrund. In der Windows-App-Liste erscheint es nicht extra.
+2. **Faderust Kabel** einschalten und die Anzahl wählen (1 bis 4), zum Beispiel eines für das Mikrofon und eines für Programme. Windows zeigt sie in seinen Einstellungen als „Faderust Cable“, „Faderust Cable 2“ und so weiter.
+3. **Entfernen** nimmt die Einrichtung samt usbip-win2 wieder zurück.
+
+Hinweis: Das Kabel ist noch ein Test und auf wenig Hardware erprobt.
 
 ## Grenzen
 
@@ -91,6 +99,7 @@ Rust für den Audio-Kern, Svelte 5 mit Tauri 2 für die Oberfläche.
 | Pfad | Inhalt |
 |---|---|
 | `crates/engine` | Audio-Kern: Geräte (WASAPI über cpal), Ringpuffer, Drift-Ausgleich, Mix-Matrix, Effekte, Programm-Aufnahme |
+| `crates/usbcable` | Faderust Kabel: virtuelles USB-Audiogerät über USB/IP |
 | `crates/app` | Tauri-App: Befehle, Konfiguration, Tray, Updater |
 | `crates/app/ui` | Oberfläche |
 | `streamdeck` | Stream-Deck-Plugin |
