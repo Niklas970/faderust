@@ -19,14 +19,28 @@ pub const EP_REC: u32 = 2;
 /// Windows shows this in the device names ("Speakers (Faderust Cable)").
 pub const PRODUCT_NAME: &str = "Faderust Cable";
 
+/// Most cables one server offers.
+pub const MAX_CABLES: usize = 4;
+
+/// Product name of cable `cable` (counted from 0): the first keeps the plain
+/// name, the others are numbered ("Faderust Cable 2").
+pub fn product_name(cable: usize) -> String {
+    match cable {
+        0 => PRODUCT_NAME.to_string(),
+        n => format!("{PRODUCT_NAME} {}", n + 1),
+    }
+}
+
 const VENDOR: u16 = 0x1209; // pid.codes test range
 const PRODUCT: u16 = 0x0001;
 
-fn string_table(index: u8) -> Option<&'static str> {
+/// The strings of cable `cable`; the serial number tells Windows the cables
+/// apart.
+fn string_table(index: u8, cable: usize) -> Option<String> {
     match index {
-        1 => Some("Faderust"),
-        2 => Some(PRODUCT_NAME),
-        3 => Some("0001"),
+        1 => Some("Faderust".to_string()),
+        2 => Some(product_name(cable)),
+        3 => Some(format!("{:04}", cable + 1)),
         _ => None,
     }
 }
@@ -88,23 +102,23 @@ pub fn configuration_descriptor() -> Vec<u8> {
     d
 }
 
-fn string_descriptor(index: u8) -> Option<Vec<u8>> {
+fn string_descriptor(index: u8, cable: usize) -> Option<Vec<u8>> {
     if index == 0 {
         return Some(vec![4, 3, 0x09, 0x04]);
     }
-    let text = string_table(index)?;
+    let text = string_table(index, cable)?;
     let units: Vec<u8> = text.encode_utf16().flat_map(u16::to_le_bytes).collect();
     let mut d = vec![(2 + units.len()) as u8, 3];
     d.extend(units);
     Some(d)
 }
 
-pub fn info(busid: &str) -> DeviceInfo {
+pub fn info(busid: &str, cable: usize) -> DeviceInfo {
     DeviceInfo {
         path: format!("/faderust/usbcable/{busid}"),
         busid: busid.to_string(),
         busnum: 1,
-        devnum: 2,
+        devnum: 2 + cable as u32,
         // Full speed: 1 ms frames, as the endpoint intervals assume.
         speed: 2,
         vendor: VENDOR,
@@ -131,6 +145,8 @@ pub enum Control {
 /// setting of each streaming interface.
 #[derive(Default)]
 pub struct State {
+    /// Which cable this is (from 0), for its strings.
+    pub cable: usize,
     pub configuration: u8,
     pub alt: [u8; 3],
 }
@@ -164,7 +180,7 @@ impl State {
                 match (kind, number) {
                     (1, 0) => truncated(device_descriptor()),
                     (2, 0) => truncated(configuration_descriptor()),
-                    (3, n) => string_descriptor(n).map_or(Control::Stall, truncated),
+                    (3, n) => string_descriptor(n, self.cable).map_or(Control::Stall, truncated),
                     _ => Control::Stall,
                 }
             }
@@ -283,10 +299,26 @@ mod tests {
 
     #[test]
     fn string_descriptors_are_utf16() {
-        let Some(d) = string_descriptor(2) else {
+        let Some(d) = string_descriptor(2, 0) else {
             panic!("missing");
         };
         assert_eq!(d[0] as usize, d.len());
         assert_eq!(d.len(), 2 + "Faderust Cable".len() * 2);
+    }
+
+    #[test]
+    fn cables_have_their_own_names_and_serials() {
+        assert_eq!(product_name(0), "Faderust Cable");
+        assert_eq!(product_name(1), "Faderust Cable 2");
+        let text = |d: Vec<u8>| {
+            let units: Vec<u16> = d[2..]
+                .chunks(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect();
+            String::from_utf16(&units).unwrap()
+        };
+        assert_eq!(text(string_descriptor(2, 2).unwrap()), "Faderust Cable 3");
+        assert_eq!(text(string_descriptor(3, 0).unwrap()), "0001");
+        assert_eq!(text(string_descriptor(3, 3).unwrap()), "0004");
     }
 }

@@ -6,11 +6,13 @@
   import Selftest from "./Selftest.svelte";
   import {
     cableCounterpart,
+    ownCable,
     getAutostart,
     getDevices,
     getStreamDeck,
     getUsbCable,
     setUsbCable,
+    setUsbCableCount,
     setupUsbCable,
     installStreamDeck,
     getWindowsAudio,
@@ -154,9 +156,9 @@
     devices.outputs.find(
       (d) =>
         isCable(d.name) &&
-        /input/i.test(d.name) &&
+        (/input/i.test(d.name) || ownCable(d.name) !== null) &&
         !draft.outputs.some((o) => matches(d.name, o.device)) &&
-        !draft.inputs.some((i) => matches(cableCounterpart(d.name), i.device)),
+        !draft.inputs.some((i) => matches(cableCounterpart(d.name, devices.inputs), i.device)),
     ),
   );
   let hasCable = $derived(devices.outputs.some((d) => isCable(d.name)));
@@ -171,7 +173,7 @@
     draft.outputs.push({ label: t("settings.programMic"), device: cable, bufferMs: 30, releaseSecs: 30 });
     // The first input (usually the microphone) at 0 dB, everything else muted.
     for (const m of matrices()) m.forEach((row, i) => row.push({ db: 0, muted: i !== 0 }));
-    micDevice = cableCounterpart(cable);
+    micDevice = cableCounterpart(cable, devices.inputs);
   }
 
   async function save() {
@@ -332,26 +334,39 @@
 
   {#if usb?.supported}
     <h3>{t("usbcable.title")}</h3>
-    {#if usb.installed}
-      <label class="check">
-        <input
-          type="checkbox"
-          checked={usb.running}
-          disabled={usbBusy}
-          onchange={(e) => usbAction(() => setUsbCable(e.currentTarget.checked))}
-        />
-        {t("usbcable.enable")}
-      </label>
-      {#if usb.running}
-        <p class="note">{usb.attached ? t("usbcable.attached") : t("usbcable.waiting")}</p>
-      {/if}
-    {:else}
+    {#if !usb.installed}
       <div class="deck">
         <span>{t("usbcable.hint")}</span>
         <button disabled={usbBusy} onclick={setupUsb}>
           {usbBusy ? t("usbcable.working") : t("usbcable.setup")}
         </button>
       </div>
+    {/if}
+    <label class="check">
+      <input
+        type="checkbox"
+        checked={usb.running}
+        disabled={usbBusy || !usb.installed}
+        onchange={(e) => usbAction(() => setUsbCable(e.currentTarget.checked))}
+      />
+      {t("usbcable.enable")}
+    </label>
+    <label class="check">
+      {t("usbcable.count")}
+      <select
+        value={usb.count}
+        disabled={usbBusy}
+        onchange={(e) => usbAction(() => setUsbCableCount(Number(e.currentTarget.value)))}
+      >
+        {#each [1, 2, 3, 4] as n}<option value={n}>{n}</option>{/each}
+      </select>
+    </label>
+    {#if usb.running}
+      <p class="note">
+        {#each usb.attached as on, i}
+          {t(on ? "usbcable.cableOn" : "usbcable.cableWaiting", { name: i ? `Faderust Cable ${i + 1}` : "Faderust Cable" })}<br />
+        {/each}
+      </p>
     {/if}
     {#if usbError}<p class="error">{usbError}</p>{/if}
   {/if}
@@ -506,6 +521,9 @@
   }
   .error {
     color: var(--danger);
+  }
+  .check select {
+    width: auto;
   }
   .note {
     color: var(--muted);

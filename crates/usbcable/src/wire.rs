@@ -84,12 +84,14 @@ fn header(code: u16, status: u32) -> Vec<u8> {
     out
 }
 
-pub fn encode_devlist_reply(device: &DeviceInfo) -> Vec<u8> {
+pub fn encode_devlist_reply(devices: &[DeviceInfo]) -> Vec<u8> {
     let mut out = header(OP_REP_DEVLIST, 0);
-    out.extend(1u32.to_be_bytes());
-    out.extend(device.encode_fixed());
-    for &(class, subclass, protocol) in &device.interfaces {
-        out.extend([class, subclass, protocol, 0]);
+    out.extend((devices.len() as u32).to_be_bytes());
+    for device in devices {
+        out.extend(device.encode_fixed());
+        for &(class, subclass, protocol) in &device.interfaces {
+            out.extend([class, subclass, protocol, 0]);
+        }
     }
     out
 }

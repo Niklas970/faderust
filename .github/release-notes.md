@@ -1,8 +1,6 @@
-## Neu in 0.6.0
+## Neu in 0.6.2
 
-- **Faderust Kabel (Test):** Ein eigenes virtuelles Kabel ohne VB-Cable. Unter „Geräte“ auf „Einrichten“ klicken (einmalig, installiert usbip-win2 und fragt einmal nach Administratorrechten), dann „Faderust Kabel verwenden“ einschalten. Windows zeigt es als „Faderust Cable“. Es arbeitet mit 24 Bit und zählt wie ein VB-Kabel. Noch ein Test: bitte Fehler als Issue melden
-- Die Meldung „kein freies Kabel“ hat einen Knopf zum Einrichten des Faderust Kabels
-- Sicherung der Einstellungen als `config.toml.bak`, schnellere Tests (aus 0.5.9)
+- **Mehrere Faderust Kabel:** Unter „Geräte“ → „Faderust Kabel (Test)“ lässt sich die Anzahl der Kabel (1 bis 4) einstellen, zum Beispiel eines für das Mikrofon und eines für Programme. Windows zeigt sie als „Faderust Cable“, „Faderust Cable 2“ und so weiter. Wer schon eingerichtet hat und mehr als ein Kabel will, richtet einmal neu ein (eine Administrator-Abfrage)
 
 ## Installation
 

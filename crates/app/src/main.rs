@@ -302,20 +302,38 @@ async fn set_device_volume(
 const CABLE_PAGE: &str = "https://vb-audio.com/Cable/";
 
 #[tauri::command]
-fn get_usb_cable() -> cable::Status {
-    cable::status()
+fn get_usb_cable(state: State<AppState>) -> cable::Status {
+    let configured = state
+        .config
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .usb_cables;
+    cable::status(configured)
 }
 
 /// Turns Faderust's USB cable on or off and remembers the choice.
 #[tauri::command]
 fn set_usb_cable(enabled: bool, state: State<AppState>) -> Result<(), String> {
+    let mut config = state.config.lock().unwrap_or_else(|e| e.into_inner());
     if enabled {
-        cable::start()?;
+        cable::start(cable::clamp_count(config.usb_cables))?;
     } else {
         cable::stop();
     }
-    let mut config = state.config.lock().unwrap_or_else(|e| e.into_inner());
     config.usb_cable = enabled;
+    config.save(&state.path).map_err(|e| e.to_string())
+}
+
+/// How many USB cables to offer; a running server restarts with the new number.
+#[tauri::command]
+fn set_usb_cable_count(count: u8, state: State<AppState>) -> Result<(), String> {
+    let count = cable::clamp_count(count);
+    let mut config = state.config.lock().unwrap_or_else(|e| e.into_inner());
+    config.usb_cables = count as u8;
+    if config.usb_cable {
+        cable::stop();
+        cable::start(count)?;
+    }
     config.save(&state.path).map_err(|e| e.to_string())
 }
 
@@ -716,6 +734,7 @@ fn initial_config() -> Config {
         gains: vec![],
         presets: vec![],
         usb_cable: false,
+        usb_cables: 1,
     }
     .normalized()
 }
@@ -767,7 +786,7 @@ fn main() {
                 }
             };
             if config.usb_cable {
-                if let Err(e) = cable::start() {
+                if let Err(e) = cable::start(cable::clamp_count(config.usb_cables)) {
                     log::write(&format!("USB-Kabel: {e}"));
                 }
             }
@@ -856,6 +875,7 @@ fn main() {
             open_cable_page,
             get_usb_cable,
             set_usb_cable,
+            set_usb_cable_count,
             setup_usb_cable,
             get_config,
             save_config,
@@ -911,6 +931,7 @@ mod tests {
             gains: vec![],
             presets: vec![],
             usb_cable: false,
+            usb_cables: 1,
         }
         .normalized()
     }

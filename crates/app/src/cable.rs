@@ -4,22 +4,35 @@
 //! one-time setup installs together with a scheduled task that attaches the
 //! cable without asking for administrator rights again.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use faderust_usbcable::server::{Server, Stopper, BUSID, DEFAULT_PORT};
+use faderust_usbcable::device::MAX_CABLES;
+use faderust_usbcable::server::{Server, Stopper, DEFAULT_PORT};
 use serde::Serialize;
 
 use crate::log;
 
-const TASK: &str = "Faderust Cable";
+/// Name of the scheduled task that attaches cable `cable` (counted from 0).
+fn task_name(cable: usize) -> String {
+    match cable {
+        0 => "Faderust Cable".to_string(),
+        n => format!("Faderust Cable {}", n + 1),
+    }
+}
+
+/// How long a look at the scheduled tasks stays valid.
+const INSTALLED_FOR: Duration = Duration::from_secs(30);
 /// How often the watcher attaches a cable that is not attached.
 const REATTACH_EVERY: Duration = Duration::from_secs(10);
 
-static RUNNING: Mutex<Option<Stopper>> = Mutex::new(None);
-/// Ends the watcher of the server that is running.
-static WATCH: AtomicBool = AtomicBool::new(false);
+/// The server's stopper and the number of cables it offers.
+static RUNNING: Mutex<Option<(Stopper, usize)>> = Mutex::new(None);
+/// Last answer of [`installed`]: when, for how many cables, and the result.
+static INSTALLED: Mutex<Option<(Instant, usize, bool)>> = Mutex::new(None);
+/// Number of the server run that is current; a watcher of an older one ends.
+static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,35 +43,63 @@ pub struct Status {
     pub installed: bool,
     /// The cable's server is running.
     pub running: bool,
-    /// A host is attached to it.
-    pub attached: bool,
+    /// Number of cables on offer (while running, else the configured one).
+    pub count: usize,
+    /// For each cable: a host is attached to it.
+    pub attached: Vec<bool>,
 }
 
-pub fn status() -> Status {
-    let running = RUNNING.lock().unwrap_or_else(|e| e.into_inner());
+/// Number of cables from the configuration, kept within the limits.
+pub fn clamp_count(count: u8) -> usize {
+    (count as usize).clamp(1, MAX_CABLES)
+}
+
+pub fn status(configured: u8) -> Status {
+    let running = RUNNING.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let count = running
+        .as_ref()
+        .map_or(clamp_count(configured), |(_, n)| *n);
     Status {
         supported: cfg!(windows),
-        installed: installed(),
+        installed: installed(count),
         running: running.is_some(),
-        attached: running.as_ref().is_some_and(Stopper::attached),
+        count,
+        attached: (0..count)
+            .map(|i| running.as_ref().is_some_and(|(s, _)| s.attached(i)))
+            .collect(),
     }
 }
 
-/// Starts the cable's server (and its attach watcher) unless it runs.
-pub fn start() -> Result<(), String> {
+/// Binds the server's port; a server that was stopped a moment ago may
+/// still hold it.
+fn bind(count: usize) -> Result<Server, String> {
+    let mut last = None;
+    for _ in 0..10 {
+        match Server::bind_cables(DEFAULT_PORT, count) {
+            Ok(server) => return Ok(server),
+            Err(e) => last = Some(e),
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    Err(format!(
+        "{} {DEFAULT_PORT}: {}",
+        faderust_engine::lang::tr("Port belegt:", "Port in use:"),
+        last.map(|e| e.to_string()).unwrap_or_default()
+    ))
+}
+
+/// Starts the server for `count` cables (and its attach watcher) unless it
+/// runs.
+pub fn start(count: usize) -> Result<(), String> {
+    let count = count.clamp(1, MAX_CABLES);
     let mut running = RUNNING.lock().unwrap_or_else(|e| e.into_inner());
     if running.is_some() {
         return Ok(());
     }
-    let server = Server::bind(DEFAULT_PORT).map_err(|e| {
-        format!(
-            "{} {DEFAULT_PORT}: {e}",
-            faderust_engine::lang::tr("Port belegt:", "Port in use:")
-        )
-    })?;
+    let server = bind(count)?;
     let stopper = server.stopper();
-    *running = Some(stopper.clone());
-    log::write("USB-Kabel gestartet");
+    *running = Some((stopper.clone(), count));
+    log::write(&format!("USB-Kabel gestartet ({count})"));
     std::thread::Builder::new()
         .name("faderust-usbcable".into())
         .spawn(move || {
@@ -67,15 +108,19 @@ pub fn start() -> Result<(), String> {
             }
         })
         .map_err(|e| e.to_string())?;
-    WATCH.store(true, Ordering::SeqCst);
+    let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     std::thread::Builder::new()
         .name("faderust-usbcable-attach".into())
         .spawn(move || {
-            // Attaches now, and again whenever the host dropped the cable
+            // Attaches now, and again whenever the host dropped a cable
             // (sleep, a restart of the audio service).
-            while WATCH.load(Ordering::SeqCst) {
-                if !stopper.attached() && installed() {
-                    attach();
+            while GENERATION.load(Ordering::SeqCst) == generation {
+                if installed(count) {
+                    for cable in 0..count {
+                        if !stopper.attached(cable) {
+                            attach(cable);
+                        }
+                    }
                 }
                 std::thread::sleep(REATTACH_EVERY);
             }
@@ -85,9 +130,9 @@ pub fn start() -> Result<(), String> {
 }
 
 pub fn stop() {
-    WATCH.store(false, Ordering::SeqCst);
+    GENERATION.fetch_add(1, Ordering::SeqCst);
     let stopper = RUNNING.lock().unwrap_or_else(|e| e.into_inner()).take();
-    if let Some(stopper) = stopper {
+    if let Some((stopper, _)) = stopper {
         stopper.stop();
         log::write("USB-Kabel gestoppt");
     }
@@ -99,7 +144,7 @@ mod sys {
     use std::path::PathBuf;
     use std::process::Command;
 
-    use super::TASK;
+    use super::{task_name, MAX_CABLES};
 
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
@@ -117,23 +162,28 @@ mod sys {
         c
     }
 
-    pub fn installed() -> bool {
+    /// usbip-win2 is installed and the tasks of the first `count` cables exist.
+    pub fn installed(count: usize) -> bool {
         usbip().exists()
-            && hidden("schtasks")
-                .args(["/query", "/tn", TASK])
-                .output()
-                .is_ok_and(|o| o.status.success())
+            && (0..count.min(MAX_CABLES)).all(|i| {
+                hidden("schtasks")
+                    .args(["/query", "/tn", &task_name(i)])
+                    .output()
+                    .is_ok_and(|o| o.status.success())
+            })
     }
 
-    pub fn attach() {
-        let _ = hidden("schtasks").args(["/run", "/tn", TASK]).output();
+    pub fn attach(cable: usize) {
+        let _ = hidden("schtasks")
+            .args(["/run", "/tn", &task_name(cable)])
+            .output();
     }
 
     /// Powershell file that installs usbip-win2 and registers the task.
     /// Runs elevated; writes what went wrong to `result.txt` next to it.
     const SCRIPT: &str = include_str!("cable-setup.ps1");
 
-    pub fn setup(busid: &str) -> Result<(), String> {
+    pub fn setup() -> Result<(), String> {
         let dir = std::env::temp_dir().join("faderust-cable-setup");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -154,7 +204,7 @@ mod sys {
              exit $p.ExitCode",
             quote(&script.to_string_lossy()),
             quote(&user),
-            quote(busid)
+            MAX_CABLES
         );
         let output = hidden("powershell")
             .args(["-NoProfile", "-NonInteractive", "-Command", &command])
@@ -176,11 +226,11 @@ mod sys {
 
 #[cfg(not(windows))]
 mod sys {
-    pub fn installed() -> bool {
+    pub fn installed(_count: usize) -> bool {
         false
     }
-    pub fn attach() {}
-    pub fn setup(_busid: &str) -> Result<(), String> {
+    pub fn attach(_cable: usize) {}
+    pub fn setup() -> Result<(), String> {
         Err(faderust_engine::lang::tr(
             "Das USB-Kabel gibt es nur unter Windows.",
             "The USB cable is only available on Windows.",
@@ -188,19 +238,31 @@ mod sys {
     }
 }
 
-fn installed() -> bool {
-    sys::installed()
+/// Whether the cables can be attached: usbip-win2 and the tasks are there.
+/// Looked at every 30 s at most, since it starts a process per cable.
+fn installed(count: usize) -> bool {
+    let mut last = INSTALLED.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((at, n, answer)) = *last {
+        if n == count && at.elapsed() < INSTALLED_FOR {
+            return answer;
+        }
+    }
+    let answer = sys::installed(count);
+    *last = Some((Instant::now(), count, answer));
+    answer
 }
 
-fn attach() {
-    sys::attach();
+fn attach(cable: usize) {
+    sys::attach(cable);
 }
 
 /// Installs usbip-win2 and the attach task (one administrator prompt).
 /// Blocks until the setup is done.
 pub fn setup() -> Result<(), String> {
     log::write("USB-Kabel: Einrichtung gestartet");
-    let result = sys::setup(BUSID);
+    let result = sys::setup();
+    // The tasks are new: look again at once.
+    *INSTALLED.lock().unwrap_or_else(|e| e.into_inner()) = None;
     match &result {
         Ok(()) => log::write("USB-Kabel: Einrichtung fertig"),
         Err(e) => log::write(&format!("USB-Kabel: Einrichtung fehlgeschlagen: {e}")),

@@ -711,9 +711,9 @@ impl<B: AudioBackend> Engine<B> {
 /// ("CABLE Input (VB-Audio Virtual Cable)", "VoiceMeeter Input" …).
 pub fn feeds_back(output: &str, input: &str) -> bool {
     let output = output.to_lowercase();
-    // Faderust's USB cable: "Speakers (Faderust Cable)" / "Microphone (Faderust Cable)".
-    if output.contains("(faderust cable)") {
-        return input.to_lowercase().contains("(faderust cable)");
+    // Faderust's USB cables: "Speakers (Faderust Cable 2)" / "Microphone (Faderust Cable 2)".
+    if let Some(cable) = crate::apps::own_cable(&output) {
+        return crate::apps::own_cable(input) == Some(cable);
     }
     output.contains("input") && output.replacen("input", "output", 1) == input.to_lowercase()
 }
@@ -1291,6 +1291,14 @@ mod tests {
         assert!(feeds_back(
             "Lautsprecher (Faderust Cable)",
             "Mikrofon (Faderust Cable)"
+        ));
+        assert!(feeds_back(
+            "Speakers (Faderust Cable 2)",
+            "Microphone (Faderust Cable 2)"
+        ));
+        assert!(!feeds_back(
+            "Speakers (Faderust Cable 2)",
+            "Microphone (Faderust Cable)"
         ));
         assert!(!feeds_back(
             "Lautsprecher (Faderust Cable)",

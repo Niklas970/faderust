@@ -17,9 +17,20 @@ fn main() -> std::io::Result<()> {
         !std::env::args().any(|a| a == "--quiet"),
         std::sync::atomic::Ordering::Relaxed,
     );
-    let server = Server::bind(DEFAULT_PORT)?;
-    println!("USB/IP server on 127.0.0.1:{}, bus id 1-1", server.port());
-    let ring = server.ring.clone();
+    // `--cables N` offers more than one (bus ids 1-1, 1-2, …).
+    let args: Vec<String> = std::env::args().collect();
+    let count = args
+        .iter()
+        .position(|a| a == "--cables")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(1);
+    let server = Server::bind_cables(DEFAULT_PORT, count)?;
+    println!(
+        "USB/IP server on 127.0.0.1:{}, bus ids 1-1 …",
+        server.port()
+    );
+    let ring = server.ring(0);
     thread::spawn(move || {
         use std::sync::atomic::Ordering::Relaxed;
         loop {

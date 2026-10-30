@@ -136,12 +136,20 @@ export async function setDeviceVolume(id, volume, muted) {
 }
 
 /** VB-Audio's virtual cables, by name ("CABLE Input", "CABLE-A Output", …). */
+/** Which Faderust USB cable a device name belongs to ("faderust cable 2"), or null. */
+export function ownCable(name) {
+  const n = name.toLowerCase();
+  const start = n.lastIndexOf("(faderust cable");
+  const end = start < 0 ? -1 : n.indexOf(")", start);
+  return end < 0 ? null : n.slice(start + 1, end);
+}
+
 export function isCable(name) {
   const n = name.toLowerCase();
   return (
     n.includes("vb-audio") ||
     n.startsWith("cable") ||
-    n.includes("(faderust cable)")
+    ownCable(name) !== null
   );
 }
 
@@ -151,19 +159,23 @@ export function isCable(name) {
  */
 export function feedsBack(output, input) {
   const o = output.toLowerCase();
-  if (o.includes("(faderust cable)"))
-    return input.toLowerCase().includes("(faderust cable)");
+  if (ownCable(output) !== null) return ownCable(output) === ownCable(input);
   return (
     o.includes("input") && o.replace("input", "output") === input.toLowerCase()
   );
 }
 
 /** The recording end of the cable that `output` plays into. */
-export function cableCounterpart(output) {
+export function cableCounterpart(output, recordings = []) {
+  const own = ownCable(output);
+  // Faderust's cables are named "Speakers"/"Microphone" in the user's
+  // language: pair them by the cable's name instead.
+  if (own !== null)
+    return recordings.find((d) => ownCable(d.name) === own)?.name ?? "";
   return output.replace(/input/i, (m) => (m[0] === "I" ? "Output" : "output"));
 }
 
-/** Faderust's own USB cable: `{ supported, installed, running, attached }`. */
+/** Faderust's own USB cables: `{ supported, installed, running, count, attached: [bool] }`. */
 export async function getUsbCable() {
   if (!inTauri) return mock.usbCable;
   return (await tauri()).invoke("get_usb_cable");
@@ -171,10 +183,21 @@ export async function getUsbCable() {
 
 export async function setUsbCable(enabled) {
   if (!inTauri) {
-    mock.usbCable = { ...mock.usbCable, running: enabled, attached: enabled };
+    const n = mock.usbCable.count;
+    mock.usbCable = { ...mock.usbCable, running: enabled, attached: Array(n).fill(enabled) };
     return;
   }
   return (await tauri()).invoke("set_usb_cable", { enabled });
+}
+
+/** How many USB cables to offer (1 to 4). */
+export async function setUsbCableCount(count) {
+  if (!inTauri) {
+    const on = mock.usbCable.running;
+    mock.usbCable = { ...mock.usbCable, count, attached: Array(count).fill(on) };
+    return;
+  }
+  return (await tauri()).invoke("set_usb_cable_count", { count });
 }
 
 /** Installs usbip-win2 and the attach task; one administrator prompt. */
@@ -426,7 +449,7 @@ const mock = {
   },
   gains: [],
   autostart: false,
-  usbCable: { supported: true, installed: false, running: false, attached: false },
+  usbCable: { supported: true, installed: false, running: false, count: 1, attached: [false] },
   apps: {
     supported: true,
     devices: [
