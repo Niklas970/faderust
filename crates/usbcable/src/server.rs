@@ -277,7 +277,11 @@ fn spawn_pacer(shared: Arc<Shared>, jobs: Receiver<IsoJob>) -> thread::JoinHandl
             }
             let frames = job.iso.len().max(1) as u64;
             let now = Instant::now();
-            let start = clock.filter(|&c| c > now).unwrap_or(now);
+            // Keep to one absolute schedule so that late wake-ups are made up
+            // for; only a long stall (the host paused) starts a new one.
+            let start = clock
+                .filter(|&c| now.duration_since(c.min(now)) < Duration::from_millis(50))
+                .unwrap_or(now);
             let due = start + Duration::from_millis(frames);
             clock = Some(due);
             if let Some(wait) = due.checked_duration_since(Instant::now()) {
