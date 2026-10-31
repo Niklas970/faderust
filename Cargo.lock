@@ -1772,7 +1772,10 @@ dependencies = [
  "faderust-core",
  "iced",
  "png 0.17.16",
+ "serde",
+ "serde_json",
  "tokio",
+ "tray-icon",
 ]
 
 [[package]]

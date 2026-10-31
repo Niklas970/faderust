@@ -12,9 +12,12 @@
 mod dialogs;
 mod fader;
 mod scale;
+mod shell;
 mod style;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -58,6 +61,8 @@ pub struct Strip {
     pub shown: f32,
     target: f32,
     pub connected: bool,
+    /// Input device id (`app:name.exe` for programs).
+    device: String,
     pub routes: Vec<bool>,
     /// Programs are recorded from one program, devices from a capture device.
     pub program: bool,
@@ -148,6 +153,13 @@ pub struct App {
     pub masters_left: bool,
     pub hide_after: &'static str,
     pub dialog: Option<Dialog>,
+    visible: shell::Visible,
+    win_id: Option<window::Id>,
+    dir: PathBuf,
+    prefs: shell::Prefs,
+    pub autostart: bool,
+    #[cfg(windows)]
+    tray: Option<shell::tray::Tray>,
     core: Arc<AppState>,
     notices: Arc<Mutex<Vec<Notice>>>,
     /// Message for the user: when it came, text, level.
@@ -215,6 +227,7 @@ pub enum Edit {
     UsbEnable(bool),
     UsbCount(u8),
     UsbRemove,
+    Autostart(bool),
     OpenLogFolder,
     CopyLog,
     CopyChecks,
@@ -233,6 +246,12 @@ pub enum Edit {
 #[derive(Debug, Clone)]
 pub enum Message {
     SetView(View),
+    WinId(Option<window::Id>),
+    CloseRequested,
+    Minimize,
+    ToggleMax,
+    Drag,
+    Quit,
     Open(Option<Dialog>),
     Edit(Edit),
     Route(usize, usize),
@@ -273,6 +292,7 @@ pub enum Then {
 /// notices need a queue.
 struct GuiHost {
     notices: Arc<Mutex<Vec<Notice>>>,
+    visible: shell::Visible,
 }
 
 impl Host for GuiHost {
@@ -284,7 +304,7 @@ impl Host for GuiHost {
             .push(notice);
     }
     fn visible(&self) -> bool {
-        true
+        shell::is_visible(&self.visible)
     }
 }
 
@@ -362,6 +382,56 @@ fn blocking<T: Send + 'static>(
 }
 
 impl App {
+    fn save_prefs(&mut self) {
+        let prefs = shell::Prefs {
+            view: if self.view == View::Matrix {
+                "matrix"
+            } else {
+                "desk"
+            }
+            .into(),
+            masters_right: !self.masters_left,
+            hide_after: Some(hide_secs(self.hide_after)),
+            keep: self
+                .strips
+                .iter()
+                .filter(|s| s.keep)
+                .map(|s| s.device.clone())
+                .collect(),
+            hidden_outputs: self
+                .outs
+                .iter()
+                .filter(|o| o.hidden)
+                .map(|o| o.label.clone())
+                .collect(),
+        };
+        if prefs != self.prefs {
+            shell::save_prefs(&self.dir, &prefs);
+            self.prefs = prefs;
+        }
+    }
+
+    /// Closing the window keeps the mixer running in the tray.
+    fn hide(&mut self) -> Task<Message> {
+        self.visible.store(false, Ordering::Relaxed);
+        match self.win_id {
+            Some(id) => window::set_mode(id, window::Mode::Hidden),
+            None => Task::none(),
+        }
+    }
+
+    fn show(&mut self) -> Task<Message> {
+        self.visible.store(true, Ordering::Relaxed);
+        match self.win_id {
+            Some(id) => Task::batch([
+                window::set_mode(id, window::Mode::Windowed),
+                window::minimize(id, false),
+                window::gain_focus(id),
+            ]),
+            None => Task::none(),
+        }
+    }
+
     fn load_windows(&self) -> Task<Message> {
         blocking(faderust_core::get_windows_audio, |r| {
             Message::Loaded(Loaded::Windows(r))
@@ -547,12 +617,17 @@ impl App {
 impl App {
     fn new() -> (Self, Task<Message>) {
         let notices = Arc::new(Mutex::new(Vec::new()));
+        let minimized = std::env::args().any(|a| a == shell::MINIMIZED_ARG);
+        let visible: shell::Visible = Arc::new(AtomicBool::new(!minimized));
+        let dir = config_dir();
         let core = faderust_core::start(
             Arc::new(GuiHost {
                 notices: Arc::clone(&notices),
+                visible: Arc::clone(&visible),
             }),
-            &config_dir(),
+            &dir,
         );
+        let prefs = shell::load_prefs(&dir);
         let dialog = std::env::var("FADERUST_DIALOG")
             .ok()
             .and_then(|d| match d.as_str() {
@@ -567,13 +642,26 @@ impl App {
                 _ => None,
             });
         let mut app = App {
-            view: if std::env::var("FADERUST_VIEW").as_deref() == Ok("matrix") {
+            view: if std::env::var("FADERUST_VIEW").as_deref() == Ok("matrix")
+                || prefs.view == "matrix"
+            {
                 View::Matrix
             } else {
                 View::Desk
             },
-            masters_left: true,
-            hide_after: HIDE_AFTER[2],
+            masters_left: !prefs.masters_right,
+            hide_after: match prefs.hide_after {
+                Some(0) => HIDE_AFTER[0],
+                Some(5) => HIDE_AFTER[1],
+                _ => HIDE_AFTER[2],
+            },
+            visible,
+            win_id: None,
+            dir,
+            autostart: shell::autostart_enabled(),
+            #[cfg(windows)]
+            tray: tray_icon(),
+            prefs,
             dialog: None,
             core,
             notices,
@@ -608,7 +696,7 @@ impl App {
             shot: std::env::var("FADERUST_SHOT").ok(),
         };
         app.refresh_presets();
-        let task = app.open(dialog);
+        let task = Task::batch([app.open(dialog), window::latest().map(Message::WinId)]);
         (app, task)
     }
 
@@ -648,6 +736,7 @@ impl App {
                 shown: -120.0,
                 target: -120.0,
                 connected: false,
+                device: String::new(),
                 routes: vec![],
                 program: false,
                 hidden: false,
@@ -688,6 +777,10 @@ impl App {
             s.routes = row.iter().map(|g| !g.muted).collect();
             s.row = row;
             s.program = d.device.starts_with("app:");
+            if s.device != d.device {
+                s.device.clone_from(&d.device);
+                s.keep = self.prefs.keep.contains(&d.device);
+            }
             s.target = level_of(d.level_db);
             if s.connected && s.target > -60.0 {
                 s.heard = now;
@@ -720,6 +813,9 @@ impl App {
         }
         self.outs.truncate(snap.outputs.len());
         for (m, d) in self.outs.iter_mut().zip(&snap.outputs) {
+            if m.label.is_empty() {
+                m.hidden = self.prefs.hidden_outputs.contains(&d.label);
+            }
             let master = d.master.unwrap_or_default();
             let note = if d.released {
                 "Freigegeben".to_string()
@@ -804,7 +900,39 @@ impl App {
 
     fn handle(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::SetView(v) => self.view = v,
+            Message::SetView(v) => {
+                self.view = v;
+                self.save_prefs();
+            }
+            Message::WinId(id) => self.win_id = id,
+            Message::CloseRequested => return self.hide(),
+            Message::Minimize => {
+                if let Some(id) = self.win_id {
+                    return window::minimize(id, true);
+                }
+            }
+            Message::ToggleMax => {
+                if let Some(id) = self.win_id {
+                    return window::toggle_maximize(id);
+                }
+            }
+            Message::Drag => {
+                if let Some(id) = self.win_id {
+                    return window::drag(id);
+                }
+            }
+            Message::Quit => {
+                faderust_core::log::write("Faderust beendet");
+                // A stream that never closes must not keep the process, and
+                // with it the audio devices, alive after Quit.
+                let _ = std::thread::Builder::new()
+                    .name("faderust-exit-guard".into())
+                    .spawn(|| {
+                        std::thread::sleep(Duration::from_secs(3));
+                        std::process::exit(0);
+                    });
+                return iced::exit();
+            }
             Message::Open(d) => return self.open(d),
             Message::Loaded(l) => self.loaded(l),
             Message::Failed(e) => self.dialog_error = e,
@@ -835,6 +963,25 @@ impl App {
                 }
             }
             Message::Frame(now) => {
+                #[cfg_attr(not(windows), allow(unused_mut))]
+                let mut show = INSTANCE
+                    .lock()
+                    .ok()
+                    .and_then(|g| g.as_ref().map(|rx| rx.try_iter().count() > 0))
+                    .unwrap_or(false);
+                #[cfg(windows)]
+                if let Some(tray) = &self.tray {
+                    for a in tray.poll() {
+                        match a {
+                            shell::tray::Action::Show => show = true,
+                            shell::tray::Action::Quit => return self.handle(Message::Quit),
+                        }
+                    }
+                }
+                if show {
+                    let t = self.show();
+                    self.jobs.push(t);
+                }
                 let dt = now.duration_since(self.last).as_secs_f32().min(0.1);
                 self.last = now;
                 let snap = self
@@ -1157,8 +1304,18 @@ impl App {
                 );
                 self.deck_error = r.err().unwrap_or_default();
             }
-            Edit::MastersLeft(l) => self.masters_left = l,
-            Edit::HideAfter(h) => self.hide_after = h,
+            Edit::MastersLeft(l) => {
+                self.masters_left = l;
+                self.save_prefs();
+            }
+            Edit::Autostart(on) => match shell::set_autostart(on) {
+                Ok(()) => self.autostart = on,
+                Err(e) => self.dialog_error = e,
+            },
+            Edit::HideAfter(h) => {
+                self.hide_after = h;
+                self.save_prefs();
+            }
             Edit::NewPreset(t) => self.new_preset = t,
             Edit::SavePreset => {
                 let name = std::mem::take(&mut self.new_preset);
@@ -1183,6 +1340,7 @@ impl App {
                 if let Some(s) = self.strips.get_mut(i) {
                     s.keep = !s.keep;
                 }
+                self.save_prefs();
             }
             Edit::HideOut(o, h) => {
                 if let Some(m) = self.outs.get_mut(o) {
@@ -1194,6 +1352,7 @@ impl App {
                         o.hidden = false;
                     }
                 }
+                self.save_prefs();
             }
             Edit::ShowSilent => self
                 .strips
@@ -1226,11 +1385,12 @@ impl App {
             .on_press(Message::Open(Some(d)))
             .style(move |_, status| nav_style(on, matches!(status, button::Status::Hovered)))
         };
-        let win = |label: &'static str, close: bool| {
+        let win = |label: &'static str, close: bool, msg: Message| {
             button(container(text(label).size(12).color(MUTED)).center(Length::Fill))
                 .width(46)
                 .height(Length::Fill)
                 .padding(0)
+                .on_press(msg)
                 .style(move |_, status| {
                     let hot = matches!(status, button::Status::Hovered);
                     button::Style {
@@ -1273,7 +1433,7 @@ impl App {
         ]
         .spacing(8)
         .align_y(Vertical::Center);
-        container(
+        let bar = container(
             row![
                 brand,
                 space().width(Length::Fill),
@@ -1285,9 +1445,9 @@ impl App {
                 ]
                 .spacing(6),
                 space().width(24),
-                win("–", false),
-                win("▢", false),
-                win("✕", true),
+                win("–", false, Message::Minimize),
+                win("▢", false, Message::ToggleMax),
+                win("✕", true, Message::CloseRequested),
             ]
             .spacing(12)
             .align_y(Vertical::Center),
@@ -1303,8 +1463,11 @@ impl App {
                 ..Border::default()
             },
             ..container::Style::default()
-        })
-        .into()
+        });
+        iced::widget::mouse_area(bar)
+            .on_press(Message::Drag)
+            .on_double_click(Message::ToggleMax)
+            .into()
     }
 
     // --- desk ------------------------------------------------------------
@@ -1766,7 +1929,15 @@ impl App {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        iced::time::every(Duration::from_millis(33)).map(Message::Frame)
+        let every = if shell::is_visible(&self.visible) {
+            33
+        } else {
+            250
+        };
+        Subscription::batch([
+            iced::time::every(Duration::from_millis(every)).map(Message::Frame),
+            window::close_requests().map(|_| Message::CloseRequested),
+        ])
     }
 }
 
@@ -1873,13 +2044,39 @@ fn theme(_: &App) -> Theme {
     )
 }
 
+/// Set by `main` when this is the running instance.
+static INSTANCE: Mutex<Option<Receiver<()>>> = Mutex::new(None);
+
+#[cfg(windows)]
+fn tray_icon() -> Option<shell::tray::Tray> {
+    let decoder = png::Decoder::new(std::io::Cursor::new(LOGO));
+    let mut reader = decoder.read_info().ok()?;
+    let mut buf = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buf).ok()?;
+    buf.truncate(info.buffer_size());
+    (info.width == info.height && info.color_type == png::ColorType::Rgba)
+        .then(|| shell::tray::Tray::new(buf, info.width))
+        .flatten()
+}
+
 fn main() -> iced::Result {
+    // A second start only brings the running window to the front.
+    match shell::single_instance() {
+        Ok(rx) => *INSTANCE.lock().unwrap_or_else(|e| e.into_inner()) = Some(rx),
+        Err(()) => return Ok(()),
+    }
+    let minimized = std::env::args().any(|a| a == shell::MINIMIZED_ARG);
     iced::application(App::new, App::update, App::view)
         .subscription(App::subscription)
         .theme(theme)
         .window(window::Settings {
             size: Size::new(1400.0, 860.0),
+            min_size: Some(Size::new(480.0, 420.0)),
             icon: window::icon::from_file_data(LOGO, None).ok(),
+            // The title bar is drawn by the app; closing goes to the tray.
+            decorations: false,
+            visible: !minimized,
+            exit_on_close_request: false,
             ..window::Settings::default()
         })
         .title("Faderust")

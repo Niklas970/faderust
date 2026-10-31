@@ -947,6 +947,10 @@ fn settings(app: &App) -> Element<'_, Message> {
         h3("Ausgänge"),
         outputs,
         btn("+ Ausgang", edit(Edit::OutAdd), false),
+        h3("Start"),
+        checkbox(app.autostart)
+            .label("Mit Windows starten (im Tray, ohne Fenster)")
+            .on_toggle(|v| edit(Edit::Autostart(v))),
         h3("Faderust Kabel (Test)"),
         cable_section,
         h3("Stream Deck"),
@@ -960,7 +964,7 @@ fn settings(app: &App) -> Element<'_, Message> {
         ]
         .spacing(8)
         .align_y(Vertical::Center),
-        hint("Änderungen werden automatisch gespeichert. Autostart folgt."),
+        hint("Änderungen werden automatisch gespeichert."),
     ]
     .spacing(10);
     frame("Geräte".into(), 760.0, true, body.into(), done("Schließen"))
