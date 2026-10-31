@@ -1169,6 +1169,7 @@ dependencies = [
 name = "faderust"
 version = "0.6.4"
 dependencies = [
+ "faderust-core",
  "faderust-engine",
  "faderust-usbcable",
  "getrandom 0.4.3",
@@ -1179,6 +1180,19 @@ dependencies = [
  "tauri-plugin-autostart",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
+ "toml 1.1.8+spec-1.1.0",
+ "tungstenite",
+]
+
+[[package]]
+name = "faderust-core"
+version = "0.6.4"
+dependencies = [
+ "faderust-engine",
+ "faderust-usbcable",
+ "getrandom 0.4.3",
+ "serde",
+ "serde_json",
  "toml 1.1.8+spec-1.1.0",
  "tungstenite",
 ]

@@ -11,6 +11,7 @@ rust-version.workspace = true
 tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
+faderust-core = { path = "../core" }
 faderust-engine = { path = "../engine" }
 faderust-usbcable = { path = "../usbcable" }
 getrandom = "0.4"

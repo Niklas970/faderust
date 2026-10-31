@@ -9,11 +9,11 @@ use std::fs;
 use std::io;
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::Path;
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
 use tungstenite::handshake::server::{ErrorResponse, Request as Handshake, Response};
 use tungstenite::http::StatusCode;
 use tungstenite::{Message, WebSocket};
@@ -237,7 +237,7 @@ enum Push<'a> {
 
 /// Starts listening; without the port (taken by something else) Faderust
 /// runs on without remote control.
-pub fn spawn(app: AppHandle) {
+pub fn spawn(state: Arc<AppState>) {
     let listener = match TcpListener::bind((Ipv4Addr::LOCALHOST, PORT)) {
         Ok(l) => l,
         Err(e) => {
@@ -249,11 +249,11 @@ pub fn spawn(app: AppHandle) {
         .name("faderust-remote".into())
         .spawn(move || {
             for stream in listener.incoming().flatten() {
-                let app = app.clone();
+                let state = Arc::clone(&state);
                 let _ = thread::Builder::new()
                     .name("faderust-remote-client".into())
                     .spawn(move || {
-                        if let Err(e) = serve(&app, stream) {
+                        if let Err(e) = serve(&state, stream) {
                             eprintln!("remote control: {e}");
                         }
                     });
@@ -274,11 +274,10 @@ fn check_origin(req: &Handshake, res: Response) -> Result<Response, ErrorRespons
     Ok(res)
 }
 
-fn serve(app: &AppHandle, stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+fn serve(state: &AppState, stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;
     let mut ws = tungstenite::accept_hdr(stream, check_origin)?;
     ws.get_ref().set_read_timeout(Some(POLL))?;
-    let state: tauri::State<AppState> = app.state();
     let started = Instant::now();
     // Set once the client has said hello with the right token; nothing is
     // sent to or taken from it before.
@@ -293,14 +292,14 @@ fn serve(app: &AppHandle, stream: TcpStream) -> Result<(), Box<dyn std::error::E
                 let request = serde_json::from_str::<Request>(&text);
                 if connected.is_none() {
                     match request.ok().and_then(|r| authenticate(&state.token, &r)) {
-                        Some(version) => connected = Some(Connected::new(&state, version)),
-                        None => return refuse(&mut ws, &state),
+                        Some(version) => connected = Some(Connected::new(state, version)),
+                        None => return refuse(&mut ws, state),
                     }
                     continue;
                 }
                 let result = request
                     .map_err(|e| format!("Unbekannte Anfrage: {e}"))
-                    .and_then(|req| handle(&state, req));
+                    .and_then(|req| handle(state, req));
                 match result {
                     // A new default device should show at once.
                     Ok(true) => devices_at = None,
@@ -323,7 +322,7 @@ fn serve(app: &AppHandle, stream: TcpStream) -> Result<(), Box<dyn std::error::E
 
         if connected.is_none() {
             if started.elapsed() >= HELLO_WITHIN {
-                return refuse(&mut ws, &state);
+                return refuse(&mut ws, state);
             }
             continue;
         }

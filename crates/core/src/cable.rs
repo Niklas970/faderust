@@ -16,6 +16,7 @@ use serde::Serialize;
 use crate::log;
 
 /// Name of the scheduled task that attaches cable `cable` (counted from 0).
+#[cfg_attr(not(windows), allow(dead_code))]
 fn task_name(cable: usize) -> String {
     match cable {
         0 => "Faderust Cable".to_string(),

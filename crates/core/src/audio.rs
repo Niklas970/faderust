@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
+use crate::Host;
 use faderust_engine::backend::cpal::CpalBackend;
 use faderust_engine::lang::tr;
 use faderust_engine::meter::to_db;
@@ -15,7 +16,6 @@ use faderust_engine::{
     Direction, Engine, EngineConfig, EngineEvent, InputConfig, LostReason, OutputConfig, SlotState,
 };
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager};
 
 use crate::config::{Config, Fx};
 use crate::log;
@@ -59,35 +59,35 @@ pub enum Command {
 
 /// A message for the user, sent as the `notice` event.
 #[derive(Serialize, Clone)]
-struct Notice {
+pub struct Notice {
     /// "info", "warn" or "error".
-    level: &'static str,
-    text: String,
+    pub level: &'static str,
+    pub text: String,
 }
 
 /// Snapshot sent to the UI as the `state` event.
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct UiState {
-    pub(crate) inputs: Vec<UiDevice>,
-    pub(crate) outputs: Vec<UiDevice>,
+pub struct UiState {
+    pub inputs: Vec<UiDevice>,
+    pub outputs: Vec<UiDevice>,
     gains: Vec<Vec<crate::config::Gain>>,
-    pub(crate) lanes: Vec<Vec<UiLane>>,
+    pub lanes: Vec<Vec<UiLane>>,
 }
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct UiDevice {
-    pub(crate) label: String,
-    pub(crate) device: String,
-    pub(crate) connected: bool,
+pub struct UiDevice {
+    pub label: String,
+    pub device: String,
+    pub connected: bool,
     device_name: Option<String>,
     level_db: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) buffer_ms: Option<u32>,
+    pub buffer_ms: Option<u32>,
     /// Outputs only: closed while nothing plays for them.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub(crate) released: bool,
+    pub released: bool,
     /// Inputs only.
     #[serde(skip_serializing_if = "Option::is_none")]
     fx: Option<Fx>,
@@ -101,19 +101,24 @@ pub(crate) struct UiDevice {
 
 #[derive(Serialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct UiLane {
+pub struct UiLane {
     fill_ms: f32,
     correction_ppm: i32,
-    pub(crate) underruns: u64,
+    pub underruns: u64,
     /// Input frames lost because the output did not take them in time.
-    pub(crate) dropped_frames: u64,
+    pub dropped_frames: u64,
     /// Silenced because the output feeds back into the input.
-    pub(crate) looped: bool,
+    pub looped: bool,
 }
 
 /// Starts the audio thread. `config` is shared with the UI commands; the
 /// thread rebuilds the engine on [`Command::Reconfigure`].
-pub fn spawn(app: AppHandle, config: Arc<Mutex<Config>>, path: PathBuf) -> Sender<Command> {
+pub fn spawn(
+    host: Arc<dyn Host>,
+    config: Arc<Mutex<Config>>,
+    path: PathBuf,
+    last_state: Arc<Mutex<Option<UiState>>>,
+) -> Sender<Command> {
     let (tx, rx) = mpsc::channel();
     // A program recording that took Faderust down last time stays off until
     // the next start, so the app comes up again.
@@ -128,7 +133,7 @@ pub fn spawn(app: AppHandle, config: Arc<Mutex<Config>>, path: PathBuf) -> Sende
     }
     thread::Builder::new()
         .name("faderust-engine".into())
-        .spawn(move || run(app, config, path, rx, skip))
+        .spawn(move || run(host, config, path, rx, skip, last_state))
         .expect("spawn engine thread");
     tx
 }
@@ -308,11 +313,12 @@ impl Notices {
 }
 
 fn run(
-    app: AppHandle,
+    host: Arc<dyn Host>,
     config: Arc<Mutex<Config>>,
     path: PathBuf,
     rx: Receiver<Command>,
     skip: Option<String>,
+    last_state: Arc<Mutex<Option<UiState>>>,
 ) {
     let watch = Watch::new();
     watch.spawn_watchdog();
@@ -520,7 +526,7 @@ fn run(
                         log::write(&event.to_string());
                     }
                     if let Some(n) = notice {
-                        let _ = app.emit("notice", n);
+                        host.notice(n);
                     }
                 }
             }
@@ -531,23 +537,20 @@ fn run(
 
         if let Some((at, exe)) = &skip_notice {
             if Instant::now() >= *at {
-                let _ = app.emit(
-                    "notice",
-                    Notice {
+                host.notice(Notice {
                         level: "error",
                         text: tr(
                             "Die Aufnahme von {exe} hat Faderust beim letzten Mal zum Absturz gebracht. Sie bleibt bis zum nächsten Start aus. Details stehen in faderust.log.",
                             "Recording {exe} crashed Faderust last time. It stays off until the next start. Details are in faderust.log.",
                         )
                         .replace("{exe}", exe),
-                    },
-                );
+                    });
                 skip_notice = None;
             }
         }
 
         if last_visible_check.elapsed() >= VISIBLE_EVERY {
-            visible = window_visible(&app);
+            visible = host.visible();
             last_visible_check = Instant::now();
         }
         // Meters for a hidden window are wasted work, in Faderust and in
@@ -559,10 +562,8 @@ fn run(
                 engine.as_ref(),
             );
             level_delay.apply(&mut state);
-            if let Some(shared) = app.try_state::<crate::AppState>() {
-                *shared.last_state.lock().unwrap_or_else(|e| e.into_inner()) = Some(state.clone());
-            }
-            let _ = app.emit("state", state);
+            *last_state.lock().unwrap_or_else(|e| e.into_inner()) = Some(state.clone());
+            host.state(state);
             last_emit = Instant::now();
         }
 
@@ -701,12 +702,6 @@ impl LevelDelay {
             input.level_db = hist.front().copied().unwrap_or(input.level_db);
         }
     }
-}
-
-/// Whether the main window is on screen (not in the tray, not minimised).
-fn window_visible(app: &AppHandle) -> bool {
-    app.get_webview_window("main")
-        .is_none_or(|w| w.is_visible().unwrap_or(true) && !w.is_minimized().unwrap_or(false))
 }
 
 /// One dial click or key press on a fader, within the UI's range: below
