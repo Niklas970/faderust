@@ -216,34 +216,8 @@ fn delete_preset(name: String, state: St) -> Result<(), String> {
 /// to install it (a plugin of the same name is replaced).
 #[tauri::command]
 fn install_streamdeck(app: AppHandle) -> Result<(), String> {
-    let source = resource(&app, PLUGIN_FILE).ok_or_else(|| {
-        faderust_engine::lang::tr(
-            "Dieses Faderust enthält kein Stream-Deck-Plugin.",
-            "This Faderust does not include the Stream Deck plugin.",
-        )
-    })?;
     let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let target = dir.join(PLUGIN_FILE);
-    std::fs::copy(&source, &target).map_err(|e| {
-        format!(
-            "{}: {e}",
-            faderust_engine::lang::tr("Plugin nicht kopiert", "Plugin not copied")
-        )
-    })?;
-    if cfg!(windows) {
-        std::process::Command::new("explorer")
-            .arg(&target)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    } else {
-        Err(format!(
-            "{} {}",
-            faderust_engine::lang::tr("Bitte öffnen:", "Please open:"),
-            target.display()
-        ))
-    }
+    faderust_core::install_streamdeck(resource(&app, PLUGIN_FILE), &dir)
 }
 
 /// The interface language ("de" or "en"), for the messages Rust sends.
@@ -261,18 +235,7 @@ fn get_log(lines: Option<usize>) -> String {
 /// Shows the folder with `faderust.log` in the file manager.
 #[tauri::command]
 fn open_log_folder() -> Result<(), String> {
-    let dir = log::path()
-        .and_then(|p| p.parent())
-        .ok_or_else(|| "Kein Protokoll vorhanden / No log yet".to_owned())?;
-    if cfg!(windows) {
-        std::process::Command::new("explorer")
-            .arg(dir)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    } else {
-        Err(dir.display().to_string())
-    }
+    faderust_core::open_log_folder()
 }
 
 #[tauri::command]

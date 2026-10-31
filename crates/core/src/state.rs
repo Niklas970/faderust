@@ -549,6 +549,70 @@ pub fn run_selftest(
     Ok(selftest::evaluate(&facts))
 }
 
+/// Hands the shipped plugin to the Stream Deck software, which asks the user
+/// to install it (a plugin of the same name is replaced). `source` is the
+/// plugin file in the app's resources, `cache_dir` where a copy is made.
+pub fn install_streamdeck(source: Option<PathBuf>, cache_dir: &Path) -> Result<(), String> {
+    let source = source.ok_or_else(|| {
+        faderust_engine::lang::tr(
+            "Dieses Faderust enthält kein Stream-Deck-Plugin.",
+            "This Faderust does not include the Stream Deck plugin.",
+        )
+    })?;
+    std::fs::create_dir_all(cache_dir).map_err(|e| e.to_string())?;
+    let target = cache_dir.join(PLUGIN_FILE);
+    std::fs::copy(&source, &target).map_err(|e| {
+        format!(
+            "{}: {e}",
+            faderust_engine::lang::tr("Plugin nicht kopiert", "Plugin not copied")
+        )
+    })?;
+    if cfg!(windows) {
+        std::process::Command::new("explorer")
+            .arg(&target)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    } else {
+        Err(format!(
+            "{} {}",
+            faderust_engine::lang::tr("Bitte öffnen:", "Please open:"),
+            target.display()
+        ))
+    }
+}
+
+/// Shows the folder with `faderust.log` in the file manager.
+pub fn open_log_folder() -> Result<(), String> {
+    let dir = log::path()
+        .and_then(|p| p.parent())
+        .ok_or_else(|| "Kein Protokoll vorhanden / No log yet".to_owned())?;
+    if cfg!(windows) {
+        std::process::Command::new("explorer")
+            .arg(dir)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    } else {
+        Err(dir.display().to_string())
+    }
+}
+
+/// The stream deck plugin's state for a link, with the bundled version read
+/// from `version_file` (the shipped `streamdeck-plugin.version`).
+pub fn streamdeck_status(state: &AppState, version_file: Option<PathBuf>) -> StreamDeckStatus {
+    let bundled = version_file
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    let link = state
+        .streamdeck
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    plugin_status(bundled, link)
+}
+
 /// Starts everything that runs without a window: log, configuration, USB
 /// cable, audio thread and Stream Deck remote. `dir` is the app's config
 /// folder (it is created).

@@ -119,6 +119,8 @@ pub fn view(app: &App, d: Dialog) -> Element<'_, Message> {
         Dialog::Windows => windows(app),
         Dialog::Design => design(app),
         Dialog::Settings => settings(app),
+        Dialog::Log => log(app),
+        Dialog::Selftest => selftest(app),
     }
 }
 
@@ -597,6 +599,149 @@ fn design(app: &App) -> Element<'_, Message> {
     frame("Design".into(), 480.0, false, body.into(), done("Fertig"))
 }
 
+fn deck_section(app: &App) -> Element<'_, Message> {
+    let Some(deck) = &app.deck else {
+        return hint("Lade …");
+    };
+    let Some(bundled) = &deck.bundled else {
+        return hint("Dieses Faderust enthält kein Stream-Deck-Plugin.");
+    };
+    let label = if deck.refused {
+        "Das Plugin ist zu alt und darf sich nicht mehr verbinden. Bitte aktualisieren:".to_string()
+    } else if !deck.connected {
+        "Stream Deck nicht verbunden. Plugin einrichten oder neu installieren:".to_string()
+    } else if deck.update {
+        format!(
+            "Plugin {} → {bundled} verfügbar",
+            deck.installed.as_deref().unwrap_or("(alt)")
+        )
+    } else {
+        format!(
+            "Plugin {} ist aktuell",
+            deck.installed.as_deref().unwrap_or("")
+        )
+    };
+    let action = if deck.connected && !deck.update {
+        None
+    } else if deck.connected || deck.refused {
+        Some("Plugin aktualisieren")
+    } else {
+        Some("Plugin installieren")
+    };
+    let mut r = row![hint(label), space().width(Length::Fill)]
+        .spacing(8)
+        .align_y(Vertical::Center);
+    if let Some(a) = action {
+        r = r.push(btn(a, edit(Edit::InstallDeck), false));
+    }
+    column![r, error_text(&app.deck_error)].spacing(6).into()
+}
+
+fn error_text(e: &str) -> Element<'static, Message> {
+    if e.is_empty() {
+        space().height(0).into()
+    } else {
+        text(e.to_string()).size(13).color(DANGER).into()
+    }
+}
+
+fn log(app: &App) -> Element<'_, Message> {
+    let text_ = match &app.log_text {
+        None => "Lade …".to_string(),
+        Some(t) if t.trim().is_empty() => "Noch nichts protokolliert.".to_string(),
+        Some(t) => t.clone(),
+    };
+    let body = column![
+        hint("Was Faderust zuletzt gemeldet hat. Bei einem Fehler bitte den Text kopieren und in ein Issue einfügen."),
+        container(text(text_).font(MONO).size(12).color(TEXT))
+            .padding(10)
+            .width(Length::Fill)
+            .style(|_| container::Style {
+                background: Some(Background::Color(BG)),
+                border: Border {
+                    color: BORDER,
+                    width: 1.0,
+                    radius: 3.0.into(),
+                },
+                ..container::Style::default()
+            }),
+    ]
+    .spacing(10);
+    frame(
+        "Protokoll".into(),
+        900.0,
+        true,
+        body.into(),
+        row![
+            btn("Aktualisieren", edit(Edit::Refresh), false),
+            btn("Kopieren", edit(Edit::CopyLog), false),
+            btn("Ordner öffnen", edit(Edit::OpenLogFolder), false),
+            done("Schließen"),
+        ]
+        .spacing(8)
+        .into(),
+    )
+}
+
+fn selftest(app: &App) -> Element<'_, Message> {
+    use faderust_core::selftest::Status;
+    let mut body = column![
+        error_line(app),
+        hint("Prüft Geräte, Puffer, Fernsteuerung und Plugin. Der Bericht lässt sich in ein Issue kopieren."),
+    ]
+    .spacing(10);
+    match &app.checks {
+        None => body = body.push(hint("Prüfe …")),
+        Some(checks) => {
+            let problems = checks
+                .iter()
+                .filter(|c| matches!(c.status, Status::Warn | Status::Fail))
+                .count();
+            body = body.push(
+                text(if problems == 0 {
+                    "Alles in Ordnung".to_string()
+                } else {
+                    format!("{problems} Punkte brauchen einen Blick")
+                })
+                .size(15)
+                .color(if problems == 0 { SIGNAL } else { AMBER }),
+            );
+            for c in checks {
+                let (mark, color) = match c.status {
+                    Status::Ok => ("✓", SIGNAL),
+                    Status::Warn => ("!", AMBER),
+                    Status::Fail => ("✕", DANGER),
+                    Status::Info => ("i", MUTED),
+                };
+                body = body.push(
+                    row![
+                        container(text(mark).size(14).font(BOLD).color(color)).width(20),
+                        column![
+                            text(c.title.clone()).size(13).font(BOLD).color(TEXT),
+                            text(c.detail.clone()).size(12).color(MUTED),
+                        ]
+                        .spacing(2),
+                    ]
+                    .spacing(8),
+                );
+            }
+        }
+    }
+    frame(
+        "Selbsttest".into(),
+        700.0,
+        false,
+        body.into(),
+        row![
+            btn("Nochmal prüfen", edit(Edit::Refresh), false),
+            btn("Bericht kopieren", edit(Edit::CopyChecks), false),
+            done("Schließen"),
+        ]
+        .spacing(8)
+        .into(),
+    )
+}
+
 fn settings(app: &App) -> Element<'_, Message> {
     let Some(draft) = &app.draft else {
         return frame(
@@ -804,7 +949,18 @@ fn settings(app: &App) -> Element<'_, Message> {
         btn("+ Ausgang", edit(Edit::OutAdd), false),
         h3("Faderust Kabel (Test)"),
         cable_section,
-        hint("Änderungen werden automatisch gespeichert. Autostart, Stream Deck, Selbsttest und Protokoll folgen."),
+        h3("Stream Deck"),
+        deck_section(app),
+        h3("Selbsttest"),
+        row![
+            hint("Prüft Geräte, Puffer, Fernsteuerung und Plugin."),
+            space().width(Length::Fill),
+            btn("Starten", Message::Open(Some(Dialog::Selftest)), false),
+            btn("Protokoll", Message::Open(Some(Dialog::Log)), false),
+        ]
+        .spacing(8)
+        .align_y(Vertical::Center),
+        hint("Änderungen werden automatisch gespeichert. Autostart folgt."),
     ]
     .spacing(10);
     frame("Geräte".into(), 760.0, true, body.into(), done("Schließen"))

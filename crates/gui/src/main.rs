@@ -21,7 +21,8 @@ use std::time::{Duration, Instant};
 use faderust_core::audio::{Command, Notice, UiState};
 use faderust_core::config::{Config as CoreConfig, InputEntry};
 use faderust_core::config::{Fx as CoreFx, Gain};
-use faderust_core::{cable, AppState, Apps, Devices, Host, WindowsAudio};
+use faderust_core::selftest::Check;
+use faderust_core::{cable, AppState, Apps, Devices, Host, StreamDeckStatus, WindowsAudio};
 
 use iced::alignment::{Horizontal, Vertical};
 use iced::gradient;
@@ -137,6 +138,8 @@ pub enum Dialog {
     Settings,
     Design,
     Apps,
+    Log,
+    Selftest,
     Fx(usize),
 }
 
@@ -170,6 +173,10 @@ pub struct App {
     pub input_devices: Vec<String>,
     /// Error shown inside the open dialog.
     pub dialog_error: String,
+    pub log_text: Option<String>,
+    pub checks: Option<Vec<Check>>,
+    pub deck: Option<StreamDeckStatus>,
+    pub deck_error: String,
     /// Background jobs started by the current message.
     jobs: Vec<Task<Message>>,
     last: Instant,
@@ -208,6 +215,10 @@ pub enum Edit {
     UsbEnable(bool),
     UsbCount(u8),
     UsbRemove,
+    OpenLogFolder,
+    CopyLog,
+    CopyChecks,
+    InstallDeck,
     MastersLeft(bool),
     HideAfter(&'static str),
     NewPreset(String),
@@ -243,6 +254,9 @@ pub enum Loaded {
     Apps(Result<Apps, String>),
     Devices(Result<Devices, String>),
     Usb(cable::Status),
+    Log(String),
+    Selftest(Result<Vec<Check>, String>),
+    Deck(StreamDeckStatus),
     Done(Then, Result<(), String>),
 }
 
@@ -285,6 +299,21 @@ fn config_dir() -> PathBuf {
     };
     base.unwrap_or_else(std::env::temp_dir)
         .join("io.github.niklas970.faderust")
+}
+
+/// A file shipped next to the program (`resources/`), when there is one.
+fn resource(name: &str) -> Option<PathBuf> {
+    let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    [dir.join("resources").join(name), dir.join(name)]
+        .into_iter()
+        .find(|p| p.is_file())
+}
+
+fn bundled_plugin_version() -> Option<String> {
+    resource(faderust_core::PLUGIN_VERSION_FILE)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
 }
 
 /// Seconds of silence after which a program leaves the desk (0 = never).
@@ -359,6 +388,34 @@ impl App {
         )
     }
 
+    fn load_log(&self) -> Task<Message> {
+        blocking(
+            || faderust_core::log::tail(400),
+            |t| Message::Loaded(Loaded::Log(t)),
+        )
+    }
+
+    fn load_selftest(&self) -> Task<Message> {
+        let core = Arc::clone(&self.core);
+        blocking(
+            move || faderust_core::run_selftest(&core, bundled_plugin_version()),
+            |r| Message::Loaded(Loaded::Selftest(r)),
+        )
+    }
+
+    fn load_deck(&self) -> Task<Message> {
+        let core = Arc::clone(&self.core);
+        blocking(
+            move || {
+                faderust_core::streamdeck_status(
+                    &core,
+                    resource(faderust_core::PLUGIN_VERSION_FILE),
+                )
+            },
+            |s| Message::Loaded(Loaded::Deck(s)),
+        )
+    }
+
     fn refresh_dialog(&mut self) -> Task<Message> {
         self.dialog_error.clear();
         match self.dialog {
@@ -367,7 +424,14 @@ impl App {
                 self.input_devices = self.config().inputs.into_iter().map(|i| i.device).collect();
                 Task::batch([self.load_apps(), self.load_windows()])
             }
-            Some(Dialog::Settings) => Task::batch([self.load_devices(), self.load_usb()]),
+            Some(Dialog::Settings) => {
+                Task::batch([self.load_devices(), self.load_usb(), self.load_deck()])
+            }
+            Some(Dialog::Log) => self.load_log(),
+            Some(Dialog::Selftest) => {
+                self.checks = None;
+                self.load_selftest()
+            }
             _ => Task::none(),
         }
     }
@@ -458,6 +522,10 @@ impl App {
                 self.dialog_error = e
             }
             Loaded::Usb(s) => self.usb = Some(s),
+            Loaded::Log(t) => self.log_text = Some(t),
+            Loaded::Selftest(Ok(c)) => self.checks = Some(c),
+            Loaded::Selftest(Err(e)) => self.dialog_error = e,
+            Loaded::Deck(d) => self.deck = Some(d),
             Loaded::Done(then, r) => {
                 self.usb_busy = false;
                 match r {
@@ -494,6 +562,8 @@ impl App {
                 "design" => Some(Dialog::Design),
                 "apps" => Some(Dialog::Apps),
                 "fx" => Some(Dialog::Fx(0)),
+                "log" => Some(Dialog::Log),
+                "selftest" => Some(Dialog::Selftest),
                 _ => None,
             });
         let mut app = App {
@@ -527,6 +597,10 @@ impl App {
             last_usb: Instant::now(),
             input_devices: vec![],
             dialog_error: String::new(),
+            log_text: None,
+            checks: None,
+            deck: None,
+            deck_error: String::new(),
             jobs: vec![],
             last: Instant::now(),
             started: Instant::now(),
@@ -796,7 +870,7 @@ impl App {
                     && self.last_usb.elapsed() >= Duration::from_secs(2)
                 {
                     self.last_usb = Instant::now();
-                    let t = self.load_usb();
+                    let t = Task::batch([self.load_usb(), self.load_deck()]);
                     self.jobs.push(t);
                 }
                 let t = now.duration_since(self.started).as_secs_f32();
@@ -1053,6 +1127,35 @@ impl App {
                     move || faderust_core::remove_usb_cable(&core),
                     |r| Message::Loaded(Loaded::Done(Then::Usb, r)),
                 ));
+            }
+            Edit::OpenLogFolder => {
+                if let Err(e) = faderust_core::open_log_folder() {
+                    self.say("info", e);
+                }
+            }
+            Edit::CopyLog => {
+                if let Some(t) = &self.log_text {
+                    self.jobs.push(iced::clipboard::write(t.clone()));
+                    self.say("info", "Protokoll kopiert".into());
+                }
+            }
+            Edit::CopyChecks => {
+                if let Some(c) = &self.checks {
+                    let text = c
+                        .iter()
+                        .map(|c| format!("[{:?}] {}: {}", c.status, c.title, c.detail))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    self.jobs.push(iced::clipboard::write(text));
+                    self.say("info", "Bericht kopiert".into());
+                }
+            }
+            Edit::InstallDeck => {
+                let r = faderust_core::install_streamdeck(
+                    resource(faderust_core::PLUGIN_FILE),
+                    &std::env::temp_dir().join("faderust"),
+                );
+                self.deck_error = r.err().unwrap_or_default();
             }
             Edit::MastersLeft(l) => self.masters_left = l,
             Edit::HideAfter(h) => self.hide_after = h,
