@@ -139,6 +139,13 @@ fn pal() -> Palette {
     PALETTE.read().ok().and_then(|p| *p).unwrap()
 }
 
+/// "#rrggbb" or "rrggbb" typed by the user, as "#rrggbb" in lower case.
+pub fn parse_hex_input(t: &str) -> Option<String> {
+    let t = t.trim().trim_start_matches('#');
+    (t.len() == 6 && t.chars().all(|c| c.is_ascii_hexdigit()))
+        .then(|| format!("#{}", t.to_lowercase()))
+}
+
 pub fn hex(c: &str) -> Color {
     parse_hex(c).unwrap_or(Color::WHITE)
 }
@@ -180,7 +187,7 @@ pub fn muted_color() -> Color {
     pal().muted
 }
 
-pub const STRIP_W: f32 = 124.0;
+pub const STRIP_W: f32 = 136.0;
 pub const PAD: f32 = 18.0;
 pub const MONO: Font = Font::MONOSPACE;
 

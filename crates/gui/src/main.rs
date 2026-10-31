@@ -14,6 +14,7 @@
 mod dialogs;
 mod fader;
 mod i18n;
+mod icons;
 mod scale;
 mod shell;
 mod style;
@@ -78,6 +79,8 @@ pub struct Strip {
     pub keep: bool,
     /// Shown on request ("N still, zeigen") until the window closes.
     revealed: bool,
+    /// Hidden by hand (the × button); comes back when sound starts again.
+    dismissed: bool,
     /// Last time sound was heard from this program.
     heard: Instant,
     /// `gains` row as the engine reports it.
@@ -169,6 +172,9 @@ pub struct App {
     /// Recording device that programs pick after "+ Programm-Mikro".
     pub mic_device: Option<String>,
     pub mic_default: bool,
+    /// What is typed in the colour fields of the design dialog.
+    pub accent_input: Option<String>,
+    pub signal_input: Option<String>,
     logo: image::Handle,
     #[cfg(windows)]
     tray: Option<shell::tray::Tray>,
@@ -275,6 +281,8 @@ pub enum Edit {
     InstallDeck,
     MastersLeft(bool),
     Mode(&'static str),
+    AccentHex(String),
+    SignalHex(String),
     Accent(String),
     Signal(String),
     Lang(&'static str),
@@ -286,6 +294,10 @@ pub enum Edit {
     Keep(usize),
     HideOut(usize, bool),
     ShowSilent,
+    /// Hide a program by hand.
+    Dismiss(usize),
+    /// Show one hidden program.
+    ShowOne(usize),
 }
 
 #[derive(Debug, Clone)]
@@ -293,6 +305,7 @@ pub enum Message {
     SetView(View),
     WinId(Option<window::Id>),
     ToggleCompact,
+    DismissNotice,
     TogglePin,
     CloseRequested,
     Minimize,
@@ -307,6 +320,8 @@ pub enum Message {
     Edit(Edit),
     Route(usize, usize),
     Level(usize, f32),
+    /// One input on one output: (input, output, slider position 0..1).
+    Cell(usize, usize, f32),
     Master(usize, f32),
     Mute(usize),
     MasterMute(usize),
@@ -921,6 +936,8 @@ impl App {
             autostart: shell::autostart_enabled(),
             mic_device: None,
             mic_default: true,
+            accent_input: None,
+            signal_input: None,
             logo: image::Handle::from_bytes(LOGO),
             #[cfg(windows)]
             tray: tray_icon(),
@@ -1009,6 +1026,7 @@ impl App {
                 hidden: false,
                 keep: false,
                 revealed: false,
+                dismissed: false,
                 // Not heard yet counts as heard a moment ago only, so silent
                 // programs are gone a few seconds after the start.
                 heard: now - Duration::from_secs(secs.saturating_sub(if startup { 0 } else { 5 })),
@@ -1052,11 +1070,15 @@ impl App {
             if s.connected && s.target > -60.0 {
                 s.heard = now;
             }
+            if s.connected && s.target > -60.0 {
+                s.dismissed = false;
+            }
             s.hidden = s.program
-                && secs > 0
-                && !s.keep
-                && !s.revealed
-                && now.duration_since(s.heard) >= Duration::from_secs(secs);
+                && (s.dismissed
+                    || (secs > 0
+                        && !s.keep
+                        && !s.revealed
+                        && now.duration_since(s.heard) >= Duration::from_secs(secs)));
             if self.dialog != Some(Dialog::Fx(i)) {
                 if let Some(fx) = d.fx {
                     self.fx[i] = fx.into();
@@ -1139,6 +1161,24 @@ impl App {
         }
     }
 
+    /// One cell of the matrix: an input's level on a single output.
+    fn set_cell(&mut self, i: usize, o: usize, db: f32) {
+        let Some(s) = self.strips.get_mut(i) else {
+            return;
+        };
+        let Some(g) = s.row.get_mut(o) else {
+            return;
+        };
+        if g.db == db {
+            return;
+        }
+        g.db = db;
+        s.db = scale::strip_value(&s.row);
+        s.anchor = None;
+        s.cache.clear();
+        self.send(Command::SetGain(i, o, db));
+    }
+
     /// Switching an output on that sits at -inf brings it to the strip's level.
     fn toggle_route(&mut self, i: usize, o: usize) {
         let Some(g) = self.strips.get(i).and_then(|s| s.row.get(o)).copied() else {
@@ -1177,6 +1217,7 @@ impl App {
                     return window::set_level(id, window::Level::AlwaysOnTop);
                 }
             }
+            Message::DismissNotice => self.notice = None,
             Message::ToggleCompact => {
                 self.compact = !self.compact;
                 self.save_prefs();
@@ -1267,6 +1308,7 @@ impl App {
             Message::Edit(e) => self.edit(e),
             Message::Route(i, o) => self.toggle_route(i, o),
             Message::Level(i, db) => self.move_strip(i, db),
+            Message::Cell(i, o, pos) => self.set_cell(i, o, scale::clamp(scale::from_pos(pos))),
             Message::Master(o, db) => {
                 if let Some(m) = self.outs.get_mut(o) {
                     m.db = db;
@@ -1702,8 +1744,28 @@ impl App {
                 self.deck_error = r.err().unwrap_or_default();
             }
             Edit::Mode(m) => self.set_look(|p| p.mode = m.into()),
-            Edit::Accent(c) => self.set_look(|p| p.accent = c),
-            Edit::Signal(c) => self.set_look(|p| p.signal = c),
+            Edit::AccentHex(t) => {
+                let hex = style::parse_hex_input(&t);
+                self.accent_input = Some(t);
+                if let Some(c) = hex {
+                    self.set_look(|p| p.accent = c);
+                }
+            }
+            Edit::SignalHex(t) => {
+                let hex = style::parse_hex_input(&t);
+                self.signal_input = Some(t);
+                if let Some(c) = hex {
+                    self.set_look(|p| p.signal = c);
+                }
+            }
+            Edit::Accent(c) => {
+                self.accent_input = None;
+                self.set_look(|p| p.accent = c);
+            }
+            Edit::Signal(c) => {
+                self.signal_input = None;
+                self.set_look(|p| p.signal = c);
+            }
             Edit::Lang(l) => self.set_look(|p| p.lang = l.into()),
             Edit::MastersLeft(l) => {
                 self.masters_left = l;
@@ -1755,11 +1817,26 @@ impl App {
                 }
                 self.save_prefs();
             }
-            Edit::ShowSilent => self
-                .strips
-                .iter_mut()
-                .filter(|s| s.hidden)
-                .for_each(|s| s.revealed = true),
+            Edit::ShowSilent => self.strips.iter_mut().filter(|s| s.hidden).for_each(|s| {
+                s.revealed = true;
+                s.dismissed = false;
+            }),
+            Edit::Dismiss(i) => {
+                if let Some(s) = self.strips.get_mut(i) {
+                    s.dismissed = true;
+                    s.keep = false;
+                    s.revealed = false;
+                    s.hidden = true;
+                }
+                self.save_prefs();
+            }
+            Edit::ShowOne(i) => {
+                if let Some(s) = self.strips.get_mut(i) {
+                    s.revealed = true;
+                    s.dismissed = false;
+                    s.hidden = false;
+                }
+            }
         }
     }
 
@@ -1818,14 +1895,18 @@ impl App {
                     }
                 })
         };
-        let toggle = |label: &'static str, on: bool, tip: &'static str, msg: Message| {
+        let toggle = |glyph: icons::Glyph, on: bool, tip: &'static str, msg: Message| {
             dialogs::tip(
                 button(
-                    container(text(label).size(12).color(if on {
-                        accent_light()
-                    } else {
-                        muted_color()
-                    }))
+                    container(
+                        Canvas::new(icons::Icon {
+                            glyph,
+                            color: if on { accent_light() } else { muted_color() },
+                            on,
+                        })
+                        .width(18)
+                        .height(18),
+                    )
                     .center(Length::Fill),
                 )
                 .width(40)
@@ -1835,7 +1916,13 @@ impl App {
                 .style(move |_, status| {
                     let hot = matches!(status, button::Status::Hovered);
                     button::Style {
-                        background: hot.then(|| Background::Color(panel_2())),
+                        background: (hot || on).then(|| {
+                            Background::Color(if hot {
+                                panel_2()
+                            } else {
+                                mix(panel(), accent(), 0.12)
+                            })
+                        }),
                         text_color: muted_color(),
                         border: Border::default(),
                         ..button::Style::default()
@@ -1915,7 +2002,7 @@ impl App {
                 .spacing(6),
                 space().width(16),
                 toggle(
-                    "▬",
+                    icons::Glyph::Compact,
                     self.compact,
                     if self.compact {
                         "Normale Ansicht"
@@ -1925,7 +2012,7 @@ impl App {
                     Message::ToggleCompact
                 ),
                 toggle(
-                    "▲",
+                    icons::Glyph::Pin,
                     self.pinned,
                     if self.pinned {
                         "Nicht mehr im Vordergrund halten"
@@ -1991,6 +2078,7 @@ impl App {
         )
         .width(Length::Fill)
         .height(14)
+        .align_x(Horizontal::Center)
         .clip(true)
         .into()
     }
@@ -2113,18 +2201,64 @@ impl App {
                 .style(key(Look::Secondary))
         };
         let foot: Element<'_, Message> = if narrow && s.program {
+            let keep = s.keep;
+            let look = if keep { Look::Primary } else { Look::Secondary };
             row![
                 small("FX", Message::Open(Some(Dialog::Fx(i))), 34.0),
-                small("◉", Message::Edit(Edit::Keep(i)), 34.0),
+                dialogs::tip(
+                    button(
+                        text(if keep { "◉" } else { "○" })
+                            .size(13)
+                            .color(look_text(look))
+                            .center()
+                    )
+                    .width(34)
+                    .height(24)
+                    .padding(0)
+                    .on_press(Message::Edit(Edit::Keep(i)))
+                    .style(key(look)),
+                    if keep {
+                        "Bleibt auf dem Pult, auch wenn still"
+                    } else {
+                        "Immer anzeigen, auch wenn still"
+                    },
+                ),
             ]
             .spacing(4)
             .into()
         } else {
             small("Effekte", Message::Open(Some(Dialog::Fx(i))), 72.0).into()
         };
+        let top: Element<'_, Message> = if s.program {
+            row![
+                space().width(20),
+                Self::chips(&s.routes, Some(i), narrow),
+                dialogs::tip(
+                    button(text("×").size(14).color(muted_color()).center())
+                        .width(20)
+                        .height(22)
+                        .padding(0)
+                        .on_press(Message::Edit(Edit::Dismiss(i)))
+                        .style(|_, status| button::Style {
+                            background: None,
+                            text_color: if matches!(status, button::Status::Hovered) {
+                                text_color()
+                            } else {
+                                muted_color()
+                            },
+                            ..button::Style::default()
+                        }),
+                    "Programm ausblenden",
+                ),
+            ]
+            .align_y(Vertical::Center)
+            .into()
+        } else {
+            Self::chips(&s.routes, Some(i), narrow)
+        };
         Self::card(
             column![
-                Self::chips(&s.routes, Some(i), narrow),
+                top,
                 Self::name_label(&s.label),
                 space().height(14),
                 fader,
@@ -2135,7 +2269,7 @@ impl App {
             .spacing(8)
             .align_x(Horizontal::Center)
             .into(),
-            if narrow { 106.0 } else { 150.0 },
+            if narrow { 106.0 } else { 164.0 },
         )
     }
 
@@ -2209,7 +2343,7 @@ impl App {
             .spacing(8)
             .align_x(Horizontal::Center)
             .into(),
-            if self.compact { 106.0 } else { 150.0 },
+            if self.compact { 106.0 } else { 164.0 },
         )
     }
 
@@ -2226,7 +2360,10 @@ impl App {
         if let Some(e) = extra {
             r = r.push(e);
         }
-        container(r).height(if slim { 4 } else { 26 }).into()
+        container(r)
+            .height(if slim { 4 } else { 26 })
+            .align_y(Vertical::Center)
+            .into()
     }
 
     fn section<'a>(
@@ -2305,16 +2442,32 @@ impl App {
                 .into();
         let silent = self.strips.iter().filter(|s| s.program && s.hidden).count();
         let extra: Element<'_, Message> = if silent > 0 {
-            row![
-                add,
-                link(
-                    format!("{silent} {}", i18n::tr("still, zeigen")),
-                    Message::Edit(Edit::ShowSilent)
-                )
-            ]
-            .spacing(8)
-            .align_y(Vertical::Center)
-            .into()
+            let mut choices = vec![dialogs::Choice {
+                id: String::new(),
+                label: i18n::tr("Alle zeigen"),
+            }];
+            choices.extend(
+                self.strips
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, s)| s.program && s.hidden)
+                    .map(|(i, s)| dialogs::Choice {
+                        id: i.to_string(),
+                        label: s.label.clone(),
+                    }),
+            );
+            let menu = style::pick(
+                choices,
+                None::<dialogs::Choice>,
+                |c: dialogs::Choice| match c.id.parse() {
+                    Ok(i) => Message::Edit(Edit::ShowOne(i)),
+                    Err(_) => Message::Edit(Edit::ShowSilent),
+                },
+            )
+            .placeholder(format!("{silent} {}", i18n::tr("still, zeigen")))
+            .text_size(12)
+            .padding([3, 8]);
+            row![add, menu].spacing(8).align_y(Vertical::Center).into()
         } else {
             add
         };
@@ -2335,60 +2488,192 @@ impl App {
     }
 
     fn matrix(&self) -> Element<'_, Message> {
-        let head = row![space().width(110)].extend(self.outs.iter().map(|o| {
-            container(
-                text(o.label.to_uppercase())
-                    .size(12)
-                    .color(text_color())
-                    .font(BOLD),
-            )
-            .width(110)
-            .align_x(Horizontal::Center)
-            .into()
-        }));
+        const CELL: f32 = 250.0;
+        const LABEL: f32 = 150.0;
+        let head = row![space().width(LABEL)]
+            .extend(self.outs.iter().enumerate().map(|(o, m)| {
+                container(
+                    row![
+                        container(
+                            text(format!("A{}", o + 1))
+                                .size(11)
+                                .font(BOLD)
+                                .color(on_accent())
+                                .center()
+                        )
+                        .width(30)
+                        .height(20)
+                        .center_x(30)
+                        .center_y(20)
+                        .style(|_| container::Style {
+                            background: Some(Background::Color(accent())),
+                            border: Border {
+                                radius: 3.0.into(),
+                                ..Border::default()
+                            },
+                            ..container::Style::default()
+                        }),
+                        column![
+                            text(m.label.to_uppercase())
+                                .size(12)
+                                .font(BOLD)
+                                .color(text_color()),
+                            text(m.note.clone())
+                                .size(11)
+                                .wrapping(iced::widget::text::Wrapping::None)
+                                .color(if m.note_on { signal() } else { muted_color() }),
+                        ]
+                        .spacing(1),
+                    ]
+                    .spacing(8)
+                    .align_y(Vertical::Center),
+                )
+                .width(CELL)
+                .clip(true)
+                .into()
+            }))
+            .spacing(12);
         let mut rows = column![head].spacing(10);
         for (i, s) in self.strips.iter().enumerate() {
-            let cells = (0..s.routes.len()).map(|o| {
-                let on = s.routes[o];
-                button(
-                    text(if on {
-                        scale::format(s.row[o].db)
-                    } else {
-                        "AUS".into()
-                    })
-                    .font(MONO)
-                    .size(13)
-                    .color(if on { Color::BLACK } else { muted_color() })
-                    .center(),
+            let cells = (0..s.row.len()).map(|o| {
+                let g = s.row[o];
+                let dim = g.muted;
+                let slider = iced::widget::slider(0.0..=1.0, scale::to_pos(g.db), move |p| {
+                    Message::Cell(i, o, p)
+                })
+                .step(0.002_f32)
+                .width(Length::Fill)
+                .style(move |_, status| {
+                    let hot = matches!(
+                        status,
+                        iced::widget::slider::Status::Hovered
+                            | iced::widget::slider::Status::Dragged
+                    );
+                    let tone = if dim { muted_color() } else { accent() };
+                    iced::widget::slider::Style {
+                        rail: iced::widget::slider::Rail {
+                            backgrounds: (Background::Color(tone), Background::Color(well())),
+                            width: 6.0,
+                            border: Border {
+                                color: border(),
+                                width: 1.0,
+                                radius: 3.0.into(),
+                            },
+                        },
+                        handle: iced::widget::slider::Handle {
+                            shape: iced::widget::slider::HandleShape::Rectangle {
+                                width: 12,
+                                border_radius: 3.0.into(),
+                            },
+                            background: Background::Color(if hot {
+                                accent_light()
+                            } else {
+                                mix(panel_2(), text_color(), 0.55)
+                            }),
+                            border_width: 1.0,
+                            border_color: border(),
+                        },
+                    }
+                });
+                let look = if dim { Look::Danger } else { Look::Secondary };
+                container(
+                    row![
+                        slider,
+                        container(text(scale::format(g.db)).font(MONO).size(12).color(if dim {
+                            muted_color()
+                        } else {
+                            text_color()
+                        }))
+                        .width(44)
+                        .align_x(Horizontal::Right),
+                        button(
+                            text("M")
+                                .size(11)
+                                .font(BOLD)
+                                .color(look_text(look))
+                                .center()
+                        )
+                        .width(26)
+                        .height(24)
+                        .padding(0)
+                        .on_press(Message::Route(i, o))
+                        .style(key(look)),
+                    ]
+                    .spacing(8)
+                    .align_y(Vertical::Center),
                 )
-                .width(110)
-                .height(40)
-                .on_press(Message::Route(i, o))
-                .style(move |_, _| button::Style {
-                    background: Some(Background::Color(if on { signal() } else { panel_2() })),
-                    text_color: Color::WHITE,
+                .width(CELL)
+                .padding([6, 10])
+                .style(|_| container::Style {
+                    background: Some(Background::Color(panel())),
                     border: Border {
                         color: border(),
                         width: 1.0,
-                        radius: 4.0.into(),
+                        radius: 6.0.into(),
                     },
-                    ..button::Style::default()
+                    ..container::Style::default()
                 })
                 .into()
             });
-            rows = rows.push(
-                row![container(
+            let name = button(
+                column![
                     text(s.label.to_uppercase())
                         .size(12)
-                        .color(text_color())
                         .font(BOLD)
-                )
-                .width(110)]
-                .extend(cells)
-                .align_y(Vertical::Center),
+                        .color(text_color()),
+                    text(if s.program { "Programm" } else { "Gerät" })
+                        .size(11)
+                        .color(muted_color()),
+                ]
+                .spacing(1),
+            )
+            .width(LABEL)
+            .padding([4, 8])
+            .on_press(Message::Open(Some(Dialog::Fx(i))))
+            .style(|_, status| button::Style {
+                background: None,
+                text_color: text_color(),
+                border: Border {
+                    color: if matches!(status, button::Status::Hovered) {
+                        accent()
+                    } else {
+                        Color::TRANSPARENT
+                    },
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..button::Style::default()
+            });
+            rows = rows.push(
+                row![name]
+                    .extend(cells)
+                    .spacing(12)
+                    .align_y(Vertical::Center),
             );
         }
-        rows.into()
+        let add = button(text("+ Programm").size(12).font(BOLD).color(accent_light()))
+            .padding([4, 12])
+            .on_press(Message::Open(Some(Dialog::Apps)))
+            .style(key(Look::Secondary));
+        rows = rows.push(add);
+        container(
+            iced::widget::scrollable(container(rows).padding(4))
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .padding(12)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(Background::Color(mix(bg(), panel(), 0.45))),
+            border: Border {
+                color: border(),
+                width: 1.0,
+                radius: 8.0.into(),
+            },
+            ..container::Style::default()
+        })
+        .into()
     }
 
     fn view(&self) -> Element<'_, Message> {
@@ -2396,60 +2681,80 @@ impl App {
             View::Desk => self.desk(),
             View::Matrix => self.matrix(),
         };
-        let banner: Element<'_, Message> = match &self.notice {
+        let toast: Element<'_, Message> = match &self.notice {
             Some((_, text_, level)) => {
-                let tone = match *level {
-                    "error" => danger(),
-                    "warn" => amber(),
-                    _ => accent(),
+                let (tone, glyph) = match *level {
+                    "error" => (danger(), "!"),
+                    "warn" => (amber(), "!"),
+                    _ => (accent(), "i"),
                 };
+                let badge = container(text(glyph).size(13).font(BOLD).color(Color::WHITE).center())
+                    .width(22)
+                    .height(22)
+                    .center_x(22)
+                    .center_y(22)
+                    .style(move |_| container::Style {
+                        background: Some(Background::Color(tone)),
+                        border: Border {
+                            radius: 11.0.into(),
+                            ..Border::default()
+                        },
+                        ..container::Style::default()
+                    });
+                let close = button(text("×").size(16).color(muted_color()).center())
+                    .width(24)
+                    .height(24)
+                    .padding(0)
+                    .on_press(Message::DismissNotice)
+                    .style(|_, status| button::Style {
+                        background: matches!(status, button::Status::Hovered)
+                            .then(|| Background::Color(panel_2())),
+                        text_color: muted_color(),
+                        border: Border {
+                            radius: 12.0.into(),
+                            ..Border::default()
+                        },
+                        ..button::Style::default()
+                    });
                 container(
                     container(
                         row![
-                            container(space())
-                                .width(4)
-                                .height(Length::Fill)
-                                .style(move |_| container::Style {
-                                    background: Some(Background::Color(tone)),
-                                    border: Border {
-                                        radius: 2.0.into(),
-                                        ..Border::default()
-                                    },
-                                    ..container::Style::default()
-                                }),
+                            badge,
                             text(text_.clone()).size(13).color(text_color()),
+                            close
                         ]
-                        .spacing(10)
+                        .spacing(12)
                         .align_y(Vertical::Center),
                     )
-                    .padding([8, 12])
+                    .padding([10, 14])
+                    .max_width(620)
                     .style(move |_| container::Style {
-                        background: Some(Background::Color(panel_2())),
+                        background: Some(Background::Color(panel())),
                         border: Border {
-                            color: tone,
+                            color: mix(border(), tone, 0.6),
                             width: 1.0,
-                            radius: 6.0.into(),
+                            radius: 10.0.into(),
                         },
                         shadow: Shadow {
                             color: Color {
-                                a: 0.35,
+                                a: 0.5,
                                 ..Color::BLACK
                             },
-                            offset: iced::Vector::new(0.0, 2.0),
-                            blur_radius: 8.0,
+                            offset: iced::Vector::new(0.0, 6.0),
+                            blur_radius: 18.0,
                         },
                         ..container::Style::default()
                     }),
                 )
-                .padding([8, 12])
+                .padding(24)
                 .center_x(Length::Fill)
+                .align_bottom(Length::Fill)
                 .into()
             }
             None => space().height(0).into(),
         };
         let page = column![
             self.titlebar(),
-            banner,
             container(body)
                 .padding(10)
                 .width(Length::Fill)
@@ -2463,8 +2768,8 @@ impl App {
                 ..container::Style::default()
             });
         match self.dialog {
-            Some(d) => stack![page, dialogs::view(self, d)].into(),
-            None => page.into(),
+            Some(d) => stack![page, dialogs::view(self, d), toast].into(),
+            None => stack![page, toast].into(),
         }
     }
 

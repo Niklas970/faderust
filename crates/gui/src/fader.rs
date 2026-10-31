@@ -53,7 +53,7 @@ impl Fader<'_> {
         if self.narrow {
             62.0
         } else {
-            94.0
+            100.0
         }
     }
     fn top() -> f32 {
@@ -194,11 +194,11 @@ impl Fader<'_> {
         let (top, h) = (Self::top(), Self::height(total));
 
         // Narrow: no scale, the cap and slot move left (58 px track).
-        let (sx, cx) = if self.narrow {
-            (24.0, 0.0)
-        } else {
-            (53.0, 29.0)
-        };
+        let wide = !self.narrow;
+        let (sx, cx) = if wide { (51.0, 24.0) } else { (24.0, 0.0) };
+        let slot_w = if wide { 14.0 } else { 10.0 };
+        let bar_w = if wide { 6.0 } else { 4.0 };
+        let bar_x = sx + (slot_w - bar_w) / 2.0;
         // Scale: numbers on the left, small marks beside the slot.
         for (d, label) in scale::TICKS.iter().copied().filter(|_| !self.narrow) {
             let y = Self::y_of(scale::to_pos(d), total);
@@ -220,7 +220,11 @@ impl Fader<'_> {
         }
 
         // Slot with a recessed look and the accent bar up to the cap.
-        let slot = Path::rounded_rectangle(Point::new(sx, top), Size::new(10.0, h), 5.0.into());
+        let slot = Path::rounded_rectangle(
+            Point::new(sx, top),
+            Size::new(slot_w, h),
+            (slot_w / 2.0).into(),
+        );
         f.fill(&slot, Fill::from(Color::from_rgb8(5, 5, 5)));
         f.stroke(
             &slot,
@@ -239,8 +243,8 @@ impl Fader<'_> {
                 for (grow, alpha) in [(4.0, 0.06), (2.5, 0.10), (1.0, 0.16)] {
                     f.fill(
                         &Path::rounded_rectangle(
-                            Point::new(sx + 3.0 - grow, cap_y - grow),
-                            Size::new(4.0 + 2.0 * grow, fill_h + 2.0 * grow),
+                            Point::new(bar_x - grow, cap_y - grow),
+                            Size::new(bar_w + 2.0 * grow, fill_h + 2.0 * grow),
                             (2.0 + grow).into(),
                         ),
                         Fill::from(Color { a: alpha, ..g }),
@@ -249,8 +253,8 @@ impl Fader<'_> {
             }
             f.fill(
                 &Path::rounded_rectangle(
-                    Point::new(sx + 3.0, cap_y),
-                    Size::new(4.0, fill_h),
+                    Point::new(bar_x, cap_y),
+                    Size::new(bar_w, fill_h),
                     2.0.into(),
                 ),
                 Fill::from(core),
@@ -258,7 +262,7 @@ impl Fader<'_> {
         }
 
         // Cap: graphite gradient, accent edges, index line and a value window.
-        let (cw, ch) = (58.0, 40.0);
+        let (cw, ch) = if wide { (68.0, 44.0) } else { (58.0, 40.0) };
         let cy = cap_y - ch / 2.0;
         let cap = Path::rounded_rectangle(Point::new(cx, cy), Size::new(cw, ch), 4.0.into());
         for (grow, alpha) in [(6.0, 0.10), (3.0, 0.18), (1.0, 0.30)] {
@@ -309,8 +313,8 @@ impl Fader<'_> {
             },
         );
         let win = Path::rounded_rectangle(
-            Point::new(cx + cw / 2.0 - 23.0, cap_y - 9.0),
-            Size::new(46.0, 18.0),
+            Point::new(cx + cw / 2.0 - 26.0, cap_y - 10.0),
+            Size::new(52.0, 20.0),
             2.0.into(),
         );
         f.fill(&win, Fill::from(rgb(11, 12, 14)));
@@ -322,7 +326,7 @@ impl Fader<'_> {
             } else {
                 rgb(241, 243, 245)
             },
-            size: Pixels(12.0),
+            size: Pixels(13.0),
             font: MONO,
             align_x: Horizontal::Center.into(),
             align_y: Vertical::Center,
@@ -334,7 +338,11 @@ impl Fader<'_> {
     fn draw_meter(&self, f: &mut Frame) {
         let total = f.height();
         let (top, h) = (Self::top(), Self::height(total));
-        let (mx, mw) = (if self.narrow { 64.0 } else { 98.0 }, 14.0);
+        let (mx, mw) = if self.narrow {
+            (64.0, 14.0)
+        } else {
+            (106.0, 16.0)
+        };
         let frame = Path::rounded_rectangle(Point::new(mx, top), Size::new(mw, h), 2.0.into());
         f.fill(&frame, Fill::from(well()));
         f.stroke(

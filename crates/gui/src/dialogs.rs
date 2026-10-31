@@ -236,9 +236,9 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
 
 /// A device for a pick list: shown by its label, identified by `id`.
 #[derive(Clone, PartialEq, Eq, Debug)]
-struct Choice {
-    id: String,
-    label: String,
+pub struct Choice {
+    pub id: String,
+    pub label: String,
 }
 
 impl std::fmt::Display for Choice {
@@ -364,22 +364,15 @@ fn apps(app: &App) -> Element<'_, Message> {
                         .into()
                 } else if let Some(q) = &quiet {
                     // Park it on the quiet cable first, so it is not heard twice.
-                    tip(
-                        btn(
-                            "+ Eingang",
-                            edit(Edit::AppInputParked(
-                                program,
-                                a.name.clone(),
-                                a.pids.clone(),
-                                q.id.clone(),
-                            )),
-                            false,
-                        ),
-                        format!(
-                            "{} {}",
-                            tr("Programm als eigenen Eingang aufnehmen und stellen auf"),
-                            device_label(&q.name)
-                        ),
+                    btn(
+                        "+ Eingang",
+                        edit(Edit::AppInputParked(
+                            program,
+                            a.name.clone(),
+                            a.pids.clone(),
+                            q.id.clone(),
+                        )),
+                        false,
                     )
                 } else {
                     btn(
@@ -436,9 +429,19 @@ fn apps(app: &App) -> Element<'_, Message> {
             }
         }
     }
+    let parked_hint: Element<'_, Message> = match app.quiet_cable() {
+        Some(q) => hint(format!(
+            "{} {} {}",
+            tr("„+ Eingang“ nimmt das Programm auf und stellt es vorher auf"),
+            device_label(&q.name),
+            tr(", damit du es nicht doppelt hörst.")
+        )),
+        None => space().height(0).into(),
+    };
     let body = column![
         error_line(app),
         list,
+        parked_hint,
         text("Windows merkt sich die Zuordnung pro Programm. Manche Programme übernehmen sie erst nach einem Neustart.")
             .size(12)
             .color(muted_color()),
@@ -633,25 +636,18 @@ fn design(app: &App) -> Element<'_, Message> {
     let accent_now = app.accent();
     let signal_now = app.signal();
     let mode_now = app.mode();
-    let english = faderust_core::lang::is_english();
-    let accents = ACCENTS.iter().fold(row![].spacing(8), |r, (de, en, hex)| {
-        r.push(tip(
-            swatch(
-                hex,
-                accent_now.eq_ignore_ascii_case(hex),
-                edit(Edit::Accent((*hex).into())),
-            ),
-            if english { *en } else { *de },
+    let accents = ACCENTS.iter().fold(row![].spacing(8), |r, (_, _, hex)| {
+        r.push(swatch(
+            hex,
+            accent_now.eq_ignore_ascii_case(hex),
+            edit(Edit::Accent((*hex).into())),
         ))
     });
-    let signals = SIGNALS.iter().fold(row![].spacing(8), |r, (de, en, hex)| {
-        r.push(tip(
-            swatch(
-                hex,
-                signal_now.eq_ignore_ascii_case(hex),
-                edit(Edit::Signal((*hex).into())),
-            ),
-            if english { *en } else { *de },
+    let signals = SIGNALS.iter().fold(row![].spacing(8), |r, (_, _, hex)| {
+        r.push(swatch(
+            hex,
+            signal_now.eq_ignore_ascii_case(hex),
+            edit(Edit::Signal((*hex).into())),
         ))
     });
     let lang_now = app.lang();
@@ -686,8 +682,20 @@ fn design(app: &App) -> Element<'_, Message> {
         segmented(hide),
         h3("Akzentfarbe"),
         accents,
+        custom_color(
+            app.accent_input
+                .clone()
+                .unwrap_or_else(|| accent_now.clone()),
+            |t| edit(Edit::AccentHex(t)),
+        ),
         h3("Signalfarbe"),
         signals,
+        custom_color(
+            app.signal_input
+                .clone()
+                .unwrap_or_else(|| signal_now.clone()),
+            |t| edit(Edit::SignalHex(t)),
+        ),
         h3("Helligkeit"),
         segmented(vec![
             (
@@ -713,7 +721,7 @@ fn design(app: &App) -> Element<'_, Message> {
         ]),
     ]
     .spacing(10);
-    frame("Design".into(), 480.0, false, body.into(), done("Fertig"))
+    frame("Design".into(), 480.0, true, body.into(), done("Fertig"))
 }
 
 pub fn tip<'a>(
@@ -735,6 +743,38 @@ pub fn tip<'a>(
             }),
         iced::widget::tooltip::Position::Bottom,
     )
+    .into()
+}
+
+/// A field for any colour as #rrggbb, with a preview.
+fn custom_color(
+    value: String,
+    on_input: impl Fn(String) -> Message + 'static,
+) -> Element<'static, Message> {
+    let valid = crate::style::parse_hex_input(&value);
+    let preview = valid.as_deref().map(crate::style::hex);
+    row![
+        text("Eigene Farbe").size(13).color(muted_color()),
+        text_input("#rrggbb", &value).on_input(on_input).width(110),
+        container(space())
+            .width(28)
+            .height(28)
+            .style(move |_| container::Style {
+                background: Some(Background::Color(preview.unwrap_or(Color::TRANSPARENT))),
+                border: Border {
+                    color: if preview.is_some() {
+                        border()
+                    } else {
+                        danger()
+                    },
+                    width: 1.0,
+                    radius: 14.0.into(),
+                },
+                ..container::Style::default()
+            }),
+    ]
+    .spacing(10)
+    .align_y(Vertical::Center)
     .into()
 }
 
