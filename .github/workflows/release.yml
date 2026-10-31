@@ -63,8 +63,8 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           "/c/Program Files (x86)/NSIS/makensis.exe" -V2 \
             "-DVERSION=$VERSION" \
-            "-DEXE=$(cygpath -w target/release/faderust-iced.exe)" \
-            "-DRESOURCES=$(cygpath -w stage/resources)" \
+            "-DEXE=$(cygpath -aw target/release/faderust-iced.exe)" \
+            "-DRESOURCES=$(cygpath -aw stage/resources)" \
             "-DOUTFILE=$(cygpath -w "$PWD/Faderust_${VERSION}_x64-setup.exe")" \
             installer/faderust.nsi
       # The in-app updater checks this signature. Pull request runs do not get
