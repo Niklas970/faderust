@@ -2,17 +2,15 @@
 //! uppercase section headings, grey hints, buttons in the footer.
 
 use crate::i18n::{text, tr};
+use crate::style::{check, input as text_input, key, look_text, pick as pick_list, Look};
 use iced::alignment::Vertical;
-use iced::widget::{
-    button, checkbox, column, container, mouse_area, opaque, pick_list, row, scrollable, slider,
-    space, text_input,
-};
+use iced::widget::{button, column, container, mouse_area, opaque, row, scrollable, slider, space};
 use iced::{Background, Border, Color, Element, Length};
 
 use crate::style::*;
 use faderust_core::names::device_label;
 
-use crate::{flat, App, Dialog, Edit, Message, HIDE_AFTER, RELEASE};
+use crate::{App, Dialog, Edit, Message, HIDE_AFTER, RELEASE};
 
 fn edit(e: Edit) -> Message {
     Message::Edit(e)
@@ -38,20 +36,26 @@ fn hint(label: impl Into<String>) -> Element<'static, Message> {
 }
 
 fn btn(label: impl Into<String>, msg: Message, primary: bool) -> Element<'static, Message> {
-    button(text(label.into()).size(13).color(Color::WHITE))
-        .padding([6, 12])
+    let look = if primary {
+        Look::Primary
+    } else {
+        Look::Secondary
+    };
+    button(text(label.into()).size(13).color(look_text(look)))
+        .padding([6, 14])
         .on_press(msg)
-        .style(move |_, _| flat(if primary { accent() } else { panel_2() }))
+        .style(key(look))
         .into()
 }
 
 /// A row of buttons of which one is on, like the web UI's segmented control.
 fn segmented(items: Vec<(String, bool, Message)>) -> Element<'static, Message> {
     row(items.into_iter().map(|(label, on, msg)| {
-        button(text(label).size(13).color(Color::WHITE))
+        let look = if on { Look::Primary } else { Look::Secondary };
+        button(text(label).size(13).color(look_text(look)))
             .padding([6, 14])
             .on_press(msg)
-            .style(move |_, _| flat(if on { accent() } else { panel_2() }))
+            .style(key(look))
             .into()
     }))
     .spacing(1)
@@ -146,7 +150,7 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
     };
     let body = column![
         h3("Rauschfilter"),
-        checkbox(f.denoise)
+        check(f.denoise)
             .label("Hintergrundgeräusche entfernen")
             .on_toggle(move |v| edit(Edit::Denoise(i, v))),
         hint("Filtert Tastatur, Lüfter und Rauschen aus der Stimme."),
@@ -171,7 +175,7 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
         band(1, "Präsenz", "3 kHz"),
         band(2, "Höhen", "8 kHz"),
         h3("Gate"),
-        checkbox(f.gate)
+        check(f.gate)
             .label("Stumm unter der Schwelle")
             .on_toggle(move |v| edit(Edit::Gate(i, v))),
         row![
@@ -360,7 +364,7 @@ fn apps(app: &App) -> Element<'_, Message> {
                         .into()
                 } else if let Some(q) = &quiet {
                     // Park it on the quiet cable first, so it is not heard twice.
-                    tooltip_text(
+                    tip(
                         btn(
                             "+ Eingang",
                             edit(Edit::AppInputParked(
@@ -563,15 +567,17 @@ fn windows(app: &App) -> Element<'_, Message> {
                             )
                             .width(54)
                             .align_right(Length::Fill),
-                            button(
-                                text(if muted { "Stumm" } else { "Laut" })
-                                    .size(12)
-                                    .color(Color::WHITE)
-                            )
+                            button(text(if muted { "Stumm" } else { "Laut" }).size(12).color(
+                                look_text(if muted { Look::Danger } else { Look::Secondary })
+                            ))
                             .padding([4, 8])
                             .width(64)
                             .on_press(edit(Edit::WinMute(mute_id, !muted)))
-                            .style(move |_, _| flat(if muted { danger() } else { panel_2() })),
+                            .style(key(if muted {
+                                Look::Danger
+                            } else {
+                                Look::Secondary
+                            })),
                         ]
                         .spacing(10)
                         .align_y(Vertical::Center),
@@ -629,7 +635,7 @@ fn design(app: &App) -> Element<'_, Message> {
     let mode_now = app.mode();
     let english = faderust_core::lang::is_english();
     let accents = ACCENTS.iter().fold(row![].spacing(8), |r, (de, en, hex)| {
-        r.push(tooltip_text(
+        r.push(tip(
             swatch(
                 hex,
                 accent_now.eq_ignore_ascii_case(hex),
@@ -639,7 +645,7 @@ fn design(app: &App) -> Element<'_, Message> {
         ))
     });
     let signals = SIGNALS.iter().fold(row![].spacing(8), |r, (de, en, hex)| {
-        r.push(tooltip_text(
+        r.push(tip(
             swatch(
                 hex,
                 signal_now.eq_ignore_ascii_case(hex),
@@ -710,7 +716,7 @@ fn design(app: &App) -> Element<'_, Message> {
     frame("Design".into(), 480.0, false, body.into(), done("Fertig"))
 }
 
-fn tooltip_text<'a>(
+pub fn tip<'a>(
     content: impl Into<Element<'a, Message>>,
     tip: impl Into<String>,
 ) -> Element<'a, Message> {
@@ -922,9 +928,9 @@ fn settings(app: &App) -> Element<'_, Message> {
         (choices, selected)
     };
     let arrow = |label: &'static str, msg: Option<Message>| {
-        let b = button(text(label).size(13).color(Color::WHITE))
+        let b = button(text(label).size(13).color(text_color()))
             .padding([4, 8])
-            .style(|_, _| flat(panel_2()));
+            .style(key(Look::Secondary));
         match msg {
             Some(m) => b.on_press(m),
             None => b,
@@ -1035,7 +1041,7 @@ fn settings(app: &App) -> Element<'_, Message> {
                 let count = u.count.clamp(1, 4) as u8;
                 col = col
                     .push(
-                        checkbox(u.running)
+                        check(u.running)
                             .label("Faderust Kabel verwenden")
                             .on_toggle(|v| edit(Edit::UsbEnable(v))),
                     )
@@ -1091,7 +1097,7 @@ fn settings(app: &App) -> Element<'_, Message> {
         btn("+ Ausgang", edit(Edit::OutAdd), false),
         mic_section(app),
         h3("Start"),
-        checkbox(app.autostart)
+        check(app.autostart)
             .label("Mit Windows starten (im Tray, ohne Fenster)")
             .on_toggle(|v| edit(Edit::Autostart(v))),
         h3("Faderust Kabel (Test)"),
@@ -1128,7 +1134,7 @@ fn mic_section(app: &App) -> Element<'_, Message> {
                 device_label(device),
                 tr("Die Spalte „Programm-Mikro“ bestimmt, was dort ankommt.")
             )),
-            checkbox(app.mic_default)
+            check(app.mic_default)
                 .label(tr("Als Windows-Mikrofon für Anrufe setzen"))
                 .on_toggle(|v| edit(Edit::MicDefault(v))),
         ]

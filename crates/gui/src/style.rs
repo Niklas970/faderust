@@ -55,7 +55,7 @@ fn parse_hex(h: &str) -> Option<Color> {
     Some(Color::from_rgb8((v >> 16) as u8, (v >> 8) as u8, v as u8))
 }
 
-fn mix(a: Color, b: Color, t: f32) -> Color {
+pub fn mix(a: Color, b: Color, t: f32) -> Color {
     Color::from_rgb(
         a.r + (b.r - a.r) * t,
         a.g + (b.g - a.g) * t,
@@ -104,7 +104,7 @@ pub fn set_theme(mode: &str, accent: &str, signal: &str) {
             panel: rgb(243, 244, 246),
             panel_2: rgb(233, 235, 238),
             well: rgb(42, 45, 50),
-            border: rgb(170, 176, 184),
+            border: rgb(140, 147, 156),
             text: rgb(18, 20, 23),
             muted: rgb(68, 75, 83),
         }
@@ -119,7 +119,7 @@ pub fn set_theme(mode: &str, accent: &str, signal: &str) {
             panel: rgb(12, 13, 15),
             panel_2: rgb(23, 25, 28),
             well: rgb(5, 5, 6),
-            border: rgb(51, 55, 61),
+            border: rgb(72, 77, 86),
             text: rgb(236, 238, 241),
             muted: rgb(169, 175, 183),
         }
@@ -192,3 +192,213 @@ pub const BOLD: Font = Font {
     weight: iced::font::Weight::Bold,
     ..Font::DEFAULT
 };
+
+// --- widget looks -----------------------------------------------------------
+
+use iced::widget::{button, checkbox, pick_list, text_input};
+use iced::{gradient, Background, Border, Shadow, Theme};
+
+/// Readable text on the accent colour (black on a pale accent).
+pub fn on_accent() -> Color {
+    let c = accent();
+    let l = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+    if l > 0.6 {
+        Color::from_rgb(0.07, 0.08, 0.09)
+    } else {
+        Color::WHITE
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum Look {
+    /// The accent colour: the main action or an option that is on.
+    Primary,
+    /// A plain raised key.
+    Secondary,
+    /// Red: an option that is on and means "off" (mute).
+    Danger,
+}
+
+fn vertical(top: Color, bottom: Color) -> Background {
+    Background::Gradient(
+        gradient::Linear::new(iced::Radians(std::f32::consts::PI))
+            .add_stop(0.0, top)
+            .add_stop(1.0, bottom)
+            .into(),
+    )
+}
+
+/// Text colour that goes with a `Look`.
+pub fn look_text(look: Look) -> Color {
+    match look {
+        Look::Primary => on_accent(),
+        Look::Secondary => text_color(),
+        Look::Danger => Color::WHITE,
+    }
+}
+
+/// A raised key with a soft gradient, a clear edge and hover/press states.
+pub fn key(look: Look) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, status| {
+        let base = match look {
+            Look::Primary => accent(),
+            Look::Secondary => panel_2(),
+            Look::Danger => danger(),
+        };
+        let lift = if text_color().r > 0.5 {
+            Color::WHITE
+        } else {
+            Color::BLACK
+        };
+        let (top, bottom, edge) = match status {
+            button::Status::Pressed => (
+                mix(base, Color::BLACK, 0.18),
+                mix(base, Color::BLACK, 0.08),
+                accent(),
+            ),
+            button::Status::Hovered => {
+                (mix(base, lift, 0.16), mix(base, lift, 0.06), accent_light())
+            }
+            button::Status::Disabled => (mix(base, bg(), 0.5), mix(base, bg(), 0.5), border()),
+            button::Status::Active => (
+                mix(base, lift, 0.09),
+                base,
+                if look == Look::Secondary {
+                    border()
+                } else {
+                    mix(base, Color::BLACK, 0.3)
+                },
+            ),
+        };
+        button::Style {
+            background: Some(vertical(top, bottom)),
+            text_color: look_text(look),
+            border: Border {
+                color: edge,
+                width: 1.0,
+                radius: 5.0.into(),
+            },
+            shadow: Shadow {
+                color: Color {
+                    a: 0.25,
+                    ..Color::BLACK
+                },
+                offset: iced::Vector::new(0.0, 1.0),
+                blur_radius: 2.0,
+            },
+            snap: true,
+        }
+    }
+}
+
+pub fn pick<'a, T, L, V, M>(
+    options: L,
+    selected: Option<V>,
+    on_select: impl Fn(T) -> M + 'a,
+) -> pick_list::PickList<'a, T, L, V, M>
+where
+    T: ToString + PartialEq + Clone + 'a,
+    L: std::borrow::Borrow<[T]> + 'a,
+    V: std::borrow::Borrow<T> + 'a,
+    M: Clone,
+{
+    pick_list(options, selected, on_select)
+        .style(|_, status| {
+            let hot = matches!(
+                status,
+                pick_list::Status::Hovered | pick_list::Status::Opened { .. }
+            );
+            pick_list::Style {
+                text_color: text_color(),
+                placeholder_color: muted_color(),
+                handle_color: muted_color(),
+                background: Background::Color(well_light()),
+                border: Border {
+                    color: if hot { accent() } else { border() },
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+            }
+        })
+        .menu_style(|_| iced::overlay::menu::Style {
+            background: Background::Color(panel()),
+            border: Border {
+                color: accent(),
+                width: 1.0,
+                radius: 4.0.into(),
+            },
+            text_color: text_color(),
+            selected_text_color: on_accent(),
+            selected_background: Background::Color(accent()),
+            shadow: Shadow {
+                color: Color {
+                    a: 0.45,
+                    ..Color::BLACK
+                },
+                offset: iced::Vector::new(0.0, 4.0),
+                blur_radius: 10.0,
+            },
+        })
+}
+
+/// Fields: a light recess so they read against the dialog.
+fn well_light() -> Color {
+    mix(
+        panel(),
+        if text_color().r > 0.5 {
+            Color::WHITE
+        } else {
+            Color::BLACK
+        },
+        0.06,
+    )
+}
+
+pub fn input<'a, M: Clone + 'a>(placeholder: &str, value: &str) -> text_input::TextInput<'a, M> {
+    text_input(placeholder, value).style(|_, status| {
+        let focused = matches!(status, text_input::Status::Focused { .. });
+        let hot = focused || matches!(status, text_input::Status::Hovered);
+        text_input::Style {
+            background: Background::Color(well_light()),
+            border: Border {
+                color: if focused {
+                    accent()
+                } else if hot {
+                    accent_light()
+                } else {
+                    border()
+                },
+                width: 1.0,
+                radius: 4.0.into(),
+            },
+            icon: muted_color(),
+            placeholder: muted_color(),
+            value: text_color(),
+            selection: Color {
+                a: 0.35,
+                ..accent()
+            },
+        }
+    })
+}
+
+pub fn check<'a, M: 'a>(on: bool) -> checkbox::Checkbox<'a, M> {
+    checkbox(on).style(|_, status| {
+        let hot = matches!(status, checkbox::Status::Hovered { .. });
+        let checked = matches!(
+            status,
+            checkbox::Status::Active { is_checked: true }
+                | checkbox::Status::Hovered { is_checked: true }
+        );
+        checkbox::Style {
+            background: Background::Color(if checked { accent() } else { well_light() }),
+            icon_color: on_accent(),
+            border: Border {
+                color: if checked || hot { accent() } else { border() },
+                width: 1.0,
+                radius: 3.0.into(),
+            },
+            text_color: Some(text_color()),
+        }
+    })
+}
