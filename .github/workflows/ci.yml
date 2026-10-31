@@ -59,6 +59,13 @@ jobs:
           name: faderust-usbcable-test
           path: target/release/examples/serve.exe
           if-no-files-found: error
+      # The iced window (replacing Tauri/WebView2), for trying it on Windows.
+      - run: cargo build --release -p faderust-iced
+      - uses: actions/upload-artifact@v7
+        with:
+          name: faderust-iced
+          path: target/release/faderust-iced.exe
+          if-no-files-found: error
 
   streamdeck:
     runs-on: ubuntu-latest
