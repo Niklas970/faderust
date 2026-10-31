@@ -1,7 +1,7 @@
 // No console window in release builds on Windows.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-//! Faderust window built with iced instead of Tauri/WebView2: title bar, desk
+//! Faderust window built with iced: title bar, desk
 //! (strips for inputs and output masters with A1-An), matrix and the
 //! dialogs, driven by `faderust-core`.
 //!

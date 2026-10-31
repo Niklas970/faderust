@@ -1,6 +1,6 @@
 [package]
-name = "faderust-iced"
-description = "Faderust window built with iced (no WebView2)"
+name = "faderust"
+description = "Faderust: mixer window built with iced"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

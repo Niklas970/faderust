@@ -6,7 +6,7 @@ updates:
       interval: weekly
     ignore:
       # windows-core must match the `windows` crate (0.62 is its newest
-      # release) and the copies cpal and tauri use: bumping it alone breaks
+      # release) and the copies cpal and iced use: bumping it alone breaks
       # the COM `implement` macro.
       - dependency-name: windows-core
       - dependency-name: windows

@@ -55,7 +55,7 @@ jobs:
           cp streamdeck/dist/*.streamDeckPlugin stage/resources/
           jq -r .Version streamdeck/com.niklas970.faderust.sdPlugin/manifest.json \
             > stage/resources/streamdeck-plugin.version
-      - run: cargo build --release -p faderust-iced
+      - run: cargo build --release -p faderust
       - name: Build setup
         run: |
           choco install nsis -y --no-progress
@@ -63,7 +63,7 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           "/c/Program Files (x86)/NSIS/makensis.exe" -V2 \
             "-DVERSION=$VERSION" \
-            "-DEXE=$(cygpath -aw target/release/faderust-iced.exe)" \
+            "-DEXE=$(cygpath -aw target/release/faderust.exe)" \
             "-DRESOURCES=$(cygpath -aw stage/resources)" \
             "-DOUTFILE=$(cygpath -w "$PWD/Faderust_${VERSION}_x64-setup.exe")" \
             installer/faderust.nsi

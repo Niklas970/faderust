@@ -22,16 +22,6 @@ allow = [
 confidence-threshold = 0.8
 unused-allowed-license = "allow"
 
-# Weak-copyleft (file-level) crates that Tauri pulls in unmodified. Allowed
-# per crate only, so a new MPL dependency still fails the check.
-exceptions = [
-    { allow = ["MPL-2.0"], crate = "cssparser" },
-    { allow = ["MPL-2.0"], crate = "cssparser-macros" },
-    { allow = ["MPL-2.0"], crate = "dtoa-short" },
-    { allow = ["MPL-2.0"], crate = "selectors" },
-    { allow = ["MPL-2.0"], crate = "option-ext" },
-]
-
 [bans]
 multiple-versions = "allow"
 

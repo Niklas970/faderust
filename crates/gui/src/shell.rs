@@ -52,7 +52,7 @@ pub fn single_instance() -> Result<Receiver<()>, ()> {
     }
 }
 
-/// Value name of the autostart entry; the same the Tauri app used, so an
+/// Value name of the autostart entry; the same the old Tauri version used, so an
 /// update keeps working autostart.
 const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 const RUN_VALUE: &str = "faderust";
