@@ -2,7 +2,7 @@
 //! window toolkit: shared state, devices, programs, Windows sound, USB cable,
 //! presets and the self-test. Each front end calls these.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use crate::audio::Command;
 use crate::config::{Config, InputEntry, OutputEntry};
-use crate::{audio, cable, remote, selftest};
+use crate::{audio, cable, log, remote, selftest, Host};
 
 pub struct AppState {
     pub config: Arc<Mutex<Config>>,
@@ -702,4 +702,52 @@ mod tests {
         let s = plugin_status(Some("0.3.1".into()), link(1, Some("0.3.1.0"), true));
         assert!(s.connected && !s.refused && !s.update);
     }
+}
+
+/// Starts everything that runs without a window: log, configuration, USB
+/// cable, audio thread and Stream Deck remote. `dir` is the app's config
+/// folder (it is created).
+pub fn start(host: Arc<dyn Host>, dir: &Path) -> Arc<AppState> {
+    let _ = std::fs::create_dir_all(dir);
+    log::init(dir.join("faderust.log"));
+    #[cfg(windows)]
+    faderust_engine::apps::capture::set_crash_marker(dir.join("capture-starting"));
+    let path = dir.join("config.toml");
+    let config = match Config::load(&path) {
+        Ok(Some(c)) => c,
+        Ok(None) => first_start(),
+        Err(e) => {
+            // Keep the broken file for the user, start fresh.
+            log::write(&format!("{}: {e}", path.display()));
+            let _ = std::fs::rename(&path, path.with_extension("toml.broken"));
+            first_start()
+        }
+    };
+    if config.usb_cable {
+        if let Err(e) = cable::start(cable::clamp_count(config.usb_cables)) {
+            log::write(&format!("USB-Kabel: {e}"));
+        }
+    }
+    let config = Arc::new(Mutex::new(config));
+    let last_state = Arc::default();
+    let audio = audio::spawn(
+        host,
+        Arc::clone(&config),
+        path.clone(),
+        Arc::clone(&last_state),
+    );
+    let token = remote::load_or_create_token(&dir.join(remote::TOKEN_FILE)).unwrap_or_else(|e| {
+        log::write(&format!("Fernsteuerung aus: Token nicht angelegt: {e}"));
+        String::new()
+    });
+    let state = Arc::new(AppState {
+        config,
+        path,
+        audio: Mutex::new(audio),
+        streamdeck: Mutex::default(),
+        last_state,
+        token,
+    });
+    remote::spawn(Arc::clone(&state));
+    state
 }

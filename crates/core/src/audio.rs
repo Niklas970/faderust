@@ -71,7 +71,7 @@ pub struct Notice {
 pub struct UiState {
     pub inputs: Vec<UiDevice>,
     pub outputs: Vec<UiDevice>,
-    gains: Vec<Vec<crate::config::Gain>>,
+    pub gains: Vec<Vec<crate::config::Gain>>,
     pub lanes: Vec<Vec<UiLane>>,
 }
 
@@ -81,8 +81,8 @@ pub struct UiDevice {
     pub label: String,
     pub device: String,
     pub connected: bool,
-    device_name: Option<String>,
-    level_db: f32,
+    pub device_name: Option<String>,
+    pub level_db: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub buffer_ms: Option<u32>,
     /// Outputs only: closed while nothing plays for them.
@@ -90,20 +90,20 @@ pub struct UiDevice {
     pub released: bool,
     /// Inputs only.
     #[serde(skip_serializing_if = "Option::is_none")]
-    fx: Option<Fx>,
+    pub fx: Option<Fx>,
     /// Outputs only.
     #[serde(skip_serializing_if = "Option::is_none")]
-    master: Option<crate::config::Gain>,
+    pub master: Option<crate::config::Gain>,
     /// Inputs only.
     #[serde(skip_serializing_if = "Option::is_none")]
-    muted: Option<bool>,
+    pub muted: Option<bool>,
 }
 
 #[derive(Serialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UiLane {
-    fill_ms: f32,
-    correction_ppm: i32,
+    pub fill_ms: f32,
+    pub correction_ppm: i32,
     pub underruns: u64,
     /// Input frames lost because the output did not take them in time.
     pub dropped_frames: u64,

@@ -4,13 +4,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use faderust_core::audio::{Command, Notice, UiState};
 use faderust_core::config::{Config, Fx};
 use faderust_core::{
-    cable, log, remote, selftest, AppLevel, AppState, Apps, Devices, Host, StreamDeckStatus,
-    WindowsAudio, PLUGIN_FILE, PLUGIN_VERSION_FILE,
+    cable, log, selftest, AppLevel, AppState, Apps, Devices, Host, StreamDeckStatus, WindowsAudio,
+    PLUGIN_FILE, PLUGIN_VERSION_FILE,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -320,56 +320,8 @@ fn main() {
         )
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
-            let _ = std::fs::create_dir_all(&dir);
-            log::init(dir.join("faderust.log"));
-            #[cfg(windows)]
-            faderust_engine::apps::capture::set_crash_marker(dir.join("capture-starting"));
-            let path = dir.join("config.toml");
-            let config = match Config::load(&path) {
-                Ok(Some(c)) => c,
-                Ok(None) => faderust_core::first_start(),
-                Err(e) => {
-                    // Keep the broken file for the user, start fresh.
-                    log::write(&format!("{}: {e}", path.display()));
-                    let _ = std::fs::rename(&path, path.with_extension("toml.broken"));
-                    faderust_core::first_start()
-                }
-            };
-            if config.usb_cable {
-                if let Err(e) = cable::start(cable::clamp_count(config.usb_cables)) {
-                    log::write(&format!("USB-Kabel: {e}"));
-                }
-            }
-            let config = Arc::new(Mutex::new(config));
-            let last_state = Arc::default();
-            let audio = faderust_core::audio::spawn(
-                Arc::new(TauriHost(app.handle().clone())),
-                Arc::clone(&config),
-                path.clone(),
-                Arc::clone(&last_state),
-            );
-            let token = app
-                .path()
-                .app_config_dir()
-                .map_err(|e| e.to_string())
-                .and_then(|dir| {
-                    remote::load_or_create_token(&dir.join(remote::TOKEN_FILE))
-                        .map_err(|e| e.to_string())
-                })
-                .unwrap_or_else(|e| {
-                    log::write(&format!("Fernsteuerung aus: Token nicht angelegt: {e}"));
-                    String::new()
-                });
-            let state = Arc::new(AppState {
-                config,
-                path,
-                audio: Mutex::new(audio),
-                streamdeck: Mutex::default(),
-                last_state,
-                token,
-            });
-            app.manage(Arc::clone(&state));
-            remote::spawn(state);
+            let state = faderust_core::start(Arc::new(TauriHost(app.handle().clone())), &dir);
+            app.manage(state);
 
             let show = MenuItem::with_id(app, "show", "Anzeigen", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Beenden", true, None::<&str>)?;
