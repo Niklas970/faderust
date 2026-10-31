@@ -1,10 +1,11 @@
 //! The dialogs, laid out like the web UI's: panel, 18 px title, small
 //! uppercase section headings, grey hints, buttons in the footer.
 
+use crate::i18n::{text, tr};
 use iced::alignment::Vertical;
 use iced::widget::{
     button, checkbox, column, container, mouse_area, opaque, pick_list, row, scrollable, slider,
-    space, text, text_input,
+    space, text_input,
 };
 use iced::{Background, Border, Color, Element, Length};
 
@@ -24,23 +25,23 @@ fn close() -> Message {
 fn h3(label: impl Into<String>) -> Element<'static, Message> {
     column![
         space().height(8),
-        text(label.into().to_uppercase())
+        text(tr(&label.into()).to_uppercase())
             .size(12)
             .font(BOLD)
-            .color(MUTED)
+            .color(muted_color())
     ]
     .into()
 }
 
 fn hint(label: impl Into<String>) -> Element<'static, Message> {
-    text(label.into()).size(12).color(MUTED).into()
+    text(label.into()).size(12).color(muted_color()).into()
 }
 
 fn btn(label: impl Into<String>, msg: Message, primary: bool) -> Element<'static, Message> {
     button(text(label.into()).size(13).color(Color::WHITE))
         .padding([6, 12])
         .on_press(msg)
-        .style(move |_, _| flat(if primary { ACCENT } else { PANEL_2 }))
+        .style(move |_, _| flat(if primary { accent() } else { panel_2() }))
         .into()
 }
 
@@ -50,7 +51,7 @@ fn segmented(items: Vec<(String, bool, Message)>) -> Element<'static, Message> {
         button(text(label).size(13).color(Color::WHITE))
             .padding([6, 14])
             .on_press(msg)
-            .style(move |_, _| flat(if on { ACCENT } else { PANEL_2 }))
+            .style(move |_, _| flat(if on { accent() } else { panel_2() }))
             .into()
     }))
     .spacing(1)
@@ -66,7 +67,7 @@ fn frame<'a>(
 ) -> Element<'a, Message> {
     let card = container(
         column![
-            text(title).size(18).color(TEXT),
+            text(title).size(18).color(text_color()),
             scrollable(container(body).padding([0, 12])).height(if tall {
                 Length::Fill
             } else {
@@ -81,9 +82,9 @@ fn frame<'a>(
     .max_height(if tall { 780.0 } else { 640.0 })
     .height(if tall { Length::Fill } else { Length::Shrink })
     .style(|_| container::Style {
-        background: Some(Background::Color(PANEL)),
+        background: Some(Background::Color(panel())),
         border: Border {
-            color: BORDER,
+            color: border(),
             width: 1.0,
             radius: 4.0.into(),
         },
@@ -129,13 +130,13 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
     let lit = (app.strips[i].shown + 90.0).clamp(1.0, 89.0) as u16;
     let band = |b: usize, name: &'static str, hz: &'static str| {
         row![
-            container(text(format!("{name} {hz}")).size(13).color(TEXT)).width(150),
+            container(text(format!("{name} {hz}")).size(13).color(text_color())).width(150),
             slider(-12.0..=12.0, f.eq[b], move |v| edit(Edit::Eq(i, b, v))).step(0.5_f32),
             container(
                 text(format!("{:+.1} dB", f.eq[b]))
                     .font(MONO)
                     .size(13)
-                    .color(TEXT)
+                    .color(text_color())
             )
             .width(70)
             .align_right(Length::Fill),
@@ -174,7 +175,7 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
             .label("Stumm unter der Schwelle")
             .on_toggle(move |v| edit(Edit::Gate(i, v))),
         row![
-            container(text("Schwelle").size(13).color(TEXT)).width(150),
+            container(text("Schwelle").size(13).color(text_color())).width(150),
             slider(-90.0..=-10.0, f.gate_db, move |v| edit(Edit::GateDb(
                 i,
                 v.round()
@@ -183,7 +184,7 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
                 text(format!("{} dB", f.gate_db))
                     .font(MONO)
                     .size(13)
-                    .color(TEXT)
+                    .color(text_color())
             )
             .width(70)
             .align_right(Length::Fill),
@@ -197,14 +198,14 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
                     .width(Length::FillPortion(lit))
                     .height(8)
                     .style(|_| container::Style {
-                        background: Some(Background::Color(SIGNAL)),
+                        background: Some(Background::Color(signal())),
                         ..container::Style::default()
                     }),
                 space().width(Length::FillPortion(90 - lit)),
             ])
             .width(Length::Fill)
             .style(|_| container::Style {
-                background: Some(Background::Color(PANEL_2)),
+                background: Some(Background::Color(panel_2())),
                 border: Border {
                     radius: 4.0.into(),
                     ..Border::default()
@@ -216,7 +217,7 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
     ]
     .spacing(8);
     frame(
-        format!("Effekte: {}", app.strips[i].label),
+        format!("{}: {}", tr("Effekte"), app.strips[i].label),
         520.0,
         false,
         body.into(),
@@ -246,7 +247,10 @@ fn error_line(app: &App) -> Element<'static, Message> {
     if app.dialog_error.is_empty() {
         space().height(0).into()
     } else {
-        text(app.dialog_error.clone()).size(13).color(DANGER).into()
+        text(app.dialog_error.clone())
+            .size(13)
+            .color(danger())
+            .into()
     }
 }
 
@@ -265,12 +269,12 @@ fn apps(app: &App) -> Element<'_, Message> {
                     container(
                         text("Noch kein Faderust Kabel. Mit „+ Eingang“ nimmt Faderust ein Programm direkt auf. Damit es dann nicht zusätzlich über die Boxen läuft, braucht es ein Gerät, das du nicht hörst: das Faderust Kabel (Einrichtung unter Geräte).")
                             .size(13)
-                            .color(TEXT),
+                            .color(text_color()),
                     )
                     .padding([10, 12])
                     .style(|_| container::Style {
                         border: Border {
-                            color: ACCENT,
+                            color: accent(),
                             width: 1.0,
                             radius: 3.0.into(),
                         },
@@ -278,6 +282,28 @@ fn apps(app: &App) -> Element<'_, Message> {
                     }),
                 );
             }
+            for cable in app.unused_cables() {
+                list = list.push(
+                    row![
+                        text(format!(
+                            "{} {}",
+                            device_label(&cable),
+                            tr("wird von keinem Eingang genutzt.")
+                        ))
+                        .size(13)
+                        .color(text_color()),
+                        space().width(Length::Fill),
+                        btn(
+                            "Als Eingang anlegen",
+                            edit(Edit::AppInput(cable.clone(), device_label(&cable))),
+                            true
+                        ),
+                    ]
+                    .spacing(8)
+                    .align_y(Vertical::Center),
+                );
+            }
+            let quiet = app.quiet_cable();
             if data.apps.is_empty() {
                 list = list.push(hint(
                     "Gerade spielt kein Programm Ton ab. Starte die Wiedergabe und tippe auf „Aktualisieren“.",
@@ -321,17 +347,36 @@ fn apps(app: &App) -> Element<'_, Message> {
                 .width(Length::Fill);
                 let program = format!("app:{}", a.exe.to_lowercase());
                 let action: Element<'_, Message> = if app.input_devices.contains(&program) {
-                    container(text("Eingang").size(12).font(BOLD).color(SIGNAL))
+                    container(text("Eingang").size(12).font(BOLD).color(signal()))
                         .padding([5, 10])
                         .style(|_| container::Style {
                             border: Border {
-                                color: SIGNAL,
+                                color: signal(),
                                 width: 1.0,
                                 radius: 3.0.into(),
                             },
                             ..container::Style::default()
                         })
                         .into()
+                } else if let Some(q) = &quiet {
+                    // Park it on the quiet cable first, so it is not heard twice.
+                    tooltip_text(
+                        btn(
+                            "+ Eingang",
+                            edit(Edit::AppInputParked(
+                                program,
+                                a.name.clone(),
+                                a.pids.clone(),
+                                q.id.clone(),
+                            )),
+                            false,
+                        ),
+                        format!(
+                            "{} {}",
+                            tr("Programm als eigenen Eingang aufnehmen und stellen auf"),
+                            device_label(&q.name)
+                        ),
+                    )
                 } else {
                     btn(
                         "+ Eingang",
@@ -341,13 +386,49 @@ fn apps(app: &App) -> Element<'_, Message> {
                 };
                 list = list.push(
                     row![
-                        container(text(a.name.clone()).size(14).color(TEXT)).width(170),
+                        container(text(a.name.clone()).size(14).color(text_color())).width(170),
                         device,
                         action
                     ]
                     .spacing(8)
                     .align_y(Vertical::Center),
                 );
+                if app.doubled(a) {
+                    let fix: Element<'_, Message> = match &quiet {
+                        Some(q) => btn(
+                            format!("{} {}", tr("Auf"), device_label(&q.name)) + &tr(" stellen"),
+                            edit(Edit::AppDevice(a.pids.clone(), Some(q.id.clone()))),
+                            true,
+                        ),
+                        None => btn("Faderust Kabel einrichten", edit(Edit::UsbSetup), true),
+                    };
+                    list = list.push(
+                        container(
+                            row![
+                                text(format!(
+                                    "{} {}",
+                                    tr("Du hörst"),
+                                    a.name
+                                ) + &tr(" doppelt: einmal über den Fader, einmal über sein eigenes Gerät."))
+                                .size(12)
+                                .color(amber()),
+                                space().width(Length::Fill),
+                                fix,
+                            ]
+                            .spacing(8)
+                            .align_y(Vertical::Center),
+                        )
+                        .padding([6, 10])
+                        .style(|_| container::Style {
+                            border: Border {
+                                color: amber(),
+                                width: 1.0,
+                                radius: 3.0.into(),
+                            },
+                            ..container::Style::default()
+                        }),
+                    );
+                }
             }
         }
     }
@@ -356,7 +437,7 @@ fn apps(app: &App) -> Element<'_, Message> {
         list,
         text("Windows merkt sich die Zuordnung pro Programm. Manche Programme übernehmen sie erst nach einem Neustart.")
             .size(12)
-            .color(MUTED),
+            .color(muted_color()),
     ]
     .spacing(16);
     frame(
@@ -378,7 +459,7 @@ fn presets(app: &App) -> Element<'_, Message> {
     for p in &app.presets {
         list = list.push(
             row![
-                container(text(p.clone()).size(14).color(TEXT)).width(Length::Fill),
+                container(text(p.clone()).size(14).color(text_color())).width(Length::Fill),
                 btn("Laden", edit(Edit::LoadPreset(p.clone())), true),
                 btn("Löschen", edit(Edit::DeletePreset(p.clone())), false),
             ]
@@ -440,7 +521,7 @@ fn windows(app: &App) -> Element<'_, Message> {
                         })
                         .and_then(|e| choices.iter().find(|c| c.id == e.id).cloned());
                     row![
-                        container(text(label).size(13).color(TEXT)).width(130),
+                        container(text(label).size(13).color(text_color())).width(130),
                         pick_list(choices.clone(), current, move |c| edit(Edit::WinDefault(
                             c.id, comm
                         )))
@@ -468,7 +549,7 @@ fn windows(app: &App) -> Element<'_, Message> {
                             container(
                                 text(format!("{}{badge}", device_label(&e.name)))
                                     .size(13)
-                                    .color(TEXT)
+                                    .color(text_color())
                             )
                             .width(230),
                             slider(0.0..=100.0, e.volume * 100.0, move |v| edit(
@@ -478,7 +559,7 @@ fn windows(app: &App) -> Element<'_, Message> {
                                 text(format!("{} %", (e.volume * 100.0).round()))
                                     .font(MONO)
                                     .size(13)
-                                    .color(TEXT)
+                                    .color(text_color())
                             )
                             .width(54)
                             .align_right(Length::Fill),
@@ -490,7 +571,7 @@ fn windows(app: &App) -> Element<'_, Message> {
                             .padding([4, 8])
                             .width(64)
                             .on_press(edit(Edit::WinMute(mute_id, !muted)))
-                            .style(move |_, _| flat(if muted { DANGER } else { PANEL_2 })),
+                            .style(move |_, _| flat(if muted { danger() } else { panel_2() })),
                         ]
                         .spacing(10)
                         .align_y(Vertical::Center),
@@ -517,20 +598,21 @@ fn windows(app: &App) -> Element<'_, Message> {
 }
 
 fn design(app: &App) -> Element<'_, Message> {
-    let swatch = |c: Color, on: bool| {
+    let swatch = |hex: &'static str, on: bool, msg: Message| {
+        let c = hex_color(hex);
         button(space())
             .width(28)
             .height(28)
             .style(move |_, _| button::Style {
                 background: Some(Background::Color(c)),
                 border: Border {
-                    color: if on { Color::WHITE } else { BORDER },
-                    width: if on { 2.0 } else { 1.0 },
+                    color: if on { text_color() } else { border() },
+                    width: if on { 3.0 } else { 1.0 },
                     radius: 14.0.into(),
                 },
                 ..button::Style::default()
             })
-            .on_press(close())
+            .on_press(msg)
     };
     let hide = HIDE_AFTER
         .iter()
@@ -542,6 +624,31 @@ fn design(app: &App) -> Element<'_, Message> {
             )
         })
         .collect();
+    let accent_now = app.accent();
+    let signal_now = app.signal();
+    let mode_now = app.mode();
+    let english = faderust_core::lang::is_english();
+    let accents = ACCENTS.iter().fold(row![].spacing(8), |r, (de, en, hex)| {
+        r.push(tooltip_text(
+            swatch(
+                hex,
+                accent_now.eq_ignore_ascii_case(hex),
+                edit(Edit::Accent((*hex).into())),
+            ),
+            if english { *en } else { *de },
+        ))
+    });
+    let signals = SIGNALS.iter().fold(row![].spacing(8), |r, (de, en, hex)| {
+        r.push(tooltip_text(
+            swatch(
+                hex,
+                signal_now.eq_ignore_ascii_case(hex),
+                edit(Edit::Signal((*hex).into())),
+            ),
+            if english { *en } else { *de },
+        ))
+    });
+    let lang_now = app.lang();
     let body = column![
         h3("Ansicht"),
         segmented(vec![
@@ -572,31 +679,61 @@ fn design(app: &App) -> Element<'_, Message> {
         h3("Stille Programme ausblenden"),
         segmented(hide),
         h3("Akzentfarbe"),
-        row![
-            swatch(ACCENT, true),
-            swatch(rgb(94, 154, 235), false),
-            swatch(rgb(176, 120, 230), false),
-            swatch(rgb(230, 190, 70), false),
-            swatch(rgb(220, 90, 130), false),
-        ]
-        .spacing(8),
+        accents,
         h3("Signalfarbe"),
-        row![
-            swatch(SIGNAL, true),
-            swatch(rgb(64, 200, 210), false),
-            swatch(rgb(150, 220, 80), false),
-            swatch(rgb(235, 235, 235), false),
-        ]
-        .spacing(8),
+        signals,
         h3("Helligkeit"),
         segmented(vec![
-            ("Dunkel".into(), true, close()),
-            ("Hell".into(), false, close()),
-            ("Wie Windows".into(), false, close()),
+            (
+                "Dunkel".into(),
+                mode_now == "dark",
+                edit(Edit::Mode("dark"))
+            ),
+            (
+                "Hell".into(),
+                mode_now == "light",
+                edit(Edit::Mode("light"))
+            ),
+            (
+                "Wie Windows".into(),
+                mode_now == "system",
+                edit(Edit::Mode("system"))
+            ),
+        ]),
+        h3("Sprache"),
+        segmented(vec![
+            ("Deutsch".into(), lang_now == "de", edit(Edit::Lang("de"))),
+            ("English".into(), lang_now == "en", edit(Edit::Lang("en"))),
         ]),
     ]
     .spacing(10);
     frame("Design".into(), 480.0, false, body.into(), done("Fertig"))
+}
+
+fn tooltip_text<'a>(
+    content: impl Into<Element<'a, Message>>,
+    tip: impl Into<String>,
+) -> Element<'a, Message> {
+    iced::widget::tooltip(
+        content,
+        container(text(tip.into()).size(12).color(text_color()))
+            .padding(6)
+            .style(|_| container::Style {
+                background: Some(Background::Color(panel_2())),
+                border: Border {
+                    color: border(),
+                    width: 1.0,
+                    radius: 3.0.into(),
+                },
+                ..container::Style::default()
+            }),
+        iced::widget::tooltip::Position::Bottom,
+    )
+    .into()
+}
+
+fn hex_color(h: &str) -> Color {
+    crate::style::hex(h)
 }
 
 fn deck_section(app: &App) -> Element<'_, Message> {
@@ -612,13 +749,15 @@ fn deck_section(app: &App) -> Element<'_, Message> {
         "Stream Deck nicht verbunden. Plugin einrichten oder neu installieren:".to_string()
     } else if deck.update {
         format!(
-            "Plugin {} → {bundled} verfügbar",
-            deck.installed.as_deref().unwrap_or("(alt)")
+            "Plugin {} → {bundled} {}",
+            deck.installed.as_deref().unwrap_or("(alt)"),
+            tr("verfügbar")
         )
     } else {
         format!(
-            "Plugin {} ist aktuell",
-            deck.installed.as_deref().unwrap_or("")
+            "Plugin {} {}",
+            deck.installed.as_deref().unwrap_or(""),
+            tr("ist aktuell")
         )
     };
     let action = if deck.connected && !deck.update {
@@ -641,7 +780,7 @@ fn error_text(e: &str) -> Element<'static, Message> {
     if e.is_empty() {
         space().height(0).into()
     } else {
-        text(e.to_string()).size(13).color(DANGER).into()
+        text(e.to_string()).size(13).color(danger()).into()
     }
 }
 
@@ -653,13 +792,13 @@ fn log(app: &App) -> Element<'_, Message> {
     };
     let body = column![
         hint("Was Faderust zuletzt gemeldet hat. Bei einem Fehler bitte den Text kopieren und in ein Issue einfügen."),
-        container(text(text_).font(MONO).size(12).color(TEXT))
+        container(text(text_).font(MONO).size(12).color(text_color()))
             .padding(10)
             .width(Length::Fill)
             .style(|_| container::Style {
-                background: Some(Background::Color(BG)),
+                background: Some(Background::Color(bg())),
                 border: Border {
-                    color: BORDER,
+                    color: border(),
                     width: 1.0,
                     radius: 3.0.into(),
                 },
@@ -701,24 +840,27 @@ fn selftest(app: &App) -> Element<'_, Message> {
                 text(if problems == 0 {
                     "Alles in Ordnung".to_string()
                 } else {
-                    format!("{problems} Punkte brauchen einen Blick")
+                    format!("{problems} {}", tr("Punkte brauchen einen Blick"))
                 })
                 .size(15)
-                .color(if problems == 0 { SIGNAL } else { AMBER }),
+                .color(if problems == 0 { signal() } else { amber() }),
             );
             for c in checks {
                 let (mark, color) = match c.status {
-                    Status::Ok => ("✓", SIGNAL),
-                    Status::Warn => ("!", AMBER),
-                    Status::Fail => ("✕", DANGER),
-                    Status::Info => ("i", MUTED),
+                    Status::Ok => ("✓", signal()),
+                    Status::Warn => ("!", amber()),
+                    Status::Fail => ("✕", danger()),
+                    Status::Info => ("i", muted_color()),
                 };
                 body = body.push(
                     row![
                         container(text(mark).size(14).font(BOLD).color(color)).width(20),
                         column![
-                            text(c.title.clone()).size(13).font(BOLD).color(TEXT),
-                            text(c.detail.clone()).size(12).color(MUTED),
+                            text(c.title.clone())
+                                .size(13)
+                                .font(BOLD)
+                                .color(text_color()),
+                            text(c.detail.clone()).size(12).color(muted_color()),
                         ]
                         .spacing(2),
                     ]
@@ -782,7 +924,7 @@ fn settings(app: &App) -> Element<'_, Message> {
     let arrow = |label: &'static str, msg: Option<Message>| {
         let b = button(text(label).size(13).color(Color::WHITE))
             .padding([4, 8])
-            .style(|_, _| flat(PANEL_2));
+            .style(|_, _| flat(panel_2()));
         match msg {
             Some(m) => b.on_press(m),
             None => b,
@@ -899,7 +1041,7 @@ fn settings(app: &App) -> Element<'_, Message> {
                     )
                     .push(
                         row![
-                            text("Anzahl Kabel").size(13).color(TEXT),
+                            text("Anzahl Kabel").size(13).color(text_color()),
                             pick_list([1u8, 2, 3, 4], Some(count), |n| edit(Edit::UsbCount(n))),
                             space().width(Length::Fill),
                             btn("Entfernen", edit(Edit::UsbRemove), false),
@@ -932,7 +1074,7 @@ fn settings(app: &App) -> Element<'_, Message> {
                                 .join("\n"),
                         )
                         .size(12)
-                        .color(MUTED),
+                        .color(muted_color()),
                     );
                 }
             }
@@ -947,6 +1089,7 @@ fn settings(app: &App) -> Element<'_, Message> {
         h3("Ausgänge"),
         outputs,
         btn("+ Ausgang", edit(Edit::OutAdd), false),
+        mic_section(app),
         h3("Start"),
         checkbox(app.autostart)
             .label("Mit Windows starten (im Tray, ohne Fenster)")
@@ -968,4 +1111,42 @@ fn settings(app: &App) -> Element<'_, Message> {
     ]
     .spacing(10);
     frame("Geräte".into(), 760.0, true, body.into(), done("Schließen"))
+}
+
+/// "Programm-Mikro": an output on a virtual cable, so Discord, Teams & co.
+/// get Faderust's microphone mix by recording the cable's other end.
+fn mic_section(app: &App) -> Element<'_, Message> {
+    if let Some(device) = &app.mic_device {
+        return column![
+            text(tr("Programm-Mikro angelegt."))
+                .size(13)
+                .font(BOLD)
+                .color(signal()),
+            hint(format!(
+                "{} {}. {}",
+                tr("Wähle in Discord, Teams usw. als Mikrofon"),
+                device_label(device),
+                tr("Die Spalte „Programm-Mikro“ bestimmt, was dort ankommt.")
+            )),
+            checkbox(app.mic_default)
+                .label(tr("Als Windows-Mikrofon für Anrufe setzen"))
+                .on_toggle(|v| edit(Edit::MicDefault(v))),
+        ]
+        .spacing(6)
+        .into();
+    }
+    if app.mic_cable().is_some() {
+        return row![
+            btn("+ Programm-Mikro", edit(Edit::MicAdd), false),
+            hint("Ausgang auf einem virtuellen Kabel, den Programme als Mikrofon nutzen"),
+        ]
+        .spacing(10)
+        .align_y(Vertical::Center)
+        .into();
+    }
+    hint(if app.has_cable() {
+        "Für ein Programm-Mikro (Discord, Teams …) braucht es ein freies virtuelles Kabel. Alle Kabel sind schon belegt: erhöhe die Anzahl unter „Faderust Kabel“."
+    } else {
+        "Für ein Programm-Mikro (Discord, Teams …) braucht es ein virtuelles Kabel."
+    })
 }

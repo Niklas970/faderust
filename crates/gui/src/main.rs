@@ -13,6 +13,7 @@
 
 mod dialogs;
 mod fader;
+mod i18n;
 mod scale;
 mod shell;
 mod style;
@@ -30,10 +31,11 @@ use faderust_core::selftest::Check;
 use faderust_core::update::Update;
 use faderust_core::{cable, AppState, Apps, Devices, Host, StreamDeckStatus, WindowsAudio};
 
+use i18n::text;
 use iced::alignment::{Horizontal, Vertical};
 use iced::gradient;
 use iced::widget::canvas::{self, Canvas};
-use iced::widget::{button, column, container, image, row, space, stack, text};
+use iced::widget::{button, column, container, image, row, space, stack};
 use iced::{
     window, Background, Border, Color, Element, Font, Length, Shadow, Size, Subscription, Task,
     Theme,
@@ -161,6 +163,9 @@ pub struct App {
     dir: PathBuf,
     prefs: shell::Prefs,
     pub autostart: bool,
+    /// Recording device that programs pick after "+ Programm-Mikro".
+    pub mic_device: Option<String>,
+    pub mic_default: bool,
     #[cfg(windows)]
     tray: Option<shell::tray::Tray>,
     update: Option<Update>,
@@ -204,6 +209,27 @@ pub struct App {
     shot: Option<String>,
 }
 
+/// Applies the saved colours and language.
+fn apply_look(p: &shell::Prefs) {
+    let accent = if p.accent.is_empty() {
+        style::DEFAULT_ACCENT
+    } else {
+        &p.accent
+    };
+    let signal = if p.signal.is_empty() {
+        style::DEFAULT_SIGNAL
+    } else {
+        &p.signal
+    };
+    style::set_theme(&p.mode, accent, signal);
+    let lang = if p.lang.is_empty() {
+        shell::system_lang()
+    } else {
+        &p.lang
+    };
+    faderust_core::lang::set(lang);
+}
+
 #[derive(Debug, Clone)]
 pub enum Edit {
     Denoise(usize, bool),
@@ -228,6 +254,10 @@ pub enum Edit {
     OutBuffer(usize, String),
     OutRelease(usize, u32),
     OutAdd,
+    MicAdd,
+    /// Park the program on a quiet cable, then record it: (program, label, pids, cable id).
+    AppInputParked(String, String, Vec<u32>, String),
+    MicDefault(bool),
     OutRemove(usize),
     OutMove(usize, isize),
     UsbSetup,
@@ -240,6 +270,10 @@ pub enum Edit {
     CopyChecks,
     InstallDeck,
     MastersLeft(bool),
+    Mode(&'static str),
+    Accent(String),
+    Signal(String),
+    Lang(&'static str),
     HideAfter(&'static str),
     NewPreset(String),
     SavePreset,
@@ -375,6 +409,11 @@ fn level_of(db: f32) -> f32 {
 
 /// Runs `f` off the UI thread (the device calls can take a while and want
 /// their own COM apartment) and turns its result into a message.
+/// Case-insensitive "name contains pattern" for a configured device pattern.
+pub fn contains(name: &str, pattern: &str) -> bool {
+    !pattern.is_empty() && name.to_lowercase().contains(&pattern.to_lowercase())
+}
+
 fn blocking<T: Send + 'static>(
     f: impl FnOnce() -> T + Send + 'static,
     then: impl Fn(T) -> Message + Send + 'static,
@@ -405,6 +444,192 @@ impl App {
         )
     }
 
+    /// A cable's playback end that is no output yet and whose recording end
+    /// is no input (that would loop).
+    pub fn mic_cable(&self) -> Option<String> {
+        use faderust_core::names::{cable_counterpart, is_cable, own_cable};
+        let draft = self.draft.as_ref()?;
+        let matches = |name: &str, pattern: &str| {
+            !pattern.is_empty() && name.to_lowercase().contains(&pattern.to_lowercase())
+        };
+        let recordings: Vec<String> = self.devs.inputs.iter().map(|d| d.name.clone()).collect();
+        self.devs
+            .outputs
+            .iter()
+            .find(|d| {
+                is_cable(&d.name)
+                    && (d.name.to_lowercase().contains("input") || own_cable(&d.name).is_some())
+                    && !draft.outputs.iter().any(|o| matches(&d.name, &o.device))
+                    && !draft
+                        .inputs
+                        .iter()
+                        .any(|i| matches(&cable_counterpart(&d.name, &recordings), &i.device))
+            })
+            .map(|d| d.name.clone())
+    }
+
+    fn cable_inputs(&self) -> Vec<String> {
+        self.devs
+            .inputs
+            .iter()
+            .filter(|d| faderust_core::names::is_cable(&d.name))
+            .map(|d| d.name.clone())
+            .collect()
+    }
+
+    /// A cable nobody hears: Faderust neither records its other end nor
+    /// plays on it. A program input parked there is heard only through its fader.
+    pub fn quiet_cable(&self) -> Option<faderust_core::RenderDevice> {
+        let data = self.apps_data.as_ref()?;
+        let cfg = self.config();
+        let cables = self.cable_inputs();
+        data.devices
+            .iter()
+            .find(|d| self.is_quiet(d, &cfg, &cables))
+            .cloned()
+    }
+
+    fn is_quiet(
+        &self,
+        d: &faderust_core::RenderDevice,
+        cfg: &CoreConfig,
+        cables: &[String],
+    ) -> bool {
+        let counterpart = faderust_core::names::cable_counterpart(&d.name, cables);
+        d.cable
+            && !cfg.inputs.iter().any(|i| contains(&counterpart, &i.device))
+            && !cfg.outputs.iter().any(|o| contains(&d.name, &o.device))
+    }
+
+    /// Cable capture devices no input uses yet. Not offered when Faderust
+    /// plays on the cable's other end (that would loop) or a program input
+    /// is parked on it (heard twice otherwise).
+    pub fn unused_cables(&self) -> Vec<String> {
+        use faderust_core::names::own_cable;
+        let Some(data) = &self.apps_data else {
+            return vec![];
+        };
+        let cfg = self.config();
+        let cables = self.cable_inputs();
+        cables
+            .iter()
+            .filter(|c| {
+                let playback = match own_cable(c) {
+                    None => c.to_lowercase().replace("output", "input"),
+                    Some(own) => data
+                        .devices
+                        .iter()
+                        .find(|d| own_cable(&d.name).as_deref() == Some(own.as_str()))
+                        .map(|d| d.name.to_lowercase())
+                        .unwrap_or_default(),
+                };
+                !cfg.inputs.iter().any(|i| contains(c, &i.device))
+                    && !cfg.outputs.iter().any(|o| contains(&playback, &o.device))
+                    && !data.apps.iter().any(|a| {
+                        let program = format!("app:{}", a.exe.to_lowercase());
+                        cfg.inputs.iter().any(|i| i.device == program)
+                            && a.device.as_ref().is_some_and(|id| {
+                                data.devices.iter().find(|d| &d.id == id).is_some_and(|d| {
+                                    &faderust_core::names::cable_counterpart(&d.name, &cables) == *c
+                                })
+                            })
+                    })
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// The program is recorded as an input, reaches an output and still plays
+    /// on a device you hear: a cable somebody listens to, a device Faderust
+    /// plays on too, or the Windows default.
+    pub fn doubled(&self, a: &faderust_core::App) -> bool {
+        let Some(data) = &self.apps_data else {
+            return false;
+        };
+        let cfg = self.config();
+        let program = format!("app:{}", a.exe.to_lowercase());
+        let Some(row) = cfg.inputs.iter().position(|i| i.device == program) else {
+            return false;
+        };
+        let routed = !cfg.inputs[row].muted
+            && cfg
+                .gains
+                .get(row)
+                .is_some_and(|g| g.iter().any(|g| !g.muted && g.db > -59.0));
+        if !routed {
+            return false;
+        }
+        let default_id = self
+            .win
+            .as_ref()
+            .and_then(|w| w.playback.iter().find(|e| e.is_default))
+            .map(|e| e.id.clone());
+        let wanted = a.device.clone().or(default_id);
+        let Some(d) = data.devices.iter().find(|x| Some(&x.id) == wanted.as_ref()) else {
+            return false;
+        };
+        if d.cable {
+            !self.is_quiet(d, &cfg, &self.cable_inputs())
+        } else {
+            a.device.is_none() || cfg.outputs.iter().any(|o| contains(&d.name, &o.device))
+        }
+    }
+
+    pub fn has_cable(&self) -> bool {
+        self.devs
+            .outputs
+            .iter()
+            .any(|d| faderust_core::names::is_cable(&d.name))
+    }
+
+    pub fn accent(&self) -> String {
+        if self.prefs.accent.is_empty() {
+            style::DEFAULT_ACCENT.into()
+        } else {
+            self.prefs.accent.clone()
+        }
+    }
+
+    pub fn signal(&self) -> String {
+        if self.prefs.signal.is_empty() {
+            style::DEFAULT_SIGNAL.into()
+        } else {
+            self.prefs.signal.clone()
+        }
+    }
+
+    pub fn mode(&self) -> &str {
+        match self.prefs.mode.as_str() {
+            "light" => "light",
+            "system" => "system",
+            _ => "dark",
+        }
+    }
+
+    pub fn lang(&self) -> &str {
+        match self.prefs.lang.as_str() {
+            "en" => "en",
+            "de" => "de",
+            _ if faderust_core::lang::is_english() => "en",
+            _ => "de",
+        }
+    }
+
+    /// Changes colours or language: saves, applies and redraws everything.
+    fn set_look(&mut self, change: impl FnOnce(&mut shell::Prefs)) {
+        let mut p = self.prefs.clone();
+        change(&mut p);
+        apply_look(&p);
+        shell::save_prefs(&self.dir, &p);
+        self.prefs = p;
+        for s in &self.strips {
+            s.cache.clear();
+        }
+        for o in &self.outs {
+            o.cache.clear();
+        }
+    }
+
     fn save_prefs(&mut self) {
         let prefs = shell::Prefs {
             view: if self.view == View::Matrix {
@@ -427,6 +652,7 @@ impl App {
                 .filter(|o| o.hidden)
                 .map(|o| o.label.clone())
                 .collect(),
+            ..self.prefs.clone()
         };
         if prefs != self.prefs {
             shell::save_prefs(&self.dir, &prefs);
@@ -515,7 +741,7 @@ impl App {
             Some(Dialog::Windows) => self.load_windows(),
             Some(Dialog::Apps) => {
                 self.input_devices = self.config().inputs.into_iter().map(|i| i.device).collect();
-                Task::batch([self.load_apps(), self.load_windows()])
+                Task::batch([self.load_apps(), self.load_windows(), self.load_devices()])
             }
             Some(Dialog::Settings) => {
                 Task::batch([self.load_devices(), self.load_usb(), self.load_deck()])
@@ -651,6 +877,7 @@ impl App {
             &dir,
         );
         let prefs = shell::load_prefs(&dir);
+        apply_look(&prefs);
         let dialog = std::env::var("FADERUST_DIALOG")
             .ok()
             .and_then(|d| match d.as_str() {
@@ -682,6 +909,8 @@ impl App {
             win_id: None,
             dir,
             autostart: shell::autostart_enabled(),
+            mic_device: None,
+            mic_default: true,
             #[cfg(windows)]
             tray: tray_icon(),
             update: None,
@@ -1130,6 +1359,20 @@ impl App {
                     |r| Message::Loaded(Loaded::Done(Then::Apps, r)),
                 ));
             }
+            Edit::AppInputParked(device, label, pids, cable) => {
+                self.jobs.push(blocking(
+                    move || {
+                        faderust_core::set_app_output(pids, Some(cable))?;
+                        // Recording it mid-move can leave it without sound.
+                        std::thread::sleep(Duration::from_millis(800));
+                        Ok(())
+                    },
+                    move |r: Result<(), String>| match r {
+                        Ok(()) => Message::Edit(Edit::AppInput(device.clone(), label.clone())),
+                        Err(e) => Message::Failed(e),
+                    },
+                ));
+            }
             Edit::AppInput(device, label) => {
                 let r = self.add_input(device, label);
                 if let Err(e) = r {
@@ -1272,6 +1515,53 @@ impl App {
                     });
                 }
             }
+            Edit::MicDefault(on) => self.mic_default = on,
+            Edit::MicAdd => {
+                if let Some(cable) = self.mic_cable() {
+                    self.reshaped = true;
+                    let recordings: Vec<String> =
+                        self.devs.inputs.iter().map(|d| d.name.clone()).collect();
+                    let counterpart = faderust_core::names::cable_counterpart(&cable, &recordings);
+                    self.draft_edit(|c| {
+                        c.outputs.push(faderust_core::config::OutputEntry {
+                            label: i18n::tr("Programm-Mikro"),
+                            device: cable,
+                            buffer_ms: 30,
+                            master: Default::default(),
+                            release_secs: 30,
+                        });
+                        // The first input (usually the microphone) at 0 dB, the rest muted.
+                        for row in c
+                            .gains
+                            .iter_mut()
+                            .chain(c.presets.iter_mut().flat_map(|p| p.gains.iter_mut()))
+                        {
+                            row.push(Gain::default());
+                        }
+                        for (i, row) in c.gains.iter_mut().enumerate() {
+                            if let Some(g) = row.last_mut() {
+                                g.muted = i != 0;
+                            }
+                        }
+                    });
+                    if self.mic_default {
+                        let name = counterpart.clone();
+                        self.jobs.push(blocking(
+                            move || {
+                                let w = faderust_core::get_windows_audio()?;
+                                match w.recording.iter().find(|d| d.name == name) {
+                                    Some(d) => {
+                                        faderust_core::set_default_device(d.id.clone(), true)
+                                    }
+                                    None => Ok(()),
+                                }
+                            },
+                            |r| Message::Loaded(Loaded::Done(Then::Nothing, r)),
+                        ));
+                    }
+                    self.mic_device = Some(counterpart);
+                }
+            }
             Edit::OutRemove(o) => {
                 self.reshaped = true;
                 self.draft_edit(|c| {
@@ -1371,6 +1661,10 @@ impl App {
                 );
                 self.deck_error = r.err().unwrap_or_default();
             }
+            Edit::Mode(m) => self.set_look(|p| p.mode = m.into()),
+            Edit::Accent(c) => self.set_look(|p| p.accent = c),
+            Edit::Signal(c) => self.set_look(|p| p.signal = c),
+            Edit::Lang(l) => self.set_look(|p| p.lang = l.into()),
             Edit::MastersLeft(l) => {
                 self.masters_left = l;
                 self.save_prefs();
@@ -1439,7 +1733,7 @@ impl App {
                     row![
                         text(icon)
                             .size(14)
-                            .color(if on { Color::WHITE } else { ACCENT }),
+                            .color(if on { Color::WHITE } else { accent() }),
                         text(label).size(13).font(BOLD).color(Color::WHITE)
                     ]
                     .spacing(7)
@@ -1453,7 +1747,7 @@ impl App {
             .style(move |_, status| nav_style(on, matches!(status, button::Status::Hovered)))
         };
         let win = |label: &'static str, close: bool, msg: Message| {
-            button(container(text(label).size(12).color(MUTED)).center(Length::Fill))
+            button(container(text(label).size(12).color(muted_color())).center(Length::Fill))
                 .width(46)
                 .height(Length::Fill)
                 .padding(0)
@@ -1462,9 +1756,9 @@ impl App {
                     let hot = matches!(status, button::Status::Hovered);
                     button::Style {
                         background: hot.then(|| {
-                            Background::Color(if close { rgb(196, 43, 28) } else { PANEL_2 })
+                            Background::Color(if close { rgb(196, 43, 28) } else { panel_2() })
                         }),
-                        text_color: if hot { Color::WHITE } else { MUTED },
+                        text_color: if hot { Color::WHITE } else { muted_color() },
                         border: Border::default(),
                         ..button::Style::default()
                     }
@@ -1475,21 +1769,21 @@ impl App {
                 .width(22)
                 .height(22)
                 .border_radius(3),
-            text("FADERUST").size(13).font(BOLD).color(TEXT),
+            text("FADERUST").size(13).font(BOLD).color(text_color()),
             button(
                 text(concat!("v", env!("CARGO_PKG_VERSION")))
                     .size(12)
                     .font(MONO)
-                    .color(MUTED)
+                    .color(muted_color())
             )
             .padding([2, 6])
             .on_press(Message::CheckUpdate)
             .style(|_, status| button::Style {
                 background: None,
-                text_color: MUTED,
+                text_color: muted_color(),
                 border: Border {
                     color: if matches!(status, button::Status::Hovered) {
-                        BORDER
+                        border()
                     } else {
                         Color::TRANSPARENT
                     },
@@ -1508,7 +1802,7 @@ impl App {
                     text(if self.updating {
                         "Lädt …".to_string()
                     } else {
-                        format!("Update auf {}", u.version)
+                        format!("{} {}", i18n::tr("Update auf"), u.version)
                     })
                     .size(12)
                     .font(BOLD)
@@ -1516,7 +1810,7 @@ impl App {
                 )
                 .padding([3, 10])
                 .on_press_maybe((!self.updating).then_some(Message::InstallUpdate))
-                .style(|_, _| flat(ACCENT)),
+                .style(|_, _| flat(accent())),
             ]
             .spacing(10)
             .align_y(Vertical::Center)
@@ -1546,9 +1840,9 @@ impl App {
         .height(48)
         .width(Length::Fill)
         .style(|_| container::Style {
-            background: Some(Background::Color(PANEL)),
+            background: Some(Background::Color(panel())),
             border: Border {
-                color: BORDER,
+                color: border(),
                 width: 1.0,
                 ..Border::default()
             },
@@ -1563,19 +1857,24 @@ impl App {
     // --- desk ------------------------------------------------------------
 
     fn name_label(text_: &str) -> Element<'static, Message> {
-        container(text(text_.to_uppercase()).size(12).color(TEXT).font(BOLD))
-            .width(Length::Fill)
-            .padding([3, 4])
-            .align_x(Horizontal::Center)
-            .style(|_| container::Style {
-                background: Some(Background::Color(PANEL_2)),
-                border: Border {
-                    radius: 3.0.into(),
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            })
-            .into()
+        container(
+            text(text_.to_uppercase())
+                .size(12)
+                .color(text_color())
+                .font(BOLD),
+        )
+        .width(Length::Fill)
+        .padding([3, 4])
+        .align_x(Horizontal::Center)
+        .style(|_| container::Style {
+            background: Some(Background::Color(panel_2())),
+            border: Border {
+                radius: 3.0.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .into()
     }
 
     fn note(text_: &str, on: bool) -> Element<'static, Message> {
@@ -1583,7 +1882,7 @@ impl App {
             text(text_.to_string())
                 .size(11)
                 .wrapping(iced::widget::text::Wrapping::None)
-                .color(if on { SIGNAL } else { MUTED }),
+                .color(if on { signal() } else { muted_color() }),
         )
         .width(Length::Fill)
         .height(14)
@@ -1602,7 +1901,7 @@ impl App {
             ..MONO
         })
         .size(13)
-        .color(if muted { MUTED } else { ACCENT_LIGHT })
+        .color(if muted { muted_color() } else { accent_light() })
         .into()
     }
 
@@ -1651,9 +1950,9 @@ impl App {
             .height(Length::Fill)
             .align_x(Horizontal::Center)
             .style(|_| container::Style {
-                background: Some(Background::Color(PANEL)),
+                background: Some(Background::Color(panel())),
                 border: Border {
-                    color: BORDER,
+                    color: border(),
                     width: 1.0,
                     radius: 4.0.into(),
                 },
@@ -1669,7 +1968,7 @@ impl App {
                 text(format!("A{}", o + 1))
                     .size(11)
                     .font(BOLD)
-                    .color(if on { Color::WHITE } else { MUTED })
+                    .color(if on { Color::WHITE } else { muted_color() })
                     .center(),
             )
             .width(if narrow { 26.0 } else { 34.0 })
@@ -1701,12 +2000,12 @@ impl App {
         .width(if narrow { 84.0 } else { STRIP_W })
         .height(Length::Fill);
         let small = |label: &'static str, msg: Message, w: f32| {
-            button(text(label).size(12).color(TEXT).center())
+            button(text(label).size(12).color(text_color()).center())
                 .width(w)
                 .height(24)
                 .padding(0)
                 .on_press(msg)
-                .style(|_, _| flat(PANEL_2))
+                .style(|_, _| flat(panel_2()))
         };
         let foot: Element<'_, Message> = if narrow {
             row![
@@ -1761,7 +2060,7 @@ impl App {
             .align_x(Horizontal::Center)
             .align_y(Vertical::Center)
             .style(|_| container::Style {
-                background: Some(Background::Color(ACCENT)),
+                background: Some(Background::Color(accent())),
                 border: Border {
                     radius: 3.0.into(),
                     ..Border::default()
@@ -1769,7 +2068,7 @@ impl App {
                 ..container::Style::default()
             }),
             space().width(Length::Fill),
-            button(text("×").size(14).color(MUTED).center())
+            button(text("×").size(14).color(muted_color()).center())
                 .width(22)
                 .height(22)
                 .padding(0)
@@ -1777,9 +2076,9 @@ impl App {
                 .style(|_, status| button::Style {
                     background: None,
                     text_color: if matches!(status, button::Status::Hovered) {
-                        TEXT
+                        text_color()
                     } else {
-                        MUTED
+                        muted_color()
                     },
                     ..button::Style::default()
                 }),
@@ -1807,7 +2106,7 @@ impl App {
         label: &'static str,
         extra: Option<Element<'static, Message>>,
     ) -> Element<'static, Message> {
-        let mut r = row![text(label).size(12).font(BOLD).color(MUTED)]
+        let mut r = row![text(label).size(12).font(BOLD).color(muted_color())]
             .spacing(12)
             .align_y(Vertical::Center);
         if let Some(e) = extra {
@@ -1831,7 +2130,7 @@ impl App {
             .width(2)
             .height(Length::Fill)
             .style(|_| container::Style {
-                background: Some(Background::Color(BORDER)),
+                background: Some(Background::Color(border())),
                 ..container::Style::default()
             })
             .into()
@@ -1839,15 +2138,15 @@ impl App {
 
     fn desk(&self) -> Element<'_, Message> {
         let link = |label: String, msg: Message| -> Element<'static, Message> {
-            button(text(label).size(12).color(ACCENT_LIGHT))
+            button(text(label).size(12).color(accent_light()))
                 .padding([2, 8])
                 .on_press(msg)
                 .style(|_, status| button::Style {
                     background: None,
-                    text_color: ACCENT_LIGHT,
+                    text_color: accent_light(),
                     border: Border {
                         color: if matches!(status, button::Status::Hovered) {
-                            ACCENT
+                            accent()
                         } else {
                             Color::TRANSPARENT
                         },
@@ -1864,7 +2163,7 @@ impl App {
                 "AUSGÄNGE",
                 (hidden_outs > 0).then(|| {
                     link(
-                        format!("{hidden_outs} ausgeblendet"),
+                        format!("{hidden_outs} {}", i18n::tr("ausgeblendet")),
                         Message::Edit(Edit::HideOut(0, false)),
                     )
                 }),
@@ -1882,15 +2181,15 @@ impl App {
                 .collect(),
         );
         let add: Element<'_, Message> =
-            button(text("+ Programm").size(12).font(BOLD).color(ACCENT_LIGHT))
+            button(text("+ Programm").size(12).font(BOLD).color(accent_light()))
                 .height(24)
                 .padding([0, 12])
                 .on_press(Message::Open(Some(Dialog::Apps)))
                 .style(|_, _| button::Style {
                     background: None,
-                    text_color: ACCENT_LIGHT,
+                    text_color: accent_light(),
                     border: Border {
-                        color: ACCENT,
+                        color: accent(),
                         width: 1.0,
                         radius: 3.0.into(),
                     },
@@ -1902,7 +2201,7 @@ impl App {
             row![
                 add,
                 link(
-                    format!("{silent} still, zeigen"),
+                    format!("{silent} {}", i18n::tr("still, zeigen")),
                     Message::Edit(Edit::ShowSilent)
                 )
             ]
@@ -1930,10 +2229,15 @@ impl App {
 
     fn matrix(&self) -> Element<'_, Message> {
         let head = row![space().width(110)].extend(self.outs.iter().map(|o| {
-            container(text(o.label.to_uppercase()).size(12).color(TEXT).font(BOLD))
-                .width(110)
-                .align_x(Horizontal::Center)
-                .into()
+            container(
+                text(o.label.to_uppercase())
+                    .size(12)
+                    .color(text_color())
+                    .font(BOLD),
+            )
+            .width(110)
+            .align_x(Horizontal::Center)
+            .into()
         }));
         let mut rows = column![head].spacing(10);
         for (i, s) in self.strips.iter().enumerate() {
@@ -1947,17 +2251,17 @@ impl App {
                     })
                     .font(MONO)
                     .size(13)
-                    .color(if on { Color::BLACK } else { MUTED })
+                    .color(if on { Color::BLACK } else { muted_color() })
                     .center(),
                 )
                 .width(110)
                 .height(40)
                 .on_press(Message::Route(i, o))
                 .style(move |_, _| button::Style {
-                    background: Some(Background::Color(if on { SIGNAL } else { PANEL_2 })),
+                    background: Some(Background::Color(if on { signal() } else { panel_2() })),
                     text_color: Color::WHITE,
                     border: Border {
-                        color: BORDER,
+                        color: border(),
                         width: 1.0,
                         radius: 4.0.into(),
                     },
@@ -1966,10 +2270,13 @@ impl App {
                 .into()
             });
             rows = rows.push(
-                row![
-                    container(text(s.label.to_uppercase()).size(12).color(TEXT).font(BOLD))
-                        .width(110)
-                ]
+                row![container(
+                    text(s.label.to_uppercase())
+                        .size(12)
+                        .color(text_color())
+                        .font(BOLD)
+                )
+                .width(110)]
                 .extend(cells)
                 .align_y(Vertical::Center),
             );
@@ -1988,9 +2295,9 @@ impl App {
                 .width(Length::Fill)
                 .style(move |_| container::Style {
                     background: Some(Background::Color(match *level {
-                        "error" => DANGER,
-                        "warn" => AMBER,
-                        _ => ACCENT,
+                        "error" => danger(),
+                        "warn" => amber(),
+                        _ => accent(),
                     })),
                     ..container::Style::default()
                 })
@@ -2009,7 +2316,7 @@ impl App {
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_| container::Style {
-                background: Some(Background::Color(BG)),
+                background: Some(Background::Color(bg())),
                 ..container::Style::default()
             });
         match self.dialog {
@@ -2033,10 +2340,10 @@ impl App {
 
 fn nav_style(active: bool, hot: bool) -> button::Style {
     button::Style {
-        background: Some(Background::Color(if active { ACCENT } else { PANEL_2 })),
+        background: Some(Background::Color(if active { accent() } else { panel_2() })),
         text_color: Color::WHITE,
         border: Border {
-            color: if active || hot { ACCENT } else { BORDER },
+            color: if active || hot { accent() } else { border() },
             width: 1.0,
             radius: 3.0.into(),
         },
@@ -2049,7 +2356,7 @@ pub fn flat(color: Color) -> button::Style {
         background: Some(Background::Color(color)),
         text_color: Color::WHITE,
         border: Border {
-            color: BORDER,
+            color: border(),
             width: 1.0,
             radius: 4.0.into(),
         },
@@ -2059,10 +2366,10 @@ pub fn flat(color: Color) -> button::Style {
 
 fn small_toggle(on: bool) -> button::Style {
     button::Style {
-        background: Some(Background::Color(if on { ACCENT } else { PANEL_2 })),
+        background: Some(Background::Color(if on { accent() } else { panel_2() })),
         text_color: Color::WHITE,
         border: Border {
-            color: if on { ACCENT } else { BORDER },
+            color: if on { accent() } else { border() },
             width: 1.0,
             radius: 3.0.into(),
         },
@@ -2124,12 +2431,12 @@ fn theme(_: &App) -> Theme {
     Theme::custom(
         "Faderust".to_string(),
         iced::theme::Palette {
-            background: BG,
-            text: TEXT,
-            primary: ACCENT,
-            success: SIGNAL,
-            warning: AMBER,
-            danger: DANGER,
+            background: bg(),
+            text: text_color(),
+            primary: accent(),
+            success: signal(),
+            warning: amber(),
+            danger: danger(),
         },
     )
 }

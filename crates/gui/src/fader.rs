@@ -206,14 +206,14 @@ impl Fader<'_> {
             f.fill_text(Text {
                 content: label.to_string(),
                 position: Point::new(26.0, y),
-                color: if zero { TEXT } else { MUTED },
+                color: if zero { text_color() } else { muted_color() },
                 size: Pixels(11.0),
                 font: MONO,
                 align_x: Horizontal::Right.into(),
                 align_y: Vertical::Center,
                 ..Text::default()
             });
-            let mark = if zero { MUTED } else { BORDER };
+            let mark = if zero { muted_color() } else { border() };
             for x in [29.0, 47.0] {
                 f.fill_rectangle(Point::new(x, y - 0.5), Size::new(7.0, 1.0), mark);
             }
@@ -233,7 +233,7 @@ impl Fader<'_> {
             let (core, glow) = if self.muted {
                 (rgb(85, 90, 97), None)
             } else {
-                (ACCENT, Some(ACCENT))
+                (accent(), Some(accent()))
             };
             if let Some(g) = glow {
                 for (grow, alpha) in [(4.0, 0.06), (2.5, 0.10), (1.0, 0.16)] {
@@ -292,7 +292,7 @@ impl Fader<'_> {
                 .with_color(rgb(12, 13, 15))
                 .with_width(1.0),
         );
-        let edge = if off { rgb(85, 90, 97) } else { ACCENT };
+        let edge = if off { rgb(85, 90, 97) } else { accent() };
         f.fill_rectangle(Point::new(cx, cy + 1.0), Size::new(3.0, ch - 2.0), edge);
         f.fill_rectangle(
             Point::new(cx + cw - 3.0, cy + 1.0),
@@ -305,7 +305,7 @@ impl Fader<'_> {
             if off {
                 rgb(133, 139, 147)
             } else {
-                ACCENT_LIGHT
+                accent_light()
             },
         );
         let win = Path::rounded_rectangle(
@@ -317,7 +317,11 @@ impl Fader<'_> {
         f.fill_text(Text {
             content: scale::format(self.db),
             position: Point::new(cx + cw / 2.0, cap_y),
-            color: if off { MUTED } else { rgb(241, 243, 245) },
+            color: if off {
+                muted_color()
+            } else {
+                rgb(241, 243, 245)
+            },
             size: Pixels(12.0),
             font: MONO,
             align_x: Horizontal::Center.into(),
@@ -332,8 +336,11 @@ impl Fader<'_> {
         let (top, h) = (Self::top(), Self::height(total));
         let (mx, mw) = (if self.narrow { 64.0 } else { 98.0 }, 14.0);
         let frame = Path::rounded_rectangle(Point::new(mx, top), Size::new(mw, h), 2.0.into());
-        f.fill(&frame, Fill::from(WELL));
-        f.stroke(&frame, Stroke::default().with_color(BORDER).with_width(1.0));
+        f.fill(&frame, Fill::from(well()));
+        f.stroke(
+            &frame,
+            Stroke::default().with_color(border()).with_width(1.0),
+        );
         let shown = if self.muted {
             scale::OFF
         } else if self.post_fader {
@@ -348,11 +355,11 @@ impl Fader<'_> {
             let frac = (top + h - 1.0 - y + 4.0) / inner;
             if frac - 4.0 / inner < lit {
                 let color = if frac > 0.95 {
-                    DANGER
+                    danger()
                 } else if frac > 0.80 {
-                    AMBER
+                    amber()
                 } else {
-                    SIGNAL
+                    signal()
                 };
                 f.fill_rectangle(
                     Point::new(mx + 1.0, y - 4.0),

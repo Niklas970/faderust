@@ -112,6 +112,41 @@ pub struct Prefs {
     pub keep: Vec<String>,
     /// Outputs hidden from the desk (labels).
     pub hidden_outputs: Vec<String>,
+    /// "dark", "light" or "system"; empty is dark.
+    pub mode: String,
+    /// Accent and signal colour as "#rrggbb"; empty is the default.
+    pub accent: String,
+    pub signal: String,
+    /// "de", "en" or empty for the system language.
+    pub lang: String,
+}
+
+/// "de" or "en", whichever the system uses.
+pub fn system_lang() -> &'static str {
+    #[cfg(windows)]
+    {
+        let out = faderust_core::proc::hidden("reg")
+            .args([
+                "query",
+                r"HKCU\Control Panel\International",
+                "/v",
+                "LocaleName",
+            ])
+            .output();
+        if let Ok(o) = out {
+            let t = String::from_utf8_lossy(&o.stdout).to_lowercase();
+            if t.contains("reg_sz") && t.contains("en-") {
+                return "en";
+            }
+            return "de";
+        }
+    }
+    let l = std::env::var("LANG").unwrap_or_default().to_lowercase();
+    if l.starts_with("en") {
+        "en"
+    } else {
+        "de"
+    }
 }
 
 pub fn prefs_path(dir: &Path) -> PathBuf {
