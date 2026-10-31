@@ -15,7 +15,10 @@
 
 ![Faderust im Pult mit Geräten, Programmen und drei Ausgängen](assets/screenshot.png)
 
-[Kurzvideo ansehen (40 s)](https://raw.githubusercontent.com/Niklas970/faderust/main/assets/faderust-reel.mp4)
+<p align="center">
+  <a href="assets/faderust-reel.mp4"><img src="assets/faderust-reel.gif" width="270" alt="Faderust in 40 Sekunden"></a><br>
+  <sub>Vorschau, <a href="assets/faderust-reel.mp4">Video in voller Qualität</a> (zum Herunterladen)</sub>
+</p>
 
 > **Alpha.** Faderust läuft, ist aber noch kaum auf echter Hardware erprobt. Fehler bitte als [Issue](https://github.com/Niklas970/faderust/issues) melden.
 
