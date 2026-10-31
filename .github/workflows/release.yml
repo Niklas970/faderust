@@ -1,8 +1,9 @@
 name: Release
 
-# Builds the Windows installer (NSIS setup) and the Stream Deck plugin. Runs
-# on a version tag (v*), by hand from the Actions tab, or as a dry run (setup
-# as workflow artifact, no release) on pull requests that touch the packaging.
+# Builds the Windows installer (NSIS setup, see installer/faderust.nsi) and the
+# Stream Deck plugin. Runs on a version tag (v*), by hand from the Actions tab,
+# or as a dry run (setup as workflow artifact, no release) on pull requests
+# that touch the packaging or the window.
 on:
   push:
     tags: ["v*"]
@@ -18,7 +19,9 @@ on:
     paths:
       - .github/workflows/release.yml
       - .github/release-notes.md
-      - crates/app/tauri.conf.json
+      - installer/**
+      - crates/gui/**
+      - crates/core/**
 
 permissions:
   contents: read
@@ -40,13 +43,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            crates/app/ui/package-lock.json
-            streamdeck/package-lock.json
-      - run: npm ci
-        working-directory: crates/app/ui
-      - run: npm run build
-        working-directory: crates/app/ui
+          cache-dependency-path: streamdeck/package-lock.json
       # Stream Deck runs the plugin on its own Node 24; building works here.
       # The setup ships the plugin too (so the app can update it), which puts
       # it under the updater's signature: build it before the setup.
@@ -54,37 +51,44 @@ jobs:
         working-directory: streamdeck
       - name: Ship the plugin with the app
         run: |
-          cp streamdeck/dist/*.streamDeckPlugin crates/app/resources/
+          mkdir -p stage/resources
+          cp streamdeck/dist/*.streamDeckPlugin stage/resources/
           jq -r .Version streamdeck/com.niklas970.faderust.sdPlugin/manifest.json \
-            > crates/app/resources/streamdeck-plugin.version
-      # The Tauri CLI downloads NSIS itself. The installer follows the
-      # Windows display language (English or German). With the signing key
-      # it also writes the setup's signature for the in-app updater; without
-      # it (forks) the build skips that.
+            > stage/resources/streamdeck-plugin.version
+      - run: cargo build --release -p faderust-iced
       - name: Build setup
-        working-directory: crates/app
+        run: |
+          choco install nsis -y --no-progress
+          VERSION=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"(.*)".*/\1/')
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          "/c/Program Files (x86)/NSIS/makensis.exe" -V2 \
+            "-DVERSION=$VERSION" \
+            "-DEXE=$(cygpath -w target/release/faderust-iced.exe)" \
+            "-DRESOURCES=$(cygpath -w stage/resources)" \
+            "-DOUTFILE=$(cygpath -w "$PWD/Faderust_${VERSION}_x64-setup.exe")" \
+            installer/faderust.nsi
+      # The in-app updater checks this signature. Pull request runs do not get
+      # the key (they only prove the build); forks have none.
+      - name: Sign setup
+        if: github.event_name != 'pull_request'
         env:
-          # Not handed to pull request runs: they only need to prove the build.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ github.event_name != 'pull_request' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: |
           if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            ui/node_modules/.bin/tauri build --bundles nsis
-          else
-            ui/node_modules/.bin/tauri build --bundles nsis \
-              --config '{"bundle":{"createUpdaterArtifacts":false}}'
+            npx --yes @tauri-apps/cli@2.12.4 signer sign "Faderust_${VERSION}_x64-setup.exe"
           fi
       - uses: actions/upload-artifact@v7
         with:
           name: faderust-setup
-          path: target/release/bundle/nsis/*-setup.exe
+          path: Faderust_*_x64-setup.exe
           if-no-files-found: error
       # Everything the release job publishes, in one place.
       - name: Collect release files
         if: github.event_name != 'pull_request'
         run: |
           mkdir release
-          cp target/release/bundle/nsis/*-setup.exe target/release/bundle/nsis/*-setup.exe.sig release/
+          cp Faderust_*_x64-setup.exe Faderust_*_x64-setup.exe.sig release/
           cp streamdeck/dist/*.streamDeckPlugin release/
       - uses: actions/upload-artifact@v7
         if: github.event_name != 'pull_request'
@@ -117,7 +121,7 @@ jobs:
           [ -f "$setup.sig" ] || { echo "Signing key missing: no updater signature"; exit 1; }
           # Manifest the in-app updater reads from the latest release.
           jq -n \
-            --arg version "$(jq -r .version "$GITHUB_WORKSPACE/crates/app/tauri.conf.json")" \
+            --arg version "$(grep -m1 '^version' "$GITHUB_WORKSPACE/Cargo.toml" | sed -E 's/.*"(.*)".*/\1/')" \
             --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg sig "$(cat "$setup.sig")" \
             --arg url "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$setup" \

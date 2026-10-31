@@ -62,7 +62,7 @@ pub fn autostart_enabled() -> bool {
     if !cfg!(windows) {
         return false;
     }
-    std::process::Command::new("reg")
+    faderust_core::proc::hidden("reg")
         .args(["query", RUN_KEY, "/v", RUN_VALUE])
         .output()
         .is_ok_and(|o| o.status.success())
@@ -73,7 +73,7 @@ pub fn set_autostart(on: bool) -> Result<(), String> {
     if !cfg!(windows) {
         return Err("Autostart gibt es nur unter Windows".into());
     }
-    let mut cmd = std::process::Command::new("reg");
+    let mut cmd = faderust_core::proc::hidden("reg");
     if on {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
         cmd.args([

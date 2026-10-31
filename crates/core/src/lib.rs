@@ -7,9 +7,11 @@ pub mod cable;
 pub mod config;
 pub mod log;
 pub mod names;
+pub mod proc;
 pub mod remote;
 pub mod selftest;
 pub mod state;
+pub mod update;
 
 pub use state::*;
 

@@ -1,10 +1,12 @@
+// No console window in release builds on Windows.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 //! Faderust window built with iced instead of Tauri/WebView2: title bar, desk
 //! (strips for inputs and output masters with A1-An), matrix and the
 //! dialogs, driven by `faderust-core`.
 //!
-//! Wired to the engine: faders, mute, routing, effects, presets, hiding of
-//! silent programs. Still placeholders (next stages): the dialogs Programme,
-//! Windows-Sound and Geräte.
+//! Everything runs against the engine: faders, mute, routing, effects,
+//! presets, programs, Windows sound, devices, tray, autostart, updates.
 //!
 //! `FADERUST_SHOT=out.png` saves one screenshot after a moment and exits;
 //! `FADERUST_VIEW=matrix` and `FADERUST_DIALOG=<name>` pick what it shows.
@@ -25,6 +27,7 @@ use faderust_core::audio::{Command, Notice, UiState};
 use faderust_core::config::{Config as CoreConfig, InputEntry};
 use faderust_core::config::{Fx as CoreFx, Gain};
 use faderust_core::selftest::Check;
+use faderust_core::update::Update;
 use faderust_core::{cable, AppState, Apps, Devices, Host, StreamDeckStatus, WindowsAudio};
 
 use iced::alignment::{Horizontal, Vertical};
@@ -160,6 +163,10 @@ pub struct App {
     pub autostart: bool,
     #[cfg(windows)]
     tray: Option<shell::tray::Tray>,
+    update: Option<Update>,
+    updating: bool,
+    checking: bool,
+    last_check: Option<Instant>,
     core: Arc<AppState>,
     notices: Arc<Mutex<Vec<Notice>>>,
     /// Message for the user: when it came, text, level.
@@ -252,6 +259,10 @@ pub enum Message {
     ToggleMax,
     Drag,
     Quit,
+    CheckUpdate,
+    UpdateChecked(Result<Option<Update>, String>, bool),
+    InstallUpdate,
+    UpdateInstalled(Result<(), String>),
     Open(Option<Dialog>),
     Edit(Edit),
     Route(usize, usize),
@@ -382,6 +393,18 @@ fn blocking<T: Send + 'static>(
 }
 
 impl App {
+    fn check_update(&mut self, manual: bool) -> Task<Message> {
+        if self.checking || self.updating {
+            return Task::none();
+        }
+        self.checking = true;
+        self.last_check = Some(Instant::now());
+        blocking(
+            || faderust_core::update::check(env!("CARGO_PKG_VERSION")),
+            move |r| Message::UpdateChecked(r, manual),
+        )
+    }
+
     fn save_prefs(&mut self) {
         let prefs = shell::Prefs {
             view: if self.view == View::Matrix {
@@ -661,6 +684,10 @@ impl App {
             autostart: shell::autostart_enabled(),
             #[cfg(windows)]
             tray: tray_icon(),
+            update: None,
+            updating: false,
+            checking: false,
+            last_check: None,
             prefs,
             dialog: None,
             core,
@@ -921,6 +948,38 @@ impl App {
                     return window::drag(id);
                 }
             }
+            Message::CheckUpdate => return self.check_update(true),
+            Message::UpdateChecked(r, manual) => {
+                self.checking = false;
+                match r {
+                    Ok(u) => {
+                        if manual && u.is_none() {
+                            self.say("info", "Faderust ist aktuell".into());
+                        }
+                        self.update = u.or(self.update.take());
+                    }
+                    Err(e) if manual => {
+                        self.say("warn", format!("Update-Suche fehlgeschlagen: {e}"))
+                    }
+                    Err(_) => {}
+                }
+            }
+            Message::InstallUpdate => {
+                if let (Some(u), false) = (self.update.clone(), self.updating) {
+                    self.updating = true;
+                    return blocking(
+                        move || faderust_core::update::install(&u),
+                        Message::UpdateInstalled,
+                    );
+                }
+            }
+            Message::UpdateInstalled(r) => {
+                self.updating = false;
+                match r {
+                    Ok(()) => return self.handle(Message::Quit),
+                    Err(e) => self.say("error", format!("Update fehlgeschlagen: {e}")),
+                }
+            }
             Message::Quit => {
                 faderust_core::log::write("Faderust beendet");
                 // A stream that never closes must not keep the process, and
@@ -977,6 +1036,14 @@ impl App {
                             shell::tray::Action::Quit => return self.handle(Message::Quit),
                         }
                     }
+                }
+                let due = match self.last_check {
+                    None => now.duration_since(self.started) > Duration::from_secs(3),
+                    Some(t) => t.elapsed() > Duration::from_secs(6 * 3600),
+                };
+                if due && !self.checking && self.shot.is_none() {
+                    let t = self.check_update(false);
+                    self.jobs.push(t);
                 }
                 if show {
                     let t = self.show();
@@ -1416,6 +1483,7 @@ impl App {
                     .color(MUTED)
             )
             .padding([2, 6])
+            .on_press(Message::CheckUpdate)
             .style(|_, status| button::Style {
                 background: None,
                 text_color: MUTED,
@@ -1433,6 +1501,28 @@ impl App {
         ]
         .spacing(8)
         .align_y(Vertical::Center);
+        let brand: Element<'_, Message> = match &self.update {
+            Some(u) => row![
+                brand,
+                button(
+                    text(if self.updating {
+                        "Lädt …".to_string()
+                    } else {
+                        format!("Update auf {}", u.version)
+                    })
+                    .size(12)
+                    .font(BOLD)
+                    .color(Color::WHITE)
+                )
+                .padding([3, 10])
+                .on_press_maybe((!self.updating).then_some(Message::InstallUpdate))
+                .style(|_, _| flat(ACCENT)),
+            ]
+            .spacing(10)
+            .align_y(Vertical::Center)
+            .into(),
+            None => brand.into(),
+        };
         let bar = container(
             row![
                 brand,
