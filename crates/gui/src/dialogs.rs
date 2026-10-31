@@ -9,7 +9,9 @@ use iced::widget::{
 use iced::{Background, Border, Color, Element, Length};
 
 use crate::style::*;
-use crate::{flat, App, Dialog, Edit, Message, DEV_IN, DEV_OUT, HIDE_AFTER, RELEASE};
+use faderust_core::names::device_label;
+
+use crate::{flat, App, Dialog, Edit, Message, HIDE_AFTER, RELEASE};
 
 fn edit(e: Edit) -> Message {
     Message::Edit(e)
@@ -19,20 +21,23 @@ fn close() -> Message {
     Message::Open(None)
 }
 
-fn h3(label: &'static str) -> Element<'static, Message> {
+fn h3(label: impl Into<String>) -> Element<'static, Message> {
     column![
         space().height(8),
-        text(label.to_uppercase()).size(12).font(BOLD).color(MUTED)
+        text(label.into().to_uppercase())
+            .size(12)
+            .font(BOLD)
+            .color(MUTED)
     ]
     .into()
 }
 
-fn hint(label: &'static str) -> Element<'static, Message> {
-    text(label).size(12).color(MUTED).into()
+fn hint(label: impl Into<String>) -> Element<'static, Message> {
+    text(label.into()).size(12).color(MUTED).into()
 }
 
-fn btn(label: &'static str, msg: Message, primary: bool) -> Element<'static, Message> {
-    button(text(label).size(13).color(Color::WHITE))
+fn btn(label: impl Into<String>, msg: Message, primary: bool) -> Element<'static, Message> {
+    button(text(label.into()).size(13).color(Color::WHITE))
         .padding([6, 12])
         .on_press(msg)
         .style(move |_, _| flat(if primary { ACCENT } else { PANEL_2 }))
@@ -102,7 +107,7 @@ fn frame<'a>(
     )
 }
 
-fn done(label: &'static str) -> Element<'static, Message> {
+fn done(label: impl Into<String>) -> Element<'static, Message> {
     btn(label, close(), true)
 }
 
@@ -222,62 +227,132 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
     )
 }
 
+/// A device for a pick list: shown by its label, identified by `id`.
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct Choice {
+    id: String,
+    label: String,
+}
+
+impl std::fmt::Display for Choice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.label)
+    }
+}
+
+fn error_line(app: &App) -> Element<'static, Message> {
+    if app.dialog_error.is_empty() {
+        space().height(0).into()
+    } else {
+        text(app.dialog_error.clone()).size(13).color(DANGER).into()
+    }
+}
+
 fn apps(app: &App) -> Element<'_, Message> {
-    let mut list = column![container(
-        row![
-            text("CABLE Output").size(13).color(TEXT),
-            text("wird noch von keinem Eingang genutzt.")
-                .size(13)
-                .color(TEXT),
-            space().width(Length::Fill),
-            btn("Als Eingang", close(), true),
-        ]
-        .spacing(6)
-        .align_y(Vertical::Center)
-    )
-    .padding([10, 12])
-    .style(|_| container::Style {
-        border: Border {
-            color: ACCENT,
-            width: 1.0,
-            radius: 3.0.into()
-        },
-        ..container::Style::default()
-    }),]
-    .spacing(8);
-    for (i, a) in app.apps.iter().enumerate() {
-        let device = pick_list(crate::APP_OUT, Some(a.device), move |d| {
-            edit(Edit::AppDevice(i, d))
-        })
-        .width(Length::Fill);
-        let action: Element<'_, Message> = if a.input {
-            container(text("Eingang").size(12).font(BOLD).color(SIGNAL))
-                .padding([5, 10])
-                .style(|_| container::Style {
-                    border: Border {
-                        color: SIGNAL,
-                        width: 1.0,
-                        radius: 3.0.into(),
+    let mut list = column![].spacing(8);
+    match &app.apps_data {
+        None => list = list.push(hint("Lade …")),
+        Some(data) if !data.supported => {
+            list = list.push(hint(
+                "Ausgabegeräte pro Programm gibt es nur unter Windows.",
+            ))
+        }
+        Some(data) => {
+            if !data.devices.iter().any(|d| d.cable) {
+                list = list.push(
+                    container(
+                        text("Noch kein Faderust Kabel. Mit „+ Eingang“ nimmt Faderust ein Programm direkt auf. Damit es dann nicht zusätzlich über die Boxen läuft, braucht es ein Gerät, das du nicht hörst: das Faderust Kabel (Einrichtung unter Geräte).")
+                            .size(13)
+                            .color(TEXT),
+                    )
+                    .padding([10, 12])
+                    .style(|_| container::Style {
+                        border: Border {
+                            color: ACCENT,
+                            width: 1.0,
+                            radius: 3.0.into(),
+                        },
+                        ..container::Style::default()
+                    }),
+                );
+            }
+            if data.apps.is_empty() {
+                list = list.push(hint(
+                    "Gerade spielt kein Programm Ton ab. Starte die Wiedergabe und tippe auf „Aktualisieren“.",
+                ));
+            }
+            let default_choice = Choice {
+                id: String::new(),
+                label: "Windows-Standard".into(),
+            };
+            for a in &data.apps {
+                let mut choices = vec![default_choice.clone()];
+                choices.extend(data.devices.iter().map(|d| Choice {
+                    id: d.id.clone(),
+                    label: if d.cable {
+                        device_label(&d.name)
+                    } else {
+                        d.name.clone()
                     },
-                    ..container::Style::default()
+                }));
+                let current = match &a.device {
+                    None => default_choice.clone(),
+                    Some(id) => choices
+                        .iter()
+                        .find(|c| &c.id == id)
+                        .cloned()
+                        .unwrap_or(Choice {
+                            id: id.clone(),
+                            label: "Gerät nicht verbunden".into(),
+                        }),
+                };
+                if !choices.contains(&current) {
+                    choices.push(current.clone());
+                }
+                let pids = a.pids.clone();
+                let device = pick_list(choices, Some(current), move |c| {
+                    edit(Edit::AppDevice(
+                        pids.clone(),
+                        (!c.id.is_empty()).then_some(c.id),
+                    ))
                 })
-                .into()
-        } else {
-            btn("+ Eingang", edit(Edit::AppInput(i)), false)
-        };
-        list = list.push(
-            row![
-                container(text(a.name).size(14).color(TEXT)).width(170),
-                device,
-                action
-            ]
-            .spacing(8)
-            .align_y(Vertical::Center),
-        );
+                .width(Length::Fill);
+                let program = format!("app:{}", a.exe.to_lowercase());
+                let action: Element<'_, Message> = if app.input_devices.contains(&program) {
+                    container(text("Eingang").size(12).font(BOLD).color(SIGNAL))
+                        .padding([5, 10])
+                        .style(|_| container::Style {
+                            border: Border {
+                                color: SIGNAL,
+                                width: 1.0,
+                                radius: 3.0.into(),
+                            },
+                            ..container::Style::default()
+                        })
+                        .into()
+                } else {
+                    btn(
+                        "+ Eingang",
+                        edit(Edit::AppInput(program, a.name.clone())),
+                        false,
+                    )
+                };
+                list = list.push(
+                    row![
+                        container(text(a.name.clone()).size(14).color(TEXT)).width(170),
+                        device,
+                        action
+                    ]
+                    .spacing(8)
+                    .align_y(Vertical::Center),
+                );
+            }
+        }
     }
     let body = column![
+        error_line(app),
         list,
-        text("Ein Programm auf einem Kabel erreicht Faderust über dessen Aufnahmeseite. Programme, die gerade nichts spielen, erscheinen erst, wenn sie Ton ausgeben.")
+        text("Windows merkt sich die Zuordnung pro Programm. Manche Programme übernehmen sie erst nach einem Neustart.")
             .size(12)
             .color(MUTED),
     ]
@@ -287,9 +362,12 @@ fn apps(app: &App) -> Element<'_, Message> {
         640.0,
         false,
         body.into(),
-        row![btn("Aktualisieren", close(), false), done("Schließen")]
-            .spacing(8)
-            .into(),
+        row![
+            btn("Aktualisieren", edit(Edit::Refresh), false),
+            done("Schließen")
+        ]
+        .spacing(8)
+        .into(),
     )
 }
 
@@ -330,54 +408,109 @@ fn presets(app: &App) -> Element<'_, Message> {
 }
 
 fn windows(app: &App) -> Element<'_, Message> {
-    let devices = [
-        "Lautsprecher (Realtek Audio)",
-        "Kopfhörer (WH-1000XM5)",
-        "CABLE Input (VB-Audio)",
-    ];
-    let mut list = column![].spacing(10);
-    for (i, d) in devices.iter().enumerate() {
-        let on = app.win_default == i;
-        list = list.push(
-            row![
-                button(
-                    text(if on { "Standard" } else { "Als Standard" })
-                        .size(12)
-                        .color(Color::WHITE)
-                )
-                .width(100)
-                .padding([5, 8])
-                .on_press(edit(Edit::WinDefault(i)))
-                .style(move |_, _| flat(if on { ACCENT } else { PANEL_2 })),
-                container(text(*d).size(13).color(TEXT)).width(210),
-                slider(0.0..=100.0, app.win_volume[i], move |v| edit(
-                    Edit::WinVolume(i, v)
-                )),
-                container(
-                    text(format!("{} %", app.win_volume[i]))
-                        .font(MONO)
-                        .size(13)
-                        .color(TEXT)
-                )
-                .width(54)
-                .align_right(Length::Fill),
-            ]
-            .spacing(10)
-            .align_y(Vertical::Center),
-        );
+    let mut body = column![error_line(app)].spacing(10);
+    match &app.win {
+        None => body = body.push(hint("Lade …")),
+        Some(w) if !w.supported => {
+            body = body.push(hint(
+                "Die Windows-Soundeinstellungen gibt es nur unter Windows.",
+            ))
+        }
+        Some(w) => {
+            for (title, list) in [("Wiedergabe", &w.playback), ("Aufnahme", &w.recording)] {
+                body = body.push(h3(title));
+                let choices: Vec<Choice> = list
+                    .iter()
+                    .map(|e| Choice {
+                        id: e.id.clone(),
+                        label: device_label(&e.name),
+                    })
+                    .collect();
+                let pick = |label: &'static str, comm: bool| {
+                    let current = list
+                        .iter()
+                        .find(|e| {
+                            if comm {
+                                e.is_default_communications
+                            } else {
+                                e.is_default
+                            }
+                        })
+                        .and_then(|e| choices.iter().find(|c| c.id == e.id).cloned());
+                    row![
+                        container(text(label).size(13).color(TEXT)).width(130),
+                        pick_list(choices.clone(), current, move |c| edit(Edit::WinDefault(
+                            c.id, comm
+                        )))
+                        .width(Length::Fill),
+                    ]
+                    .spacing(10)
+                    .align_y(Vertical::Center)
+                };
+                body = body
+                    .push(pick("Standardgerät", false))
+                    .push(pick("Für Anrufe", true));
+                for e in list {
+                    let id = e.id.clone();
+                    let badge = if e.is_default {
+                        "  Standard"
+                    } else if e.is_default_communications {
+                        "  Anrufe"
+                    } else {
+                        ""
+                    };
+                    let mute_id = id.clone();
+                    let muted = e.muted;
+                    body = body.push(
+                        row![
+                            container(
+                                text(format!("{}{badge}", device_label(&e.name)))
+                                    .size(13)
+                                    .color(TEXT)
+                            )
+                            .width(230),
+                            slider(0.0..=100.0, e.volume * 100.0, move |v| edit(
+                                Edit::WinVolume(id.clone(), v)
+                            )),
+                            container(
+                                text(format!("{} %", (e.volume * 100.0).round()))
+                                    .font(MONO)
+                                    .size(13)
+                                    .color(TEXT)
+                            )
+                            .width(54)
+                            .align_right(Length::Fill),
+                            button(
+                                text(if muted { "Stumm" } else { "Laut" })
+                                    .size(12)
+                                    .color(Color::WHITE)
+                            )
+                            .padding([4, 8])
+                            .width(64)
+                            .on_press(edit(Edit::WinMute(mute_id, !muted)))
+                            .style(move |_, _| flat(if muted { DANGER } else { PANEL_2 })),
+                        ]
+                        .spacing(10)
+                        .align_y(Vertical::Center),
+                    );
+                }
+            }
+            body = body.push(hint(
+                "Faderust nimmt Geräte direkt ab. Der Windows-Standard bestimmt nur, wohin Programme ohne eigene Zuordnung spielen und welches Mikrofon sie nutzen.",
+            ));
+        }
     }
-    let body = column![
-        h3("Wiedergabe"),
-        list,
-        hint("Das sind die Windows-Einstellungen, nicht die Fader von Faderust."),
-    ]
-    .spacing(10);
     frame(
         "Windows-Sound".into(),
-        640.0,
+        700.0,
         false,
         body.into(),
-        done("Schließen"),
+        row![
+            btn("Aktualisieren", edit(Edit::Refresh), false),
+            done("Schließen")
+        ]
+        .spacing(8)
+        .into(),
     )
 }
 
@@ -465,116 +598,214 @@ fn design(app: &App) -> Element<'_, Message> {
 }
 
 fn settings(app: &App) -> Element<'_, Message> {
-    let s = &app.settings;
+    let Some(draft) = &app.draft else {
+        return frame(
+            "Geräte".into(),
+            720.0,
+            true,
+            hint("Lade …"),
+            done("Schließen"),
+        );
+    };
+    let device_choices = |list: &[faderust_core::Device], current: &str| -> (Vec<Choice>, Choice) {
+        let mut choices: Vec<Choice> = list
+            .iter()
+            .map(|d| Choice {
+                id: d.name.clone(),
+                label: device_label(&d.name),
+            })
+            .collect();
+        let lower = current.to_lowercase();
+        let selected = list
+            .iter()
+            .find(|d| d.id == current)
+            .or_else(|| list.iter().find(|d| d.name.to_lowercase().contains(&lower)))
+            .map(|d| Choice {
+                id: d.name.clone(),
+                label: device_label(&d.name),
+            })
+            .unwrap_or(Choice {
+                id: current.to_string(),
+                label: device_label(current),
+            });
+        // A configured device that is unplugged right now stays selectable.
+        if !choices.contains(&selected) {
+            choices.insert(0, selected.clone());
+        }
+        (choices, selected)
+    };
+    let arrow = |label: &'static str, msg: Option<Message>| {
+        let b = button(text(label).size(13).color(Color::WHITE))
+            .padding([4, 8])
+            .style(|_, _| flat(PANEL_2));
+        match msg {
+            Some(m) => b.on_press(m),
+            None => b,
+        }
+    };
+    let program = |d: &str| d.starts_with("app:");
+    let last_dev = draft.inputs.iter().rposition(|i| !program(&i.device));
+    let first_dev = draft.inputs.iter().position(|i| !program(&i.device));
     let mut inputs = column![].spacing(8);
-    for (i, (label, device)) in s.inputs.iter().enumerate() {
+    for (i, input) in draft.inputs.iter().enumerate() {
+        if program(&input.device) {
+            continue;
+        }
+        let (choices, current) = device_choices(&app.devs.inputs, &input.device);
+        let prev = draft.inputs[..i].iter().rposition(|x| !program(&x.device));
+        let next = draft.inputs[i + 1..]
+            .iter()
+            .position(|x| !program(&x.device))
+            .map(|p| p + i + 1);
         inputs = inputs.push(
             row![
-                text_input("Name", label)
+                text_input("Name", &input.label)
                     .on_input(move |t| edit(Edit::InLabel(i, t)))
                     .width(140),
-                pick_list(DEV_IN, Some(*device), move |d| edit(Edit::InDevice(i, d)))
-                    .width(Length::Fill),
-                btn("✕", close(), false),
+                pick_list(choices, Some(current), move |c| edit(Edit::InDevice(
+                    i, c.id
+                )))
+                .width(Length::Fill),
+                arrow(
+                    "↑",
+                    (first_dev != Some(i)).then(|| edit(Edit::InMove(
+                        i,
+                        prev.map_or(0, |p| p as isize - i as isize)
+                    )))
+                ),
+                arrow(
+                    "↓",
+                    (last_dev != Some(i)).then(|| edit(Edit::InMove(
+                        i,
+                        next.map_or(0, |n| n as isize - i as isize)
+                    )))
+                ),
+                btn("✕", edit(Edit::InRemove(i)), false),
             ]
             .spacing(8)
             .align_y(Vertical::Center),
         );
     }
     let mut outputs = column![].spacing(8);
-    for (o, (label, device, buf, rel)) in s.outputs.iter().enumerate() {
+    let n_out = draft.outputs.len();
+    for (o, output) in draft.outputs.iter().enumerate() {
+        let (choices, current) = device_choices(&app.devs.outputs, &output.device);
+        let release = RELEASE
+            .iter()
+            .find(|(s, _)| *s == output.release_secs)
+            .copied()
+            .unwrap_or((output.release_secs, "Andere"));
         outputs = outputs.push(
             row![
-                text_input("Name", label)
+                text_input("Name", &output.label)
                     .on_input(move |t| edit(Edit::OutLabel(o, t)))
                     .width(120),
-                pick_list(DEV_OUT, Some(*device), move |d| edit(Edit::OutDevice(o, d)))
-                    .width(Length::Fill),
-                text_input("ms", buf)
+                pick_list(choices, Some(current), move |c| edit(Edit::OutDevice(
+                    o, c.id
+                )))
+                .width(Length::Fill),
+                text_input("ms", &output.buffer_ms.to_string())
                     .on_input(move |t| edit(Edit::OutBuffer(o, t)))
                     .width(54),
-                pick_list(RELEASE, Some(*rel), move |r| edit(Edit::OutRelease(o, r))),
-                btn("✕", close(), false),
+                pick_list(
+                    RELEASE.iter().map(|(_, n)| *n).collect::<Vec<_>>(),
+                    Some(release.1),
+                    move |n| edit(Edit::OutRelease(
+                        o,
+                        RELEASE
+                            .iter()
+                            .find(|(_, x)| *x == n)
+                            .map_or(30, |(s, _)| *s)
+                    ))
+                ),
+                arrow("←", (o > 0).then(|| edit(Edit::OutMove(o, -1)))),
+                arrow("→", (o + 1 < n_out).then(|| edit(Edit::OutMove(o, 1)))),
+                btn("✕", edit(Edit::OutRemove(o)), false),
             ]
             .spacing(8)
             .align_y(Vertical::Center),
         );
     }
+    let cable_section: Element<'_, Message> = match &app.usb {
+        None => hint("Lade …"),
+        Some(u) if !u.supported => hint("Das Faderust Kabel gibt es nur unter Windows."),
+        Some(u) => {
+            let mut col = column![hint(
+                "Virtuelle Kabel für Programme und Mikrofon: ein USB-Soundgerät, das Faderust selbst bereitstellt. Die Einrichtung installiert einmalig usbip-win2 (frei, von Microsoft signiert, taucht nicht als eigene App auf) und fragt einmal nach Administratorrechten.",
+            )]
+            .spacing(10);
+            if !u.installed {
+                col = col.push(btn(
+                    if app.usb_busy {
+                        "Richte ein …"
+                    } else {
+                        "Faderust Kabel einrichten"
+                    },
+                    edit(Edit::UsbSetup),
+                    true,
+                ));
+            } else {
+                let count = u.count.clamp(1, 4) as u8;
+                col = col
+                    .push(
+                        checkbox(u.running)
+                            .label("Faderust Kabel verwenden")
+                            .on_toggle(|v| edit(Edit::UsbEnable(v))),
+                    )
+                    .push(
+                        row![
+                            text("Anzahl Kabel").size(13).color(TEXT),
+                            pick_list([1u8, 2, 3, 4], Some(count), |n| edit(Edit::UsbCount(n))),
+                            space().width(Length::Fill),
+                            btn("Entfernen", edit(Edit::UsbRemove), false),
+                        ]
+                        .spacing(12)
+                        .align_y(Vertical::Center),
+                    );
+                if u.running {
+                    col = col.push(
+                        text(
+                            u.attached
+                                .iter()
+                                .enumerate()
+                                .map(|(i, on)| {
+                                    format!(
+                                        "Faderust Kabel{}: {}",
+                                        if i == 0 {
+                                            String::new()
+                                        } else {
+                                            format!(" {}", i + 1)
+                                        },
+                                        if *on {
+                                            "verbunden"
+                                        } else {
+                                            "verbinde mit Windows …"
+                                        }
+                                    )
+                                })
+                                .collect::<Vec<_>>()
+                                .join("\n"),
+                        )
+                        .size(12)
+                        .color(MUTED),
+                    );
+                }
+            }
+            col.into()
+        }
+    };
     let body = column![
+        error_line(app),
         h3("Eingänge"),
         inputs,
-        btn("+ Eingang", close(), false),
+        btn("+ Eingang", edit(Edit::InAdd), false),
         h3("Ausgänge"),
         outputs,
-        btn("+ Ausgang", close(), false),
-        h3("Start"),
-        checkbox(s.autostart)
-            .label("Mit Windows starten")
-            .on_toggle(|v| edit(Edit::Autostart(v))),
+        btn("+ Ausgang", edit(Edit::OutAdd), false),
         h3("Faderust Kabel (Test)"),
-        checkbox(app.usb_running)
-            .label("Faderust Kabel verwenden")
-            .on_toggle(|v| edit(Edit::UsbRunning(v))),
-        row![
-            text("Anzahl Kabel").size(13).color(TEXT),
-            pick_list([1u8, 2, 3, 4], Some(app.usb_count), |n| edit(
-                Edit::UsbCount(n)
-            )),
-            space().width(Length::Fill),
-            btn("Entfernen", close(), false),
-        ]
-        .spacing(12)
-        .align_y(Vertical::Center),
-        text(
-            (0..app.usb_count)
-                .map(|i| format!(
-                    "{}: {}",
-                    if i == 0 {
-                        "Faderust Cable".to_string()
-                    } else {
-                        format!("Faderust Cable {}", i + 1)
-                    },
-                    if i == 0 {
-                        "verbunden"
-                    } else {
-                        "verbinde mit Windows …"
-                    }
-                ))
-                .collect::<Vec<_>>()
-                .join("\n")
-        )
-        .size(12)
-        .color(MUTED),
-        h3("Stream Deck"),
-        row![
-            text("Plugin 0.3.2 installiert, aktuell.")
-                .size(13)
-                .color(MUTED),
-            space().width(Length::Fill),
-            btn("Plugin aktualisieren", close(), false),
-        ]
-        .align_y(Vertical::Center),
-        h3("Selbsttest"),
-        row![
-            text("Prüft Geräte und Engine.").size(13).color(MUTED),
-            space().width(Length::Fill),
-            btn("Starten", close(), false),
-            btn("Protokoll", close(), false),
-        ]
-        .spacing(8)
-        .align_y(Vertical::Center),
+        cable_section,
+        hint("Änderungen werden automatisch gespeichert. Autostart, Stream Deck, Selbsttest und Protokoll folgen."),
     ]
     .spacing(10);
-    frame(
-        "Einstellungen".into(),
-        720.0,
-        true,
-        body.into(),
-        row![
-            btn("Abbrechen", close(), false),
-            btn("Speichern", close(), true)
-        ]
-        .spacing(8)
-        .into(),
-    )
+    frame("Geräte".into(), 760.0, true, body.into(), done("Schließen"))
 }

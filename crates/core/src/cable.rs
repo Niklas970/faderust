@@ -36,7 +36,7 @@ static INSTALLED: Mutex<Option<(Instant, usize, bool)>> = Mutex::new(None);
 /// Number of the server run that is current; a watcher of an older one ends.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
     /// Only Windows can attach the cable.

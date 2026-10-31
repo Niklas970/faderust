@@ -1772,6 +1772,7 @@ dependencies = [
  "faderust-core",
  "iced",
  "png 0.17.16",
+ "tokio",
 ]
 
 [[package]]

@@ -19,8 +19,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use faderust_core::audio::{Command, Notice, UiState};
+use faderust_core::config::{Config as CoreConfig, InputEntry};
 use faderust_core::config::{Fx as CoreFx, Gain};
-use faderust_core::{AppState, Host};
+use faderust_core::{cable, AppState, Apps, Devices, Host, WindowsAudio};
 
 use iced::alignment::{Horizontal, Vertical};
 use iced::gradient;
@@ -36,24 +37,12 @@ use style::*;
 
 const LOGO: &[u8] = include_bytes!("../assets/logo.png");
 
-pub const DEV_OUT: &[&str] = &[
-    "Lautsprecher (Realtek Audio)",
-    "Kopfhörer (WH-1000XM5)",
-    "CABLE Input (VB-Audio)",
-    "Stream (Elgato Wave:3)",
+pub const RELEASE: &[(u32, &str)] = &[
+    (0, "Nie frei"),
+    (5, "Frei nach 5 s"),
+    (30, "Frei nach 30 s"),
+    (120, "Frei nach 2 min"),
 ];
-pub const DEV_IN: &[&str] = &[
-    "Mikrofon (Blue Yeti)",
-    "CABLE Output (VB-Audio)",
-    "Programm: Spiel",
-    "Programm: Browser",
-];
-pub const APP_OUT: &[&str] = &[
-    "Windows-Standard",
-    "CABLE Input (VB-Audio)",
-    "Kopfhörer (WH-1000XM5)",
-];
-pub const RELEASE: &[&str] = &["Nie", "Nach 5 s", "Nach 30 s", "Nach 2 min"];
 pub const HIDE_AFTER: &[&str] = &["Nie", "Nach 5 s", "Nach 2 min"];
 
 /// Row before a strip move and the `(output, dB)` pairs the move applied.
@@ -135,18 +124,6 @@ impl From<&Fx> for CoreFx {
     }
 }
 
-pub struct AppRow {
-    pub name: &'static str,
-    pub device: &'static str,
-    pub input: bool,
-}
-
-pub struct Settings {
-    pub autostart: bool,
-    pub inputs: Vec<(String, &'static str)>,
-    pub outputs: Vec<(String, &'static str, String, &'static str)>,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
     Desk,
@@ -175,14 +152,26 @@ pub struct App {
     pub strips: Vec<Strip>,
     pub outs: Vec<Out>,
     pub fx: Vec<Fx>,
-    pub apps: Vec<AppRow>,
-    pub settings: Settings,
     pub presets: Vec<String>,
     pub new_preset: String,
-    pub win_default: usize,
-    pub win_volume: [f32; 3],
-    pub usb_running: bool,
-    pub usb_count: u8,
+    /// Windows sound dialog.
+    pub win: Option<WindowsAudio>,
+    /// Programs dialog.
+    pub apps_data: Option<Apps>,
+    /// Devices dialog: devices on offer, the copy being edited, USB cable.
+    pub devs: Devices,
+    pub draft: Option<CoreConfig>,
+    edit_at: Option<Instant>,
+    reshaped: bool,
+    pub usb: Option<cable::Status>,
+    pub usb_busy: bool,
+    last_usb: Instant,
+    /// Inputs of the configuration, for "is this program an input".
+    pub input_devices: Vec<String>,
+    /// Error shown inside the open dialog.
+    pub dialog_error: String,
+    /// Background jobs started by the current message.
+    jobs: Vec<Task<Message>>,
     last: Instant,
     started: Instant,
     ready: bool,
@@ -197,15 +186,28 @@ pub enum Edit {
     Gate(usize, bool),
     GateDb(usize, f32),
     ResetFx(usize),
-    AppDevice(usize, &'static str),
-    AppInput(usize),
-    Autostart(bool),
+    Refresh,
+    AppDevice(Vec<u32>, Option<String>),
+    AppInput(String, String),
+    WinDefault(String, bool),
+    WinVolume(String, f32),
+    WinMute(String, bool),
     InLabel(usize, String),
-    InDevice(usize, &'static str),
+    InDevice(usize, String),
+    InAdd,
+    InRemove(usize),
+    InMove(usize, isize),
     OutLabel(usize, String),
-    OutDevice(usize, &'static str),
+    OutDevice(usize, String),
     OutBuffer(usize, String),
-    OutRelease(usize, &'static str),
+    OutRelease(usize, u32),
+    OutAdd,
+    OutRemove(usize),
+    OutMove(usize, isize),
+    UsbSetup,
+    UsbEnable(bool),
+    UsbCount(u8),
+    UsbRemove,
     MastersLeft(bool),
     HideAfter(&'static str),
     NewPreset(String),
@@ -213,12 +215,8 @@ pub enum Edit {
     LoadPreset(String),
     DeletePreset(String),
     Keep(usize),
-    WinDefault(usize),
-    WinVolume(usize, f32),
     HideOut(usize, bool),
     ShowSilent,
-    UsbRunning(bool),
-    UsbCount(u8),
 }
 
 #[derive(Debug, Clone)]
@@ -234,6 +232,27 @@ pub enum Message {
     Frame(Instant),
     Shot(window::Screenshot),
     Id(Option<window::Id>),
+    Loaded(Loaded),
+    Failed(String),
+}
+
+/// What a background job brings back.
+#[derive(Debug, Clone)]
+pub enum Loaded {
+    Windows(Result<WindowsAudio, String>),
+    Apps(Result<Apps, String>),
+    Devices(Result<Devices, String>),
+    Usb(cable::Status),
+    Done(Then, Result<(), String>),
+}
+
+/// What to do after a command finished.
+#[derive(Debug, Clone, Copy)]
+pub enum Then {
+    Nothing,
+    Windows,
+    Apps,
+    Usb,
 }
 
 /// The audio thread tells the window through the shared snapshot, so only
@@ -294,6 +313,169 @@ fn level_of(db: f32) -> f32 {
     }
 }
 
+/// Runs `f` off the UI thread (the device calls can take a while and want
+/// their own COM apartment) and turns its result into a message.
+fn blocking<T: Send + 'static>(
+    f: impl FnOnce() -> T + Send + 'static,
+    then: impl Fn(T) -> Message + Send + 'static,
+) -> Task<Message> {
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(f)
+                .await
+                .map_err(|e| e.to_string())
+        },
+        move |r| match r {
+            Ok(v) => then(v),
+            Err(e) => Message::Failed(e),
+        },
+    )
+}
+
+impl App {
+    fn load_windows(&self) -> Task<Message> {
+        blocking(faderust_core::get_windows_audio, |r| {
+            Message::Loaded(Loaded::Windows(r))
+        })
+    }
+
+    fn load_apps(&self) -> Task<Message> {
+        blocking(faderust_core::get_apps, |r| {
+            Message::Loaded(Loaded::Apps(r))
+        })
+    }
+
+    fn load_devices(&self) -> Task<Message> {
+        blocking(faderust_core::get_devices, |r| {
+            Message::Loaded(Loaded::Devices(r))
+        })
+    }
+
+    fn load_usb(&self) -> Task<Message> {
+        let core = Arc::clone(&self.core);
+        blocking(
+            move || faderust_core::get_usb_cable(&core),
+            |s| Message::Loaded(Loaded::Usb(s)),
+        )
+    }
+
+    fn refresh_dialog(&mut self) -> Task<Message> {
+        self.dialog_error.clear();
+        match self.dialog {
+            Some(Dialog::Windows) => self.load_windows(),
+            Some(Dialog::Apps) => {
+                self.input_devices = self.config().inputs.into_iter().map(|i| i.device).collect();
+                Task::batch([self.load_apps(), self.load_windows()])
+            }
+            Some(Dialog::Settings) => Task::batch([self.load_devices(), self.load_usb()]),
+            _ => Task::none(),
+        }
+    }
+
+    fn config(&self) -> CoreConfig {
+        self.core
+            .config
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    fn endpoint_mut(&mut self, id: &str) -> Option<&mut faderust_core::Endpoint> {
+        let w = self.win.as_mut()?;
+        w.playback
+            .iter_mut()
+            .chain(w.recording.iter_mut())
+            .find(|e| e.id == id)
+    }
+
+    /// A virtual cable's capture side or a program as a new input, at 0 dB
+    /// on every output.
+    fn add_input(&mut self, device: String, label: String) -> Result<(), String> {
+        let mut next = self.config();
+        next.inputs.push(InputEntry {
+            label,
+            device,
+            fx: Default::default(),
+            muted: false,
+        });
+        next.gains
+            .push(next.outputs.iter().map(|_| Gain::default()).collect());
+        faderust_core::save_config(next, &self.core)?;
+        self.input_devices = self.config().inputs.into_iter().map(|i| i.device).collect();
+        Ok(())
+    }
+
+    /// Edits the copy of the configuration the devices dialog works on; it
+    /// is saved a moment after the last change.
+    fn draft_edit(&mut self, f: impl FnOnce(&mut CoreConfig)) {
+        if let Some(d) = &mut self.draft {
+            f(d);
+            self.edit_at = Some(Instant::now());
+        }
+    }
+
+    /// Saves the draft. Unless the lists were reshaped, the faders and
+    /// presets of the running configuration are newer than the copy.
+    fn flush_draft(&mut self) {
+        let Some(mut next) = self.draft.clone() else {
+            return;
+        };
+        self.edit_at = None;
+        if !self.reshaped {
+            let fresh = self.config();
+            if fresh.inputs.len() == next.inputs.len() && fresh.outputs.len() == next.outputs.len()
+            {
+                next.gains = fresh.gains;
+                next.presets = fresh.presets;
+            }
+        }
+        match faderust_core::save_config(next, &self.core) {
+            Ok(()) => self.reshaped = false,
+            Err(e) => self.dialog_error = e,
+        }
+    }
+
+    fn open(&mut self, d: Option<Dialog>) -> Task<Message> {
+        if self.dialog == Some(Dialog::Settings) && d != Some(Dialog::Settings) {
+            self.flush_draft();
+            self.draft = None;
+        }
+        self.dialog = d;
+        self.dialog_error.clear();
+        if d == Some(Dialog::Settings) {
+            self.draft = Some(self.config());
+            self.reshaped = false;
+        }
+        self.refresh_dialog()
+    }
+
+    fn loaded(&mut self, l: Loaded) {
+        match l {
+            Loaded::Windows(Ok(w)) => self.win = Some(w),
+            Loaded::Apps(Ok(a)) => self.apps_data = Some(a),
+            Loaded::Devices(Ok(d)) => self.devs = d,
+            Loaded::Windows(Err(e)) | Loaded::Apps(Err(e)) | Loaded::Devices(Err(e)) => {
+                self.dialog_error = e
+            }
+            Loaded::Usb(s) => self.usb = Some(s),
+            Loaded::Done(then, r) => {
+                self.usb_busy = false;
+                match r {
+                    Ok(()) => self.dialog_error.clear(),
+                    Err(e) => self.dialog_error = e,
+                }
+                let t = match then {
+                    Then::Nothing => Task::none(),
+                    Then::Windows => self.load_windows(),
+                    Then::Apps => self.load_apps(),
+                    Then::Usb => self.load_usb(),
+                };
+                self.jobs.push(t);
+            }
+        }
+    }
+}
+
 impl App {
     fn new() -> (Self, Task<Message>) {
         let notices = Arc::new(Mutex::new(Vec::new()));
@@ -322,43 +504,38 @@ impl App {
             },
             masters_left: true,
             hide_after: HIDE_AFTER[2],
-            dialog,
+            dialog: None,
             core,
             notices,
             notice: None,
             strips: vec![],
             outs: vec![],
             fx: vec![],
-            apps: vec![
-                AppRow {
-                    name: "Spiel (forza.exe)",
-                    device: APP_OUT[1],
-                    input: true,
-                },
-                AppRow {
-                    name: "Browser (brave.exe)",
-                    device: APP_OUT[0],
-                    input: true,
-                },
-            ],
-            settings: Settings {
-                autostart: true,
-                inputs: vec![("Mikrofon".into(), DEV_IN[0])],
-                outputs: vec![("PS5".into(), DEV_OUT[0], "60".into(), RELEASE[0])],
-            },
             presets: vec![],
             new_preset: String::new(),
-            win_default: 0,
-            win_volume: [80.0, 55.0, 100.0],
-            usb_running: false,
-            usb_count: 1,
+            win: None,
+            apps_data: None,
+            devs: Devices {
+                inputs: vec![],
+                outputs: vec![],
+            },
+            draft: None,
+            edit_at: None,
+            reshaped: false,
+            usb: None,
+            usb_busy: false,
+            last_usb: Instant::now(),
+            input_devices: vec![],
+            dialog_error: String::new(),
+            jobs: vec![],
             last: Instant::now(),
             started: Instant::now(),
             ready: false,
             shot: std::env::var("FADERUST_SHOT").ok(),
         };
         app.refresh_presets();
-        (app, Task::none())
+        let task = app.open(dialog);
+        (app, task)
     }
 
     fn send(&mut self, cmd: Command) {
@@ -545,9 +722,18 @@ impl App {
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
+        let direct = self.handle(message);
+        let mut jobs = std::mem::take(&mut self.jobs);
+        jobs.push(direct);
+        Task::batch(jobs)
+    }
+
+    fn handle(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::SetView(v) => self.view = v,
-            Message::Open(d) => self.dialog = d,
+            Message::Open(d) => return self.open(d),
+            Message::Loaded(l) => self.loaded(l),
+            Message::Failed(e) => self.dialog_error = e,
             Message::Edit(e) => self.edit(e),
             Message::Route(i, o) => self.toggle_route(i, o),
             Message::Level(i, db) => self.move_strip(i, db),
@@ -599,6 +785,20 @@ impl App {
                 {
                     self.notice = None;
                 }
+                if self
+                    .edit_at
+                    .is_some_and(|t| t.elapsed() >= Duration::from_millis(800))
+                {
+                    self.flush_draft();
+                }
+                if self.dialog == Some(Dialog::Settings)
+                    && !self.usb_busy
+                    && self.last_usb.elapsed() >= Duration::from_secs(2)
+                {
+                    self.last_usb = Instant::now();
+                    let t = self.load_usb();
+                    self.jobs.push(t);
+                }
                 let t = now.duration_since(self.started).as_secs_f32();
                 if self.shot.is_some() && t > 2.5 && self.ready {
                     return window::latest().map(Message::Id);
@@ -632,19 +832,228 @@ impl App {
             Edit::Gate(i, on) => self.set_fx(i, |f| f.gate = on),
             Edit::GateDb(i, v) => self.set_fx(i, |f| f.gate_db = v),
             Edit::ResetFx(i) => self.set_fx(i, |f| *f = CoreFx::default().into()),
-            Edit::AppDevice(i, d) => self.apps[i].device = d,
-            Edit::AppInput(i) => self.apps[i].input = true,
-            Edit::Autostart(on) => self.settings.autostart = on,
-            Edit::InLabel(i, t) => self.settings.inputs[i].0 = t,
-            Edit::InDevice(i, d) => self.settings.inputs[i].1 = d,
-            Edit::OutLabel(i, t) => self.settings.outputs[i].0 = t,
-            Edit::OutDevice(i, d) => self.settings.outputs[i].1 = d,
-            Edit::OutBuffer(i, t) => {
-                if t.len() <= 3 && t.chars().all(|c| c.is_ascii_digit()) {
-                    self.settings.outputs[i].2 = t;
+            Edit::Refresh => {
+                let t = self.refresh_dialog();
+                self.jobs.push(t);
+            }
+            Edit::AppDevice(pids, device) => {
+                self.jobs.push(blocking(
+                    move || faderust_core::set_app_output(pids, device),
+                    |r| Message::Loaded(Loaded::Done(Then::Apps, r)),
+                ));
+            }
+            Edit::AppInput(device, label) => {
+                let r = self.add_input(device, label);
+                if let Err(e) = r {
+                    self.dialog_error = e;
+                }
+                self.jobs.push(self.load_apps());
+            }
+            Edit::WinDefault(id, comm) => {
+                self.jobs.push(blocking(
+                    move || faderust_core::set_default_device(id, comm),
+                    |r| Message::Loaded(Loaded::Done(Then::Windows, r)),
+                ));
+            }
+            Edit::WinVolume(id, v) => {
+                let vol = (v / 100.0).clamp(0.0, 1.0);
+                if let Some(e) = self.endpoint_mut(&id) {
+                    e.volume = vol;
+                }
+                self.jobs.push(blocking(
+                    move || faderust_core::set_device_volume(id, Some(vol), None),
+                    |r| Message::Loaded(Loaded::Done(Then::Nothing, r)),
+                ));
+            }
+            Edit::WinMute(id, muted) => {
+                if let Some(e) = self.endpoint_mut(&id) {
+                    e.muted = muted;
+                }
+                self.jobs.push(blocking(
+                    move || faderust_core::set_device_volume(id, None, Some(muted)),
+                    |r| Message::Loaded(Loaded::Done(Then::Nothing, r)),
+                ));
+            }
+            Edit::InLabel(i, t) => self.draft_edit(|c| {
+                if let Some(x) = c.inputs.get_mut(i) {
+                    x.label = t;
+                }
+            }),
+            Edit::InDevice(i, d) => self.draft_edit(|c| {
+                if let Some(x) = c.inputs.get_mut(i) {
+                    x.device = d;
+                }
+            }),
+            Edit::InAdd => {
+                let device = self.devs.inputs.first().map(|d| d.name.clone());
+                if let Some(device) = device {
+                    self.reshaped = true;
+                    self.draft_edit(|c| {
+                        c.inputs.push(InputEntry {
+                            label: format!("Eingang {}", c.inputs.len() + 1),
+                            device,
+                            fx: Default::default(),
+                            muted: false,
+                        });
+                        c.gains
+                            .push(c.outputs.iter().map(|_| Gain::default()).collect());
+                        for p in &mut c.presets {
+                            p.gains
+                                .push(c.outputs.iter().map(|_| Gain::default()).collect());
+                        }
+                    });
                 }
             }
-            Edit::OutRelease(i, r) => self.settings.outputs[i].3 = r,
+            Edit::InRemove(i) => {
+                self.reshaped = true;
+                self.draft_edit(|c| {
+                    if i < c.inputs.len() {
+                        c.inputs.remove(i);
+                        if i < c.gains.len() {
+                            c.gains.remove(i);
+                        }
+                        for p in &mut c.presets {
+                            if i < p.gains.len() {
+                                p.gains.remove(i);
+                            }
+                        }
+                    }
+                });
+            }
+            Edit::InMove(i, by) => {
+                self.reshaped = true;
+                self.draft_edit(|c| {
+                    let j = i as isize + by;
+                    if j >= 0 && (j as usize) < c.inputs.len() {
+                        let j = j as usize;
+                        c.inputs.swap(i, j);
+                        if i < c.gains.len() && j < c.gains.len() {
+                            c.gains.swap(i, j);
+                        }
+                        for p in &mut c.presets {
+                            if i < p.gains.len() && j < p.gains.len() {
+                                p.gains.swap(i, j);
+                            }
+                        }
+                    }
+                });
+            }
+            Edit::OutLabel(o, t) => self.draft_edit(|c| {
+                if let Some(x) = c.outputs.get_mut(o) {
+                    x.label = t;
+                }
+            }),
+            Edit::OutDevice(o, d) => self.draft_edit(|c| {
+                if let Some(x) = c.outputs.get_mut(o) {
+                    x.device = d;
+                }
+            }),
+            Edit::OutBuffer(o, t) => {
+                if t.len() <= 3 && t.chars().all(|c| c.is_ascii_digit()) {
+                    self.draft_edit(|c| {
+                        if let Some(x) = c.outputs.get_mut(o) {
+                            x.buffer_ms = t.parse().unwrap_or(0);
+                        }
+                    });
+                }
+            }
+            Edit::OutRelease(o, secs) => self.draft_edit(|c| {
+                if let Some(x) = c.outputs.get_mut(o) {
+                    x.release_secs = secs;
+                }
+            }),
+            Edit::OutAdd => {
+                let device = self.devs.outputs.first().map(|d| d.name.clone());
+                if let Some(device) = device {
+                    self.reshaped = true;
+                    self.draft_edit(|c| {
+                        c.outputs.push(faderust_core::config::OutputEntry {
+                            label: format!("Ausgang {}", c.outputs.len() + 1),
+                            device,
+                            buffer_ms: 60,
+                            master: Default::default(),
+                            release_secs: 30,
+                        });
+                        for row in c
+                            .gains
+                            .iter_mut()
+                            .chain(c.presets.iter_mut().flat_map(|p| p.gains.iter_mut()))
+                        {
+                            row.push(Gain::default());
+                        }
+                    });
+                }
+            }
+            Edit::OutRemove(o) => {
+                self.reshaped = true;
+                self.draft_edit(|c| {
+                    if o < c.outputs.len() {
+                        c.outputs.remove(o);
+                        for row in c
+                            .gains
+                            .iter_mut()
+                            .chain(c.presets.iter_mut().flat_map(|p| p.gains.iter_mut()))
+                        {
+                            if o < row.len() {
+                                row.remove(o);
+                            }
+                        }
+                    }
+                });
+            }
+            Edit::OutMove(o, by) => {
+                self.reshaped = true;
+                self.draft_edit(|c| {
+                    let j = o as isize + by;
+                    if j >= 0 && (j as usize) < c.outputs.len() {
+                        let j = j as usize;
+                        c.outputs.swap(o, j);
+                        for row in c
+                            .gains
+                            .iter_mut()
+                            .chain(c.presets.iter_mut().flat_map(|p| p.gains.iter_mut()))
+                        {
+                            if o < row.len() && j < row.len() {
+                                row.swap(o, j);
+                            }
+                        }
+                    }
+                });
+            }
+            Edit::UsbSetup => {
+                self.usb_busy = true;
+                self.dialog_error.clear();
+                let core = Arc::clone(&self.core);
+                self.jobs.push(blocking(
+                    move || {
+                        faderust_core::setup_usb_cable()?;
+                        faderust_core::set_usb_cable(true, &core)
+                    },
+                    |r| Message::Loaded(Loaded::Done(Then::Usb, r)),
+                ));
+            }
+            Edit::UsbEnable(on) => {
+                let core = Arc::clone(&self.core);
+                self.jobs.push(blocking(
+                    move || faderust_core::set_usb_cable(on, &core),
+                    |r| Message::Loaded(Loaded::Done(Then::Usb, r)),
+                ));
+            }
+            Edit::UsbCount(n) => {
+                let core = Arc::clone(&self.core);
+                self.jobs.push(blocking(
+                    move || faderust_core::set_usb_cable_count(n, &core),
+                    |r| Message::Loaded(Loaded::Done(Then::Usb, r)),
+                ));
+            }
+            Edit::UsbRemove => {
+                self.usb_busy = true;
+                let core = Arc::clone(&self.core);
+                self.jobs.push(blocking(
+                    move || faderust_core::remove_usb_cable(&core),
+                    |r| Message::Loaded(Loaded::Done(Then::Usb, r)),
+                ));
+            }
             Edit::MastersLeft(l) => self.masters_left = l,
             Edit::HideAfter(h) => self.hide_after = h,
             Edit::NewPreset(t) => self.new_preset = t,
@@ -672,8 +1081,6 @@ impl App {
                     s.keep = !s.keep;
                 }
             }
-            Edit::WinDefault(i) => self.win_default = i,
-            Edit::WinVolume(i, v) => self.win_volume[i] = v.round(),
             Edit::HideOut(o, h) => {
                 if let Some(m) = self.outs.get_mut(o) {
                     m.hidden = h;
@@ -690,8 +1097,6 @@ impl App {
                 .iter_mut()
                 .filter(|s| s.hidden)
                 .for_each(|s| s.revealed = true),
-            Edit::UsbRunning(on) => self.usb_running = on,
-            Edit::UsbCount(n) => self.usb_count = n,
         }
     }
 

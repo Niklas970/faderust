@@ -6,6 +6,7 @@ pub mod audio;
 pub mod cable;
 pub mod config;
 pub mod log;
+pub mod names;
 pub mod remote;
 pub mod selftest;
 pub mod state;

@@ -28,13 +28,13 @@ pub struct AppState {
     pub token: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Device {
     pub id: String,
     pub name: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Devices {
     pub inputs: Vec<Device>,
     pub outputs: Vec<Device>,
@@ -63,14 +63,14 @@ pub fn get_devices() -> Result<Devices, String> {
     })
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct RenderDevice {
     pub id: String,
     pub name: String,
     pub cable: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct App {
     pub name: String,
     pub exe: String,
@@ -80,7 +80,7 @@ pub struct App {
     pub muted: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Apps {
     pub supported: bool,
     pub devices: Vec<RenderDevice>,
@@ -156,7 +156,7 @@ pub fn set_app_volume(
         .map_err(|e| e.to_string())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct AppLevel {
     pub pid: u32,
     /// Peak in dBFS.
@@ -183,7 +183,7 @@ pub fn get_app_levels() -> Result<Vec<AppLevel>, String> {
         .collect())
 }
 
-#[derive(Serialize, PartialEq)]
+#[derive(Serialize, PartialEq, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Endpoint {
     pub id: String,
@@ -194,7 +194,7 @@ pub struct Endpoint {
     pub muted: bool,
 }
 
-#[derive(Serialize, PartialEq)]
+#[derive(Serialize, PartialEq, Clone, Debug)]
 pub struct WindowsAudio {
     pub supported: bool,
     pub playback: Vec<Endpoint>,
@@ -329,7 +329,7 @@ pub fn remove_usb_cable(state: &AppState) -> Result<(), String> {
 pub const PLUGIN_FILE: &str = "com.niklas970.faderust.streamDeckPlugin";
 pub const PLUGIN_VERSION_FILE: &str = "streamdeck-plugin.version";
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamDeckStatus {
     /// Version of the plugin shipped with this app; `None` in development builds.
