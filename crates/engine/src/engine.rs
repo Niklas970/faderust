@@ -509,7 +509,7 @@ impl<B: AudioBackend> Engine<B> {
             return false;
         }
         self.stall[o] = (now, dropped);
-        dropped.saturating_sub(before) > STALL_FRAMES
+        dropped.saturating_sub(before) >= STALL_FRAMES
     }
 
     fn lost(
@@ -548,7 +548,8 @@ impl<B: AudioBackend> Engine<B> {
             error: error.0,
         };
         let format = match self.backend.output_format(&device.id) {
-            Ok(f) => f,
+            Ok(f) if f.sample_rate > 0 => f,
+            Ok(_) => return failed(BackendError("invalid sample rate".into())),
             Err(e) => return failed(e),
         };
         let buffer_ms = self.config.outputs[o].buffer_ms;
@@ -618,7 +619,8 @@ impl<B: AudioBackend> Engine<B> {
             error: error.0,
         };
         let format = match self.backend.input_format(&device.id) {
-            Ok(f) => f,
+            Ok(f) if f.sample_rate > 0 => f,
+            Ok(_) => return failed(BackendError("invalid sample rate".into())),
             Err(e) => return failed(e),
         };
 
@@ -721,6 +723,9 @@ pub fn feeds_back(output: &str, input: &str) -> bool {
 /// Finds a device whose id equals `pattern` or whose name contains it
 /// (case-insensitive).
 pub fn find_device(devices: &[DeviceInfo], pattern: &str) -> Option<DeviceInfo> {
+    if pattern.is_empty() {
+        return None;
+    }
     let needle = pattern.to_lowercase();
     devices
         .iter()
