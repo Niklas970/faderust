@@ -1962,67 +1962,63 @@ impl App {
 
     fn titlebar(&self) -> Element<'_, Message> {
         let compact = self.compact;
-        let nav =
-            |icon: &'static str, glyph: Option<icons::Glyph>, label: &'static str, d: Dialog| {
-                let on = self.dialog == Some(d);
-                button(
-                    container(
-                        {
-                            let color = if on { on_accent() } else { accent_light() };
-                            let icon: Element<'_, Message> = match glyph {
-                                Some(glyph) => Canvas::new(icons::Icon {
-                                    glyph,
-                                    color,
-                                    on: false,
+        let nav = |glyph: icons::Glyph, label: &'static str, d: Dialog| {
+            let on = self.dialog == Some(d);
+            button(
+                container(
+                    {
+                        let color = if on { on_accent() } else { accent_light() };
+                        let icon: Element<'_, Message> = Canvas::new(icons::Icon {
+                            glyph,
+                            color,
+                            on: false,
+                        })
+                        .width(24)
+                        .height(24)
+                        .into();
+                        if compact {
+                            row![icon]
+                        } else {
+                            row![
+                                icon,
+                                text(label).size(14).font(BOLD).color(if on {
+                                    on_accent()
+                                } else {
+                                    text_color()
                                 })
-                                .width(19)
-                                .height(19)
-                                .into(),
-                                None => text(icon).size(17).color(color).into(),
-                            };
-                            if compact {
-                                row![icon]
-                            } else {
-                                row![
-                                    icon,
-                                    text(label).size(14).font(BOLD).color(if on {
-                                        on_accent()
-                                    } else {
-                                        text_color()
-                                    })
-                                ]
-                            }
+                            ]
                         }
-                        .spacing(7)
-                        .align_y(Vertical::Center),
-                    )
-                    .center_y(Length::Fill),
-                )
-                .height(if compact { 28 } else { 36 })
-                .padding([0, if compact { 12 } else { 22 }])
-                .on_press(Message::Open(Some(d)))
-                .style(move |t, st| {
-                    let mut v = key(if on { Look::Primary } else { Look::Secondary })(t, st);
-                    if !on {
-                        v.border.color = mix(border(), accent(), 0.3);
-                        let hot = matches!(st, button::Status::Hovered | button::Status::Pressed);
-                        // Plain black on dark, plain white on light.
-                        let (base, lift) = if text_color().r > 0.5 {
-                            (Color::BLACK, Color::WHITE)
-                        } else {
-                            (Color::WHITE, Color::BLACK)
-                        };
-                        v.background = Some(Background::Color(if hot {
-                            mix(base, lift, 0.12)
-                        } else {
-                            base
-                        }));
                     }
-                    v.border.width = 1.5;
-                    v.border.radius = 6.0.into();
-                    v
-                })
-            };
+                    .spacing(7)
+                    .align_y(Vertical::Center),
+                )
+                .center_y(Length::Fill),
+            )
+            .height(if compact { 28 } else { 36 })
+            .padding([0, if compact { 12 } else { 22 }])
+            .on_press(Message::Open(Some(d)))
+            .style(move |t, st| {
+                let mut v = key(if on { Look::Primary } else { Look::Secondary })(t, st);
+                if !on {
+                    v.border.color = mix(border(), accent(), 0.3);
+                    let hot = matches!(st, button::Status::Hovered | button::Status::Pressed);
+                    // Plain black on dark, plain white on light.
+                    let (base, lift) = if text_color().r > 0.5 {
+                        (Color::BLACK, Color::WHITE)
+                    } else {
+                        (Color::WHITE, Color::BLACK)
+                    };
+                    v.background = Some(Background::Color(if hot {
+                        mix(base, lift, 0.12)
+                    } else {
+                        base
+                    }));
+                }
+                v.border.width = 1.5;
+                v.border.radius = 6.0.into();
+                v
+            })
+        };
         let win = |label: &'static str, close: bool, msg: Message| {
             button(container(text(label).size(12).color(muted_color())).center(Length::Fill))
                 .width(46)
@@ -2140,10 +2136,10 @@ impl App {
                 brand,
                 space().width(Length::Fill),
                 row![
-                    nav("⚐", None, "Presets", Dialog::Presets),
-                    nav("", Some(icons::Glyph::Speaker), "Windows", Dialog::Windows),
-                    nav("≡", None, "Geräte", Dialog::Settings),
-                    nav("◐", None, "Design", Dialog::Design),
+                    nav(icons::Glyph::Bookmark, "Presets", Dialog::Presets),
+                    nav(icons::Glyph::Speaker, "Windows", Dialog::Windows),
+                    nav(icons::Glyph::Sliders, "Geräte", Dialog::Settings),
+                    nav(icons::Glyph::Disc, "Design", Dialog::Design),
                 ]
                 .spacing(6),
                 space().width(16),

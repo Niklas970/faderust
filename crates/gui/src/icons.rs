@@ -13,6 +13,12 @@ pub enum Glyph {
     Pin,
     /// A loudspeaker with sound waves (Windows sound).
     Speaker,
+    /// A bookmark (presets).
+    Bookmark,
+    /// Three sliders (devices).
+    Sliders,
+    /// A half-filled disc (design).
+    Disc,
 }
 
 pub struct Icon {
@@ -110,6 +116,43 @@ impl<M> canvas::Program<M> for Icon {
                     c.a *= a;
                     f.stroke(&wave, line.with_color(c));
                 }
+            }
+            Glyph::Bookmark => {
+                let mark = Path::new(|b| {
+                    b.move_to(p(3.8, 2.0));
+                    b.line_to(p(12.2, 2.0));
+                    b.line_to(p(12.2, 14.0));
+                    b.line_to(p(8.0, 10.4));
+                    b.line_to(p(3.8, 14.0));
+                    b.close();
+                });
+                f.stroke(&mark, line);
+            }
+            Glyph::Sliders => {
+                for (x, y) in [(3.0, 9.0), (8.0, 4.5), (13.0, 10.5)] {
+                    let rail = Path::line(p(x, 1.5), p(x, 14.5));
+                    f.stroke(&rail, line);
+                    let knob = Path::rounded_rectangle(
+                        p(x - 2.2, y),
+                        Size::new(4.4 * k, 3.4 * k),
+                        (1.2 * k).into(),
+                    );
+                    f.fill(&knob, Fill::from(self.color));
+                }
+            }
+            Glyph::Disc => {
+                let ring = Path::circle(p(8.0, 8.0), 6.3 * k);
+                f.stroke(&ring, line);
+                let half = Path::new(|b| {
+                    b.arc(canvas::path::Arc {
+                        center: p(8.0, 8.0),
+                        radius: 6.3 * k,
+                        start_angle: iced::Radians(-std::f32::consts::FRAC_PI_2),
+                        end_angle: iced::Radians(std::f32::consts::FRAC_PI_2),
+                    });
+                    b.close();
+                });
+                f.fill(&half, Fill::from(self.color));
             }
         }
         vec![f.into_geometry()]
