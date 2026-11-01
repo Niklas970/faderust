@@ -1,10 +1,9 @@
-## Neu in 0.7.0
+## Neu in 0.7.1
 
-- **Neue Oberfläche:** Faderust läuft jetzt ohne WebView2 (iced statt Tauri). Das spart Arbeitsspeicher und CPU, startet schneller und braucht keine Browser-Komponente mehr
-- **Pult und Matrix** mit Streifen für Geräte und Programme, dB-Skala an allen Fadern, weich gleitende Fader (Mausrad 1 dB pro Schritt, nie „-0“)
-- **Design:** dunkel, hell oder wie Windows, eigene Akzent- und Signalfarbe mit Farbwähler, Deutsch/Englisch
-- **Kompaktansicht und „Immer im Vordergrund“** in der Titelleiste, einzelne Programme aus- und einblendbar
-- **Aufgeräumt:** dezente Trennlinien, kräftigere Navigation, Hinweise und Kabel-Beschreibung überarbeitet
+- **Programm-Icon:** faderust.exe hat jetzt ein eigenes Icon (Task-Manager, Explorer, Verknüpfungen)
+- **Darstellung wählbar:** im Design-Dialog zwischen Grafikkarte (wenig CPU) und Software (wenig Arbeitsspeicher), gilt nach einem Neustart
+- **Grafikfehler behoben:** Auswahl-Knöpfe in den Dialogen zeigten schwarze und blaue Flecken, sie sind jetzt einfarbig
+- **Navigation:** Knöpfe oben neutral grau statt von der Akzentfarbe getönt
 
 ## Installation
 

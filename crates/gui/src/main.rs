@@ -305,6 +305,8 @@ pub enum Edit {
     Accent(String),
     Signal(String),
     Lang(&'static str),
+    /// Software drawing (true) or graphics card (false); applies at the next start.
+    Software(bool),
     HideAfter(&'static str),
     NewPreset(String),
     SavePreset,
@@ -1844,6 +1846,7 @@ impl App {
                 self.set_look(|p| p.signal = c);
             }
             Edit::Lang(l) => self.set_look(|p| p.lang = l.into()),
+            Edit::Software(on) => self.set_look(|p| p.software = on),
             Edit::MastersLeft(l) => {
                 self.masters_left = l;
                 self.save_prefs();
@@ -1955,12 +1958,17 @@ impl App {
             .style(move |t, st| {
                 let mut v = key(if on { Look::Primary } else { Look::Secondary })(t, st);
                 if !on {
-                    v.border.color = mix(border(), accent(), 0.5);
+                    v.border.color = mix(border(), accent(), 0.3);
                     let hot = matches!(st, button::Status::Hovered | button::Status::Pressed);
-                    let k = if hot { 0.34 } else { 0.22 };
+                    let lift = if text_color().r > 0.5 {
+                        Color::WHITE
+                    } else {
+                        Color::BLACK
+                    };
+                    let k = if hot { 0.2 } else { 0.12 };
                     v.background = Some(style::vertical(
-                        mix(panel_2(), accent(), k + 0.08),
-                        mix(panel_2(), accent(), k),
+                        mix(panel_2(), lift, k + 0.05),
+                        mix(panel_2(), lift, k),
                     ));
                 }
                 v.border.width = 1.5;
@@ -2972,6 +2980,11 @@ fn main() -> iced::Result {
         Err(()) => return Ok(()),
     }
     let minimized = std::env::args().any(|a| a == shell::MINIMIZED_ARG);
+    // The drawing backend is picked from the saved choice unless the
+    // environment already says which one to use.
+    if std::env::var_os("ICED_BACKEND").is_none() && shell::load_prefs(&config_dir()).software {
+        std::env::set_var("ICED_BACKEND", "tiny-skia");
+    }
     iced::application(App::new, App::update, App::view)
         .subscription(App::subscription)
         .theme(theme)

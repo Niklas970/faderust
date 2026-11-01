@@ -2,7 +2,7 @@
 //! uppercase section headings, grey hints, buttons in the footer.
 
 use crate::i18n::{text, tr};
-use crate::style::{check, input as text_input, key, look_text, pick as pick_list, scroll, Look};
+use crate::style::{check, input as text_input, look_text, pick as pick_list, scroll, Look};
 use iced::alignment::Vertical;
 use iced::widget::{button, column, container, mouse_area, opaque, row, slider, space};
 use iced::{Background, Border, Color, Element, Length};
@@ -44,7 +44,7 @@ fn btn(label: impl Into<String>, msg: Message, primary: bool) -> Element<'static
     button(text(label.into()).size(13).color(look_text(look)))
         .padding([6, 14])
         .on_press(msg)
-        .style(key(look))
+        .style(flat(look))
         .into()
 }
 
@@ -55,7 +55,7 @@ fn segmented(items: Vec<(String, bool, Message)>) -> Element<'static, Message> {
         button(text(label).size(13).color(look_text(look)))
             .padding([6, 14])
             .on_press(msg)
-            .style(key(look))
+            .style(flat(look))
             .into()
     }))
     .spacing(1)
@@ -79,7 +79,7 @@ fn frame<'a>(
                     .height(28)
                     .padding(0)
                     .on_press(close())
-                    .style(key(Look::Secondary)),
+                    .style(flat(Look::Secondary)),
             ]
             .align_y(Vertical::Center),
             scroll(container(body).padding(iced::Padding::default().right(28))).height(if tall {
@@ -575,7 +575,7 @@ fn windows(app: &App) -> Element<'_, Message> {
                             .padding([4, 8])
                             .width(64)
                             .on_press(edit(Edit::WinMute(mute_id, !muted)))
-                            .style(key(if muted {
+                            .style(flat(if muted {
                                 Look::Danger
                             } else {
                                 Look::Secondary
@@ -719,6 +719,20 @@ fn design(app: &App) -> Element<'_, Message> {
             ("Deutsch".into(), lang_now == "de", edit(Edit::Lang("de"))),
             ("English".into(), lang_now == "en", edit(Edit::Lang("en"))),
         ]),
+        h3("Darstellung"),
+        segmented(vec![
+            (
+                "Grafikkarte".into(),
+                !app.prefs.software,
+                edit(Edit::Software(false))
+            ),
+            (
+                "Software".into(),
+                app.prefs.software,
+                edit(Edit::Software(true))
+            ),
+        ]),
+        hint("Grafikkarte braucht wenig Prozessor, Software wenig Arbeitsspeicher. Gilt nach einem Neustart von Faderust."),
     ]
     .spacing(10);
     frame("Design".into(), 480.0, true, body.into(), no_footer())
@@ -989,7 +1003,7 @@ fn settings(app: &App) -> Element<'_, Message> {
     let arrow = |label: &'static str, msg: Option<Message>| {
         let b = button(text(label).size(13).color(text_color()))
             .padding([4, 8])
-            .style(key(Look::Secondary));
+            .style(flat(Look::Secondary));
         match msg {
             Some(m) => b.on_press(m),
             None => b,
