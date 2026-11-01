@@ -719,6 +719,20 @@ fn design(app: &App) -> Element<'_, Message> {
             ("Deutsch".into(), lang_now == "de", edit(Edit::Lang("de"))),
             ("English".into(), lang_now == "en", edit(Edit::Lang("en"))),
         ]),
+        h3("Darstellung"),
+        segmented(vec![
+            (
+                "Grafikkarte".into(),
+                !app.prefs.software,
+                edit(Edit::Software(false))
+            ),
+            (
+                "Software".into(),
+                app.prefs.software,
+                edit(Edit::Software(true))
+            ),
+        ]),
+        hint("Grafikkarte braucht wenig Prozessor, Software wenig Arbeitsspeicher. Gilt nach einem Neustart von Faderust."),
     ]
     .spacing(10);
     frame("Design".into(), 480.0, true, body.into(), no_footer())

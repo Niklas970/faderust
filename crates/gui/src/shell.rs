@@ -123,6 +123,8 @@ pub struct Prefs {
     pub compact: bool,
     /// The window stays above all others.
     pub pinned: bool,
+    /// Draw in software (little memory) instead of on the graphics card.
+    pub software: bool,
 }
 
 /// "de" or "en", whichever the system uses.

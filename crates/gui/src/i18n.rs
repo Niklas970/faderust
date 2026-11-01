@@ -168,6 +168,13 @@ const TABLE: &[(&str, &str)] = &[
     ("Änderungen werden automatisch gespeichert.", "Changes are saved automatically."),
     ("Ausgang", "Output"),
     ("Sprache", "Language"),
+    ("Darstellung", "Rendering"),
+    ("Grafikkarte", "Graphics card"),
+    ("Software", "Software"),
+    (
+        "Grafikkarte braucht wenig Prozessor, Software wenig Arbeitsspeicher. Gilt nach einem Neustart von Faderust.",
+        "Graphics card uses little CPU, software uses little memory. Applies after restarting Faderust.",
+    ),
     ("Farbwähler", "Colour picker"),
     ("Farbwähler schließen", "Close picker"),
     ("„+ Eingang“ nimmt das Programm auf und stellt es vorher auf", "“+ Input” records the program and first moves it to"),
