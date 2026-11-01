@@ -197,6 +197,14 @@ impl Config {
         true
     }
 
+    /// Adds a finished preset (from an import), replacing one of that name.
+    pub fn put_preset(&mut self, preset: Preset) {
+        match self.presets.iter_mut().find(|p| p.name == preset.name) {
+            Some(p) => *p = preset,
+            None => self.presets.push(preset),
+        }
+    }
+
     pub fn delete_preset(&mut self, name: &str) {
         self.presets.retain(|p| p.name != name);
     }

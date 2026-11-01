@@ -13,6 +13,7 @@
 
 mod dialogs;
 mod fader;
+mod files;
 mod i18n;
 mod icons;
 mod picker;
@@ -311,6 +312,8 @@ pub enum Edit {
     NewPreset(String),
     SavePreset,
     LoadPreset(String),
+    ExportPreset(String),
+    ImportPreset,
     DeletePreset(String),
     Keep(usize),
     HideOut(usize, bool),
@@ -373,6 +376,7 @@ pub enum Then {
     Windows,
     Apps,
     Usb,
+    Presets,
 }
 
 /// The audio thread tells the window through the shared snapshot, so only
@@ -918,6 +922,10 @@ impl App {
                     Then::Windows => self.load_windows(),
                     Then::Apps => self.load_apps(),
                     Then::Usb => self.load_usb(),
+                    Then::Presets => {
+                        self.refresh_presets();
+                        Task::none()
+                    }
                 };
                 self.jobs.push(t);
             }
@@ -1867,6 +1875,32 @@ impl App {
                     Err(e) => self.say("error", e),
                 }
             }
+            Edit::ExportPreset(name) => {
+                let core = self.core.clone();
+                self.jobs.push(blocking(
+                    move || -> Result<(), String> {
+                        let text = faderust_core::export_preset(&name, &core)?;
+                        let Some(path) = files::save_path(&name)? else {
+                            return Ok(());
+                        };
+                        std::fs::write(&path, text).map_err(|e| e.to_string())
+                    },
+                    |r| Message::Loaded(Loaded::Done(Then::Nothing, r)),
+                ));
+            }
+            Edit::ImportPreset => {
+                let core = self.core.clone();
+                self.jobs.push(blocking(
+                    move || -> Result<(), String> {
+                        let Some(path) = files::open_path()? else {
+                            return Ok(());
+                        };
+                        let text = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+                        faderust_core::import_preset(&text, &core).map(drop)
+                    },
+                    |r| Message::Loaded(Loaded::Done(Then::Presets, r)),
+                ));
+            }
             Edit::LoadPreset(name) => {
                 if let Err(e) = faderust_core::load_preset(name, &self.core) {
                     self.say("error", e);
@@ -1924,58 +1958,66 @@ impl App {
 
     fn titlebar(&self) -> Element<'_, Message> {
         let compact = self.compact;
-        let nav = |icon: &'static str, label: &'static str, d: Dialog| {
-            let on = self.dialog == Some(d);
-            button(
-                container(
-                    {
-                        let icon = text(icon).size(17).color(if on {
-                            on_accent()
-                        } else {
-                            accent_light()
-                        });
-                        if compact {
-                            row![icon]
-                        } else {
-                            row![
-                                icon,
-                                text(label).size(14).font(BOLD).color(if on {
-                                    on_accent()
-                                } else {
-                                    text_color()
+        let nav =
+            |icon: &'static str, glyph: Option<icons::Glyph>, label: &'static str, d: Dialog| {
+                let on = self.dialog == Some(d);
+                button(
+                    container(
+                        {
+                            let color = if on { on_accent() } else { accent_light() };
+                            let icon: Element<'_, Message> = match glyph {
+                                Some(glyph) => Canvas::new(icons::Icon {
+                                    glyph,
+                                    color,
+                                    on: false,
                                 })
-                            ]
+                                .width(19)
+                                .height(19)
+                                .into(),
+                                None => text(icon).size(17).color(color).into(),
+                            };
+                            if compact {
+                                row![icon]
+                            } else {
+                                row![
+                                    icon,
+                                    text(label).size(14).font(BOLD).color(if on {
+                                        on_accent()
+                                    } else {
+                                        text_color()
+                                    })
+                                ]
+                            }
                         }
-                    }
-                    .spacing(7)
-                    .align_y(Vertical::Center),
+                        .spacing(7)
+                        .align_y(Vertical::Center),
+                    )
+                    .center_y(Length::Fill),
                 )
-                .center_y(Length::Fill),
-            )
-            .height(if compact { 28 } else { 36 })
-            .padding([0, if compact { 12 } else { 22 }])
-            .on_press(Message::Open(Some(d)))
-            .style(move |t, st| {
-                let mut v = key(if on { Look::Primary } else { Look::Secondary })(t, st);
-                if !on {
-                    v.border.color = mix(border(), accent(), 0.3);
-                    let hot = matches!(st, button::Status::Hovered | button::Status::Pressed);
-                    let lift = if text_color().r > 0.5 {
-                        Color::WHITE
-                    } else {
-                        Color::BLACK
-                    };
-                    let k = if hot { 0.2 } else { 0.12 };
-                    v.background = Some(style::vertical(
-                        mix(panel_2(), lift, k + 0.05),
-                        mix(panel_2(), lift, k),
-                    ));
-                }
-                v.border.width = 1.5;
-                v.border.radius = 6.0.into();
-                v
-            })
-        };
+                .height(if compact { 28 } else { 36 })
+                .padding([0, if compact { 12 } else { 22 }])
+                .on_press(Message::Open(Some(d)))
+                .style(move |t, st| {
+                    let mut v = key(if on { Look::Primary } else { Look::Secondary })(t, st);
+                    if !on {
+                        v.border.color = mix(border(), accent(), 0.3);
+                        let hot = matches!(st, button::Status::Hovered | button::Status::Pressed);
+                        let lift = if text_color().r > 0.5 {
+                            Color::WHITE
+                        } else {
+                            Color::BLACK
+                        };
+                        let k = if hot { 0.2 } else { 0.12 };
+                        v.background = Some(style::vertical(
+                            mix(panel_2(), lift, k + 0.05),
+                            mix(panel_2(), lift, k),
+                        ));
+                    }
+                    v.border.width = 1.5;
+                    v.border.radius = 6.0.into();
+                    v
+                })
+            };
         let win = |label: &'static str, close: bool, msg: Message| {
             button(container(text(label).size(12).color(muted_color())).center(Length::Fill))
                 .width(46)
@@ -2093,10 +2135,10 @@ impl App {
                 brand,
                 space().width(Length::Fill),
                 row![
-                    nav("⚐", "Presets", Dialog::Presets),
-                    nav("♪", "Windows", Dialog::Windows),
-                    nav("≡", "Geräte", Dialog::Settings),
-                    nav("◐", "Design", Dialog::Design),
+                    nav("⚐", None, "Presets", Dialog::Presets),
+                    nav("", Some(icons::Glyph::Speaker), "Windows", Dialog::Windows),
+                    nav("≡", None, "Geräte", Dialog::Settings),
+                    nav("◐", None, "Design", Dialog::Design),
                 ]
                 .spacing(6),
                 space().width(16),

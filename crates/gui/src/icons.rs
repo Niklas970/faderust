@@ -11,6 +11,8 @@ pub enum Glyph {
     Compact,
     /// Two stacked windows: the window stays on top.
     Pin,
+    /// A loudspeaker with sound waves (Windows sound).
+    Speaker,
 }
 
 pub struct Icon {
@@ -79,6 +81,35 @@ impl<M> canvas::Program<M> for Icon {
                     f.fill(&front, Fill::from(self.color));
                 }
                 f.stroke(&front, line);
+            }
+            Glyph::Speaker => {
+                // Cabinet with a cone, and two waves.
+                let body = Path::new(|b| {
+                    b.move_to(p(1.5, 6.0));
+                    b.line_to(p(4.5, 6.0));
+                    b.line_to(p(8.5, 2.5));
+                    b.line_to(p(8.5, 13.5));
+                    b.line_to(p(4.5, 10.0));
+                    b.line_to(p(1.5, 10.0));
+                    b.close();
+                });
+                if self.on {
+                    f.fill(&body, Fill::from(self.color));
+                }
+                f.stroke(&body, line);
+                for (r, a) in [(2.6_f32, 1.0_f32), (5.2, 0.7)] {
+                    let wave = Path::new(|b| {
+                        b.arc(canvas::path::Arc {
+                            center: p(8.5, 8.0),
+                            radius: r * k,
+                            start_angle: iced::Radians(-0.9),
+                            end_angle: iced::Radians(0.9),
+                        });
+                    });
+                    let mut c = self.color;
+                    c.a *= a;
+                    f.stroke(&wave, line.with_color(c));
+                }
             }
         }
         vec![f.into_geometry()]

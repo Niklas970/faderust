@@ -473,6 +473,7 @@ fn presets(app: &App) -> Element<'_, Message> {
             row![
                 container(text(p.clone()).size(14).color(text_color())).width(Length::Fill),
                 btn("Laden", edit(Edit::LoadPreset(p.clone())), true),
+                btn("Export", edit(Edit::ExportPreset(p.clone())), false),
                 btn("Löschen", edit(Edit::DeletePreset(p.clone())), false),
             ]
             .spacing(8)
@@ -480,8 +481,10 @@ fn presets(app: &App) -> Element<'_, Message> {
         );
     }
     let body = column![
+        error_line(app),
         h3("Gespeicherte Presets"),
         list,
+        btn("Preset importieren …", edit(Edit::ImportPreset), false),
         h3("Aktuelle Einstellung speichern"),
         row![
             text_input("Name", &app.new_preset)
@@ -493,7 +496,7 @@ fn presets(app: &App) -> Element<'_, Message> {
         hint("Ein Preset merkt sich Fader, Stumm und Effekte aller Eingänge."),
     ]
     .spacing(10);
-    frame("Presets".into(), 460.0, false, body.into(), no_footer())
+    frame("Presets".into(), 520.0, false, body.into(), no_footer())
 }
 
 fn windows(app: &App) -> Element<'_, Message> {

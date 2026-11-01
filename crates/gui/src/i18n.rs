@@ -169,6 +169,13 @@ const TABLE: &[(&str, &str)] = &[
     ("Ausgang", "Output"),
     ("Sprache", "Language"),
     ("Darstellung", "Rendering"),
+    ("Export", "Export"),
+    ("Preset importieren …", "Import preset …"),
+    ("Preset exportieren", "Export preset"),
+    ("Preset importieren", "Import preset"),
+    ("Faderust-Preset", "Faderust preset"),
+    ("Dateiauswahl gibt es nur unter Windows", "File dialogs are only available on Windows"),
+    ("Das Preset braucht einen Namen", "The preset needs a name"),
     ("Grafikkarte", "Graphics card"),
     ("Software", "Software"),
     (
