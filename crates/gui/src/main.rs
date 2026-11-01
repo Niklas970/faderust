@@ -3091,7 +3091,7 @@ static INSTANCE: Mutex<Option<Receiver<()>>> = Mutex::new(None);
 fn tray_icon() -> Option<shell::tray::Tray> {
     let decoder = png::Decoder::new(std::io::Cursor::new(LOGO));
     let mut reader = decoder.read_info().ok()?;
-    let mut buf = vec![0; reader.output_buffer_size()];
+    let mut buf = vec![0; reader.output_buffer_size()?];
     let info = reader.next_frame(&mut buf).ok()?;
     buf.truncate(info.buffer_size());
     (info.width == info.height && info.color_type == png::ColorType::Rgba)
