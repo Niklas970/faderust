@@ -82,6 +82,12 @@ fn system_light() -> bool {
     false
 }
 
+/// Colour of the one-pixel edge around the window: clearly visible on both
+/// the dark and the light design.
+pub fn frame_color() -> Color {
+    mix(border(), accent(), 0.35)
+}
+
 /// Sets the palette; `mode` is "dark", "light" or "system".
 pub fn set_theme(mode: &str, accent: &str, signal: &str) {
     let light = match mode {
