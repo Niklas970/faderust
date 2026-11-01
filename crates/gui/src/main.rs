@@ -335,6 +335,8 @@ pub enum Message {
     Minimize,
     ToggleMax,
     Drag,
+    /// Start resizing the window from an edge or corner.
+    Resize(window::Direction),
     Quit,
     CheckUpdate,
     UpdateChecked(Result<Option<Update>, String>, bool),
@@ -1307,6 +1309,11 @@ impl App {
             Message::ToggleMax => {
                 if let Some(id) = self.win_id {
                     return window::toggle_maximize(id);
+                }
+            }
+            Message::Resize(direction) => {
+                if let Some(id) = self.win_id {
+                    return window::drag_resize(id, direction);
                 }
             }
             Message::Drag => {
@@ -2917,10 +2924,87 @@ impl App {
                 background: Some(Background::Color(bg())),
                 ..container::Style::default()
             });
-        match self.dialog {
+        let content: Element<'_, Message> = match self.dialog {
             Some(d) => stack![page, dialogs::view(self, d), toast].into(),
             None => stack![page, toast].into(),
-        }
+        };
+        // A visible edge around the borderless window, with grips to resize it.
+        let framed = container(content)
+            .padding(1)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(|_| container::Style {
+                background: Some(Background::Color(frame_color())),
+                ..container::Style::default()
+            });
+        stack![framed, Self::grips()].into()
+    }
+
+    /// Invisible strips along the edges and corners that start a resize.
+    fn grips() -> Element<'static, Message> {
+        use iced::window::Direction as D;
+        let grip = |w: Length,
+                    h: Length,
+                    d: D,
+                    cursor: iced::mouse::Interaction|
+         -> Element<'static, Message> {
+            iced::widget::mouse_area(space().width(w).height(h))
+                .on_press(Message::Resize(d))
+                .interaction(cursor)
+                .into()
+        };
+        let (edge, corner) = (5.0, 12.0);
+        let fill = Length::Fill;
+        let top = container(grip(
+            fill,
+            edge.into(),
+            D::North,
+            iced::mouse::Interaction::ResizingVertically,
+        ))
+        .align_top(fill);
+        let bottom = container(grip(
+            fill,
+            edge.into(),
+            D::South,
+            iced::mouse::Interaction::ResizingVertically,
+        ))
+        .align_bottom(fill);
+        let left = container(grip(
+            edge.into(),
+            fill,
+            D::West,
+            iced::mouse::Interaction::ResizingHorizontally,
+        ))
+        .align_left(fill);
+        let right = container(grip(
+            edge.into(),
+            fill,
+            D::East,
+            iced::mouse::Interaction::ResizingHorizontally,
+        ))
+        .align_right(fill);
+        let corner_grip = |d: D, cursor| grip(corner.into(), corner.into(), d, cursor);
+        let diag_down = iced::mouse::Interaction::ResizingDiagonallyDown;
+        let diag_up = iced::mouse::Interaction::ResizingDiagonallyUp;
+        stack![
+            top,
+            bottom,
+            left,
+            right,
+            container(corner_grip(D::NorthWest, diag_down))
+                .align_top(fill)
+                .align_left(fill),
+            container(corner_grip(D::NorthEast, diag_up))
+                .align_top(fill)
+                .align_right(fill),
+            container(corner_grip(D::SouthWest, diag_up))
+                .align_bottom(fill)
+                .align_left(fill),
+            container(corner_grip(D::SouthEast, diag_down))
+                .align_bottom(fill)
+                .align_right(fill),
+        ]
+        .into()
     }
 
     fn subscription(&self) -> Subscription<Message> {
