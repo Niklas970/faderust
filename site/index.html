@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Faderust</title>
+<meta name="description" content="Faderust ist ein schlanker, offener Audio-Mixer für Windows, als Ersatz für Voicemeeter.">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<meta property="og:title" content="Faderust">
+<meta property="og:description" content="Offener Audio-Mixer für Windows. Jeder Ausgang bekommt seine eigene Mischung.">
+<meta property="og:image" content="assets/screenshot.png">
+<style>
+:root{--bg:#000;--panel:#0d1013;--line:#1e242a;--text:#e8ecef;--muted:#8d98a1;--sig:#4fd1c0;--cu:#e2793f}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--sig)}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+header{display:flex;align-items:center;justify-content:space-between;padding:20px 0}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:20px;color:var(--text);text-decoration:none}
+.brand img{width:34px;height:34px}
+nav{display:flex;gap:18px;align-items:center;font-size:15px}
+nav a{color:var(--muted);text-decoration:none}
+nav a:hover{color:var(--text)}
+#lang{background:none;border:1px solid var(--line);color:var(--muted);border-radius:6px;padding:3px 9px;cursor:pointer;font:inherit;font-size:13px}
+.alpha{display:inline-block;color:var(--cu);border:1px solid var(--cu);border-radius:99px;padding:2px 12px;font-size:13px;letter-spacing:.04em}
+.hero{text-align:center;padding:48px 0 32px}
+h1{font-size:clamp(34px,6vw,56px);line-height:1.1;margin:14px 0 14px}
+.hero p.lead{max-width:640px;margin:0 auto 28px;color:var(--muted);font-size:19px}
+.btn{display:inline-block;background:var(--sig);color:#021210;font-weight:700;text-decoration:none;padding:13px 26px;border-radius:10px}
+.btn:hover{filter:brightness(1.1)}
+.btn.ghost{background:none;color:var(--text);border:1px solid var(--line);margin-left:8px}
+.small{color:var(--muted);font-size:14px;margin-top:12px}
+.shot{margin:36px auto 0;border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 0 80px rgba(79,209,192,.08)}
+.shot img{display:block;width:100%;height:auto}
+section{padding:56px 0}
+h2{font-size:28px;margin:0 0 24px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
+.card h3{margin:0 0 6px;font-size:18px}
+.card p{margin:0;color:var(--muted);font-size:15.5px}
+.two{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+.two figure{margin:0}
+.two img{width:100%;height:auto;border:1px solid var(--line);border-radius:10px;display:block}
+figcaption{color:var(--muted);font-size:14px;margin-top:8px}
+.reel{display:flex;justify-content:center}
+video{width:100%;max-width:300px;border:1px solid var(--line);border-radius:14px;background:#000}
+.steps{counter-reset:s;padding:0;list-style:none;display:grid;gap:12px}
+.steps li{counter-increment:s;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 20px 16px 58px;position:relative}
+.steps li::before{content:counter(s);position:absolute;left:18px;top:14px;width:28px;height:28px;border-radius:50%;background:var(--sig);color:#021210;font-weight:700;display:grid;place-items:center}
+.note{border-left:3px solid var(--cu);background:var(--panel);padding:14px 18px;border-radius:0 10px 10px 0}
+footer{border-top:1px solid var(--line);padding:28px 0 48px;color:var(--muted);font-size:14px;display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between}
+@media(max-width:700px){.two{grid-template-columns:1fr}nav .hide{display:none}.btn.ghost{margin:10px 0 0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <a class="brand" href="#"><img src="assets/logo.svg" alt="">Faderust</a>
+  <nav>
+    <a class="hide" href="#features" data-i18n="nav_features">Funktionen</a>
+    <a class="hide" href="#install" data-i18n="nav_install">Installation</a>
+    <a href="https://github.com/Niklas970/faderust">GitHub</a>
+    <button id="lang" type="button" aria-label="Sprache / Language">EN</button>
+  </nav>
+</header>
+
+<main>
+<div class="hero">
+  <span class="alpha" id="alpha">Alpha</span>
+  <h1 data-i18n="h1">Dein Ton, deine Mischung.</h1>
+  <p class="lead" data-i18n="lead">Faderust ist ein schlanker, offener Audio-Mixer für Windows, als Ersatz für Voicemeeter. Jeder Ausgang bekommt seine eigene Mischung, Geräte dürfen im Betrieb kommen und gehen.</p>
+  <a class="btn" id="dl" href="https://github.com/Niklas970/faderust/releases/latest" data-i18n="dl">Für Windows herunterladen</a>
+  <a class="btn ghost" href="https://github.com/Niklas970/faderust" data-i18n="src">Quellcode</a>
+  <div class="small" id="dlinfo" data-i18n="dlinfo">Windows 10/11 · kostenlos · MIT-Lizenz</div>
+  <div class="shot"><img src="assets/screenshot.png" alt="Faderust im Pult mit Geräten, Programmen und drei Ausgängen"></div>
+</div>
+
+<section id="features">
+  <h2 data-i18n="feat_h">Was Faderust kann</h2>
+  <div class="grid">
+    <div class="card"><h3 data-i18n="f1h">Pult wie bei Voicemeeter</h3><p data-i18n="f1p">Streifen mit Fader, MUTE und A1–A3 für jedes Gerät und jedes Programm. Jeder Ausgang hat einen Master-Fader.</p></div>
+    <div class="card"><h3 data-i18n="f2h">Programme direkt aufnehmen</h3><p data-i18n="f2p">Discord, Spotify oder der Browser bekommen einen eigenen Streifen mit Effekten, ganz ohne Zusatz-Treiber.</p></div>
+    <div class="card"><h3 data-i18n="f3h">Eigene virtuelle Kabel</h3><p data-i18n="f3p">Bis zu vier „Faderust Kabel“ richtet die App selbst ein. Kein VB-Cable nötig.</p></div>
+    <div class="card"><h3 data-i18n="f4h">Geräte kommen und gehen</h3><p data-i18n="f4p">Bluetooth aus und wieder an, USB abziehen: Faderust verbindet neu, ohne die anderen Geräte zu unterbrechen.</p></div>
+    <div class="card"><h3 data-i18n="f5h">Effekte pro Eingang</h3><p data-i18n="f5p">Rauschunterdrückung (RNNoise), Low-Cut, Drei-Band-EQ und Gate.</p></div>
+    <div class="card"><h3 data-i18n="f6h">Presets &amp; Stream Deck</h3><p data-i18n="f6p">Presets, Autostart im Tray, Updates in der App mit Signaturprüfung und ein Stream-Deck-Plugin.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2 data-i18n="views_h">Zwei Ansichten</h2>
+  <div class="two">
+    <figure><img src="assets/matrix.png" alt="Matrix-Ansicht" loading="lazy"><figcaption data-i18n="cap_m"><b>Matrix:</b> jeder Eingang auf jedem Ausgang einzeln geregelt.</figcaption></figure>
+    <figure><img src="assets/design.png" alt="Design-Dialog" loading="lazy"><figcaption data-i18n="cap_d"><b>Design:</b> Pult oder Matrix, Farben, dunkel oder hell.</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2 data-i18n="reel_h">In 40 Sekunden</h2>
+  <div class="reel"><video controls preload="none" playsinline src="assets/faderust-reel.mp4"></video></div>
+</section>
+
+<section id="install">
+  <h2 data-i18n="inst_h">Installation</h2>
+  <ol class="steps">
+    <li data-i18n="i1">Das Setup <code>Faderust_*_x64-setup.exe</code> laden und starten. Es braucht keine Admin-Rechte.</li>
+    <li data-i18n="i2">Das Setup ist nicht signiert, deshalb warnt SmartScreen: „Weitere Informationen“ → „Trotzdem ausführen“.</li>
+    <li data-i18n="i3">Faderust aus dem Startmenü öffnen. Updates meldet die App selbst.</li>
+  </ol>
+</section>
+
+<section>
+  <div class="note"><b data-i18n="alpha_h">Alpha.</b> <span data-i18n="alpha_p">Läuft schon, ist aber noch jung. Feedback willkommen: bitte als Issue auf GitHub melden.</span> <a href="https://github.com/Niklas970/faderust/issues" data-i18n="alpha_l">Issue melden</a></div>
+</section>
+</main>
+
+<footer>
+  <span>© Niklas970 · MIT</span>
+  <span><a href="https://github.com/Niklas970/faderust">GitHub</a> · <a href="https://github.com/Niklas970/faderust/releases">Releases</a> · <a href="https://github.com/Niklas970/faderust/blob/main/README.md">README</a></span>
+</footer>
+</div>
+
+<script>
+const T={en:{
+nav_features:"Features",nav_install:"Install",
+h1:"Your sound, your mix.",
+lead:"Faderust is a lean, open audio mixer for Windows, a replacement for Voicemeeter. Every output gets its own mix, and devices may come and go while it runs.",
+dl:"Download for Windows",src:"Source code",dlinfo:"Windows 10/11 · free · MIT license",
+feat_h:"What Faderust does",
+f1h:"A desk like Voicemeeter",f1p:"A strip with fader, MUTE and A1–A3 for every device and program. Each output has a master fader.",
+f2h:"Capture programs directly",f2p:"Discord, Spotify or the browser get their own strip with effects, no extra driver needed.",
+f3h:"Its own virtual cables",f3p:"The app sets up to four “Faderust Kabel” itself. No VB-Cable required.",
+f4h:"Devices come and go",f4p:"Bluetooth off and on, USB unplugged: Faderust reconnects without interrupting the other devices.",
+f5h:"Effects per input",f5p:"Noise suppression (RNNoise), low-cut, three-band EQ and gate.",
+f6h:"Presets & Stream Deck",f6p:"Presets, tray autostart, in-app updates with signature check and a Stream Deck plugin.",
+views_h:"Two views",cap_m:"<b>Matrix:</b> every input on every output, set individually.",cap_d:"<b>Design:</b> desk or matrix, colors, dark or light.",
+reel_h:"In 40 seconds",
+inst_h:"Installation",
+i1:"Download and run <code>Faderust_*_x64-setup.exe</code>. No admin rights needed.",
+i2:"The setup is not signed, so SmartScreen warns: “More info” → “Run anyway”.",
+i3:"Open Faderust from the Start menu. The app tells you about updates.",
+alpha_h:"Alpha.",alpha_p:"It runs, but it is still young. Feedback welcome: please report problems as an issue on GitHub.",alpha_l:"Report an issue"}};
+const DE={};document.querySelectorAll("[data-i18n]").forEach(e=>DE[e.dataset.i18n]=e.innerHTML);
+const btn=document.getElementById("lang");
+function setLang(l){
+  document.documentElement.lang=l;
+  document.querySelectorAll("[data-i18n]").forEach(e=>{const v=l==="en"?T.en[e.dataset.i18n]:DE[e.dataset.i18n];if(v!=null)e.innerHTML=v});
+  btn.textContent=l==="en"?"DE":"EN";
+  try{localStorage.setItem("lang",l)}catch(e){}
+  fillVersion();
+}
+let ver=null;
+function fillVersion(){
+  if(!ver)return;
+  const en=document.documentElement.lang==="en";
+  document.getElementById("alpha").textContent="Alpha "+ver.replace(/^v/,"").replace(/-alpha.*/,"");
+  document.getElementById("dlinfo").textContent=(en?"Windows 10/11 · free · MIT license · ":"Windows 10/11 · kostenlos · MIT-Lizenz · ")+ver;
+}
+btn.onclick=()=>setLang(document.documentElement.lang==="en"?"de":"en");
+let l=null;try{l=localStorage.getItem("lang")}catch(e){}
+if(!l)l=(navigator.language||"de").startsWith("de")?"de":"en";
+if(l==="en")setLang("en");
+fetch("https://api.github.com/repos/Niklas970/faderust/releases/latest").then(r=>r.ok?r.json():null).then(j=>{
+  if(!j)return;
+  ver=j.tag_name;
+  const a=(j.assets||[]).find(a=>/setup\.exe$/.test(a.name));
+  if(a)document.getElementById("dl").href=a.browser_download_url;
+  fillVersion();
+}).catch(()=>{});
+</script>
+</body>
+</html>
