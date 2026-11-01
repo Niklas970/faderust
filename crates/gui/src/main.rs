@@ -2006,16 +2006,17 @@ impl App {
                     if !on {
                         v.border.color = mix(border(), accent(), 0.3);
                         let hot = matches!(st, button::Status::Hovered | button::Status::Pressed);
-                        let lift = if text_color().r > 0.5 {
-                            Color::WHITE
+                        // Plain black on dark, plain white on light.
+                        let (base, lift) = if text_color().r > 0.5 {
+                            (Color::BLACK, Color::WHITE)
                         } else {
-                            Color::BLACK
+                            (Color::WHITE, Color::BLACK)
                         };
-                        let k = if hot { 0.2 } else { 0.12 };
-                        v.background = Some(style::vertical(
-                            mix(panel_2(), lift, k + 0.05),
-                            mix(panel_2(), lift, k),
-                        ));
+                        v.background = Some(Background::Color(if hot {
+                            mix(base, lift, 0.12)
+                        } else {
+                            base
+                        }));
                     }
                     v.border.width = 1.5;
                     v.border.radius = 6.0.into();
