@@ -8,6 +8,12 @@
   <a href="https://github.com/Niklas970/faderust/releases/latest"><img src="https://img.shields.io/github/v/release/Niklas970/faderust?label=Download" alt="Najnowsza wersja"></a>
   <a href="https://github.com/Niklas970/faderust/actions/workflows/ci.yml"><img src="https://github.com/Niklas970/faderust/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Niklas970/faderust" alt="Licencja MIT"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078d4" alt="Windows 10 | 11">
+  <img src="https://img.shields.io/badge/status-alpha-e2793f" alt="Alpha">
+  <a href="https://github.com/Niklas970/faderust/releases"><img src="https://img.shields.io/github/downloads/Niklas970/faderust/total?label=Downloads" alt="Downloads"></a>
+  <a href="https://github.com/Niklas970/faderust/stargazers"><img src="https://img.shields.io/github/stars/Niklas970/faderust?style=flat" alt="Stars"></a>
+  <a href="https://github.com/Niklas970/faderust/commits/main"><img src="https://img.shields.io/github/last-commit/Niklas970/faderust" alt="Last commit"></a>
+  <img src="https://img.shields.io/badge/Rust-stable-dea584?logo=rust&logoColor=white" alt="Rust">
 </p>
 
 <p align="center">
