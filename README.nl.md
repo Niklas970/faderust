@@ -5,14 +5,14 @@
 <h1 align="center">Faderust</h1>
 
 <p align="center">
-  Audiomixer voor Windows, een compact, open alternatief voor Voicemeeter.<br>
-  Elke uitgang krijgt een eigen mix, apparaten mogen tijdens het gebruik komen en gaan, en Faderust brengt zijn eigen virtuele kabels mee.
-</p>
-
-<p align="center">
   <a href="https://github.com/Niklas970/faderust/releases/latest"><img src="https://img.shields.io/github/v/release/Niklas970/faderust?label=Download" alt="Nieuwste versie"></a>
   <a href="https://github.com/Niklas970/faderust/actions/workflows/ci.yml"><img src="https://github.com/Niklas970/faderust/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Niklas970/faderust" alt="MIT-licentie"></a>
+</p>
+
+<p align="center">
+  Audiomixer voor Windows, een compact, open alternatief voor Voicemeeter.<br>
+  Elke uitgang krijgt een eigen mix, apparaten mogen tijdens het gebruik komen en gaan, en Faderust brengt zijn eigen virtuele kabels mee.
 </p>
 
 ![Faderust-paneel met apparaten, programma’s en drie uitgangen](assets/screenshot.png)

@@ -5,14 +5,14 @@
 <h1 align="center">Faderust</h1>
 
 <p align="center">
-  Audio-Mixer für Windows, als schlanker, offener Ersatz für Voicemeeter.<br>
-  Jeder Ausgang bekommt seine eigene Mischung, Geräte dürfen im Betrieb kommen und gehen, virtuelle Kabel bringt Faderust selbst mit.
-</p>
-
-<p align="center">
   <a href="https://github.com/Niklas970/faderust/releases/latest"><img src="https://img.shields.io/github/v/release/Niklas970/faderust?label=Download" alt="Neueste Version"></a>
   <a href="https://github.com/Niklas970/faderust/actions/workflows/ci.yml"><img src="https://github.com/Niklas970/faderust/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Niklas970/faderust" alt="Lizenz MIT"></a>
+</p>
+
+<p align="center">
+  Audio-Mixer für Windows, als schlanker, offener Ersatz für Voicemeeter.<br>
+  Jeder Ausgang bekommt seine eigene Mischung, Geräte dürfen im Betrieb kommen und gehen, virtuelle Kabel bringt Faderust selbst mit.
 </p>
 
 ![Faderust im Pult mit Geräten, Programmen und drei Ausgängen](assets/screenshot.png)
