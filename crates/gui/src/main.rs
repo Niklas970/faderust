@@ -70,6 +70,8 @@ pub struct Strip {
     pub shown: f32,
     /// Fader position as drawn (0..1, eased towards the real one).
     pub pos: f32,
+    /// Speed of the fader glide (the spring's velocity).
+    vel: f32,
     target: f32,
     pub connected: bool,
     /// Input device id (`app:name.exe` for programs).
@@ -105,6 +107,8 @@ pub struct Out {
     pub shown: f32,
     /// Fader position as drawn (0..1, eased towards the real one).
     pub pos: f32,
+    /// Speed of the fader glide (the spring's velocity).
+    vel: f32,
     target: f32,
     /// Was playing at the last snapshot (a hidden output returns with sound).
     playing: bool,
@@ -445,18 +449,33 @@ fn ease(shown: f32, target: f32, dt: f32) -> f32 {
     }
 }
 
-/// Glides the drawn fader position towards the real one; true while it moves.
-fn glide(pos: &mut f32, db: f32, dt: f32) -> bool {
+/// Glides the drawn fader position towards the real one with a critically
+/// damped spring (soft start, soft stop); true while it moves.
+fn glide(pos: &mut f32, vel: &mut f32, db: f32, dt: f32) -> bool {
     let want = scale::to_pos(db);
     if *pos == want {
         return false;
     }
-    if (*pos - want).abs() < 0.0005 {
+    let change = *pos - want;
+    if change.abs() < 0.0003 && vel.abs() < 0.01 {
         *pos = want;
-    } else {
-        *pos += (want - *pos) * (1.0 - (-dt / 0.045).exp());
+        *vel = 0.0;
+        return true;
     }
+    // Smooth damping: reaches the target in about `SMOOTH` seconds.
+    const SMOOTH: f32 = 0.08;
+    let omega = 2.0 / SMOOTH;
+    let x = omega * dt;
+    let k = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x);
+    let temp = (*vel + omega * change) * dt;
+    *vel = (*vel - omega * temp) * k;
+    *pos = want + (change + temp) * k;
     true
+}
+
+/// True while a fader is still gliding.
+fn gliding(pos: f32, db: f32) -> bool {
+    pos != scale::to_pos(db)
 }
 
 fn level_of(db: f32) -> f32 {
@@ -1067,6 +1086,7 @@ impl App {
                 muted: false,
                 shown: -120.0,
                 pos: 0.75,
+                vel: 0.0,
                 target: -120.0,
                 connected: false,
                 device: String::new(),
@@ -1134,7 +1154,7 @@ impl App {
                 }
             }
             s.shown = ease(s.shown, s.target, dt);
-            if glide(&mut s.pos, s.db, dt) {
+            if glide(&mut s.pos, &mut s.vel, s.db, dt) {
                 s.cache.clear();
             }
         }
@@ -1149,6 +1169,7 @@ impl App {
                 muted: false,
                 shown: -120.0,
                 pos: 0.75,
+                vel: 0.0,
                 target: -120.0,
                 playing: false,
             });
@@ -1181,7 +1202,7 @@ impl App {
             }
             m.playing = playing;
             m.shown = ease(m.shown, m.target, dt);
-            if glide(&mut m.pos, m.db, dt) {
+            if glide(&mut m.pos, &mut m.vel, m.db, dt) {
                 m.cache.clear();
             }
         }
@@ -3003,8 +3024,15 @@ impl App {
     }
 
     fn subscription(&self) -> Subscription<Message> {
+        let moving = self.strips.iter().any(|s| gliding(s.pos, s.db))
+            || self.outs.iter().any(|m| gliding(m.pos, m.db));
         let every = if shell::is_visible(&self.visible) {
-            33
+            // Faster while a fader glides, so the movement is fluid.
+            if moving {
+                11
+            } else {
+                33
+            }
         } else {
             250
         };
@@ -3116,4 +3144,23 @@ fn main() -> iced::Result {
         })
         .title("Faderust")
         .run()
+}
+
+#[cfg(test)]
+mod glide_tests {
+    use super::*;
+
+    #[test]
+    fn fader_glides_without_overshoot_and_settles() {
+        let (mut pos, mut vel) = (0.2_f32, 0.0_f32);
+        let want = scale::to_pos(0.0);
+        let mut last = pos;
+        for _ in 0..300 {
+            glide(&mut pos, &mut vel, 0.0, 1.0 / 90.0);
+            assert!(pos >= last - 1e-6 && pos <= want + 1e-4, "overshoot");
+            last = pos;
+        }
+        assert_eq!(pos, want);
+        assert!(!glide(&mut pos, &mut vel, 0.0, 1.0 / 90.0));
+    }
 }
