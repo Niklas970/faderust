@@ -1950,12 +1950,18 @@ impl App {
                 .center_y(Length::Fill),
             )
             .height(if compact { 28 } else { 36 })
-            .padding([0, if compact { 10 } else { 16 }])
+            .padding([0, if compact { 12 } else { 22 }])
             .on_press(Message::Open(Some(d)))
             .style(move |t, st| {
                 let mut v = key(if on { Look::Primary } else { Look::Secondary })(t, st);
                 if !on {
                     v.border.color = mix(border(), accent(), 0.5);
+                    let hot = matches!(st, button::Status::Hovered | button::Status::Pressed);
+                    let k = if hot { 0.34 } else { 0.22 };
+                    v.background = Some(style::vertical(
+                        mix(panel_2(), accent(), k + 0.08),
+                        mix(panel_2(), accent(), k),
+                    ));
                 }
                 v.border.width = 1.5;
                 v.border.radius = 6.0.into();

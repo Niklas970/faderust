@@ -230,7 +230,7 @@ pub enum Look {
     Danger,
 }
 
-fn vertical(top: Color, bottom: Color) -> Background {
+pub fn vertical(top: Color, bottom: Color) -> Background {
     Background::Gradient(
         gradient::Linear::new(iced::Radians(std::f32::consts::PI))
             .add_stop(0.0, top)

@@ -82,12 +82,14 @@ fn frame<'a>(
                     .style(key(Look::Secondary)),
             ]
             .align_y(Vertical::Center),
-            scroll(container(body).padding(iced::Padding::default().right(18))).height(if tall {
+            scroll(container(body).padding(iced::Padding::default().right(28))).height(if tall {
                 Length::Fixed(680.0)
             } else {
                 Length::Shrink
             }),
-            container(footer).align_right(Length::Fill),
+            container(footer)
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Right),
         ]
         .spacing(12),
     )
@@ -1081,7 +1083,7 @@ fn settings(app: &App) -> Element<'_, Message> {
         Some(u) if !u.supported => hint("Das Faderust Kabel gibt es nur unter Windows."),
         Some(u) => {
             let mut col = column![hint(
-                "Virtuelle Kabel für Programme und Mikrofon: ein USB-Soundgerät, das Faderust selbst bereitstellt. Die Einrichtung installiert einmalig usbip-win2 (frei, von Microsoft signiert, taucht nicht als eigene App auf) und fragt einmal nach Administratorrechten.",
+                "Virtuelle Kabel für Programm-Mikro und Programme, die du nicht über die Boxen hören willst. Faderust stellt sie selbst als USB-Soundgerät bereit, ohne zusätzliche Treiber-Apps. Einmalige Einrichtung, dafür sind Administratorrechte nötig.",
             )]
             .spacing(10);
             if !u.installed {
@@ -1157,7 +1159,7 @@ fn settings(app: &App) -> Element<'_, Message> {
         check(app.autostart)
             .label("Mit Windows starten (im Tray, ohne Fenster)")
             .on_toggle(|v| edit(Edit::Autostart(v))),
-        h3("Faderust Kabel (Test)"),
+        h3("Faderust Kabel"),
         cable_section,
         h3("Stream Deck"),
         deck_section(app),
@@ -1170,10 +1172,15 @@ fn settings(app: &App) -> Element<'_, Message> {
         ]
         .spacing(8)
         .align_y(Vertical::Center),
-        hint("Änderungen werden automatisch gespeichert."),
     ]
     .spacing(10);
-    frame("Geräte".into(), 760.0, true, body.into(), no_footer())
+    frame(
+        "Geräte".into(),
+        760.0,
+        true,
+        body.into(),
+        hint("Änderungen werden automatisch gespeichert."),
+    )
 }
 
 /// "Programm-Mikro": an output on a virtual cable, so Discord, Teams & co.

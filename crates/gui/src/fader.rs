@@ -132,10 +132,10 @@ impl canvas::Program<Message> for Fader<'_> {
                 Some(canvas::Action::capture())
             }
             Mouse(mouse::Event::WheelScrolled { delta }) if cursor.is_over(bounds) => {
-                // Fine steps: half a dB per notch.
+                // One dB per notch.
                 let dy = match delta {
-                    mouse::ScrollDelta::Lines { y, .. } => *y * 0.5,
-                    mouse::ScrollDelta::Pixels { y, .. } => y.signum() * 0.5,
+                    mouse::ScrollDelta::Lines { y, .. } => *y,
+                    mouse::ScrollDelta::Pixels { y, .. } => y.signum(),
                 };
                 let next = if self.db <= scale::OFF {
                     if dy > 0.0 {
@@ -196,7 +196,7 @@ impl Fader<'_> {
 
         // Narrow: no scale, the cap and slot move left (58 px track).
         let wide = !self.narrow;
-        let (sx, cx) = if wide { (51.0, 24.0) } else { (45.0, 26.0) };
+        let (sx, cx) = if wide { (51.0, 24.0) } else { (45.0, 30.0) };
         // The scale sits left of the slot: labels end at `lx`, marks follow.
         let (lx, marks) = if wide {
             (22.0, [29.0, 47.0])
@@ -285,9 +285,9 @@ impl Fader<'_> {
         }
 
         // Cap: graphite gradient, accent edges, index line and a value window.
-        let (cw, ch) = if wide { (68.0, 44.0) } else { (48.0, 40.0) };
+        let (cw, ch) = if wide { (68.0, 44.0) } else { (40.0, 40.0) };
         let cy = cap_y - ch / 2.0;
-        let win_w = if wide { 52.0 } else { 40.0 };
+        let win_w = if wide { 52.0 } else { 34.0 };
         let cap = Path::rounded_rectangle(Point::new(cx, cy), Size::new(cw, ch), 4.0.into());
         for (grow, alpha) in [(6.0, 0.10), (3.0, 0.18), (1.0, 0.30)] {
             f.fill(
@@ -363,7 +363,7 @@ impl Fader<'_> {
         let total = f.height();
         let (top, h) = (Self::top(), Self::height(total));
         let (mx, mw) = if self.narrow {
-            (64.0, 14.0)
+            (82.0, 14.0)
         } else {
             (106.0, 16.0)
         };

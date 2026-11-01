@@ -58,7 +58,7 @@ const TABLE: &[(&str, &str)] = &[
     ("Eingang", "Input"),
     ("Eingänge", "Inputs"),
     ("Entfernen", "Remove"),
-    ("Faderust Kabel (Test)", "Faderust cable (test)"),
+    ("Faderust Kabel", "Faderust cable"),
     ("Faderust Kabel einrichten", "Set up Faderust cable"),
     ("Faderust Kabel verwenden", "Use Faderust cable"),
     ("Faderust beendet", "Faderust closed"),
@@ -147,8 +147,8 @@ const TABLE: &[(&str, &str)] = &[
     ("Stumm unter der Schwelle", "Mute below the threshold"),
     ("Stumm", "Mute"),
     (
-        "Virtuelle Kabel für Programme und Mikrofon: ein USB-Soundgerät, das Faderust selbst bereitstellt. Die Einrichtung installiert einmalig usbip-win2 (frei, von Microsoft signiert, taucht nicht als eigene App auf) und fragt einmal nach Administratorrechten.",
-        "Virtual cables for programs and microphone: a USB sound device that Faderust provides itself. Setup installs usbip-win2 once (free, signed by Microsoft, does not show up as its own app) and asks for administrator rights once.",
+        "Virtuelle Kabel für Programm-Mikro und Programme, die du nicht über die Boxen hören willst. Faderust stellt sie selbst als USB-Soundgerät bereit, ohne zusätzliche Treiber-Apps. Einmalige Einrichtung, dafür sind Administratorrechte nötig.",
+        "Virtual cables for the program mic and for programs you don't want on the speakers. Faderust provides them itself as a USB sound device, no extra driver apps. One-time setup that needs administrator rights.",
     ),
     (
         "Was Faderust zuletzt gemeldet hat. Bei einem Fehler bitte den Text kopieren und in ein Issue einfügen.",
