@@ -45,6 +45,8 @@ impl DriftController {
     /// one and returns the relative ratio (output/input) to apply.
     /// Values below 1 consume input faster.
     pub fn update(&mut self, fill_frames: usize, dt_s: f64) -> f64 {
+        // A negative or NaN step would flip the integrator and diverge.
+        let dt_s = if dt_s.is_finite() { dt_s.max(0.0) } else { 0.0 };
         let fill = fill_frames as f64;
         let smoothed = match self.smoothed {
             None => fill,
