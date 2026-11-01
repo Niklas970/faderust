@@ -1,3 +1,5 @@
+<p align="center"><b>Deutsch</b> · <a href="README.en.md">English</a> · <a href="README.fr.md">Français</a> · <a href="README.es.md">Español</a> · <a href="README.it.md">Italiano</a> · <a href="README.nl.md">Nederlands</a> · <a href="README.pl.md">Polski</a></p>
+
 <p align="center"><img src="assets/logo.svg" width="112" alt="Faderust logo"></p>
 
 <h1 align="center">Faderust</h1>
