@@ -248,58 +248,74 @@ pub fn look_text(look: Look) -> Color {
     }
 }
 
+/// Top colour, bottom colour and edge of a key in a given state.
+fn key_colors(look: Look, status: button::Status) -> (Color, Color, Color) {
+    let base = match look {
+        Look::Primary => accent(),
+        Look::Secondary => panel_2(),
+        Look::Danger => danger(),
+    };
+    let lift = if text_color().r > 0.5 {
+        Color::WHITE
+    } else {
+        Color::BLACK
+    };
+    match status {
+        button::Status::Pressed => (
+            mix(base, Color::BLACK, 0.18),
+            mix(base, Color::BLACK, 0.08),
+            accent(),
+        ),
+        button::Status::Hovered => (mix(base, lift, 0.16), mix(base, lift, 0.06), accent_light()),
+        button::Status::Disabled => (mix(base, bg(), 0.5), mix(base, bg(), 0.5), border()),
+        button::Status::Active => (
+            mix(base, lift, 0.09),
+            base,
+            if look == Look::Secondary {
+                border()
+            } else {
+                mix(base, Color::BLACK, 0.3)
+            },
+        ),
+    }
+}
+
+fn key_style(look: Look, status: button::Status, flat: bool) -> button::Style {
+    let (top, bottom, edge) = key_colors(look, status);
+    button::Style {
+        // Dialog rows of many keys render wrongly with gradients on some
+        // graphics drivers, so those use one solid colour.
+        background: Some(if flat {
+            Background::Color(mix(top, bottom, 0.5))
+        } else {
+            vertical(top, bottom)
+        }),
+        text_color: look_text(look),
+        border: Border {
+            color: edge,
+            width: 1.0,
+            radius: 5.0.into(),
+        },
+        shadow: Shadow {
+            color: Color {
+                a: if flat { 0.0 } else { 0.25 },
+                ..Color::BLACK
+            },
+            offset: iced::Vector::new(0.0, 1.0),
+            blur_radius: 2.0,
+        },
+        snap: true,
+    }
+}
+
 /// A raised key with a soft gradient, a clear edge and hover/press states.
 pub fn key(look: Look) -> impl Fn(&Theme, button::Status) -> button::Style {
-    move |_, status| {
-        let base = match look {
-            Look::Primary => accent(),
-            Look::Secondary => panel_2(),
-            Look::Danger => danger(),
-        };
-        let lift = if text_color().r > 0.5 {
-            Color::WHITE
-        } else {
-            Color::BLACK
-        };
-        let (top, bottom, edge) = match status {
-            button::Status::Pressed => (
-                mix(base, Color::BLACK, 0.18),
-                mix(base, Color::BLACK, 0.08),
-                accent(),
-            ),
-            button::Status::Hovered => {
-                (mix(base, lift, 0.16), mix(base, lift, 0.06), accent_light())
-            }
-            button::Status::Disabled => (mix(base, bg(), 0.5), mix(base, bg(), 0.5), border()),
-            button::Status::Active => (
-                mix(base, lift, 0.09),
-                base,
-                if look == Look::Secondary {
-                    border()
-                } else {
-                    mix(base, Color::BLACK, 0.3)
-                },
-            ),
-        };
-        button::Style {
-            background: Some(vertical(top, bottom)),
-            text_color: look_text(look),
-            border: Border {
-                color: edge,
-                width: 1.0,
-                radius: 5.0.into(),
-            },
-            shadow: Shadow {
-                color: Color {
-                    a: 0.25,
-                    ..Color::BLACK
-                },
-                offset: iced::Vector::new(0.0, 1.0),
-                blur_radius: 2.0,
-            },
-            snap: true,
-        }
-    }
+    move |_, status| key_style(look, status, false)
+}
+
+/// Like `key`, but with a solid fill and no shadow (dialogs).
+pub fn flat(look: Look) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, status| key_style(look, status, true)
 }
 
 pub fn pick<'a, T, L, V, M>(
