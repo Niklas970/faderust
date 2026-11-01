@@ -99,26 +99,24 @@ Einstellungen: `%APPDATA%\io.github.niklas970.faderust\config.toml`, daneben das
 
 ## Entwicklung
 
-Rust für den Audio-Kern, Svelte 5 mit Tauri 2 für die Oberfläche.
+Rust für den Audio-Kern und die Oberfläche ([iced](https://iced.rs), kein WebView2).
 
 | Pfad | Inhalt |
 |---|---|
 | `crates/engine` | Audio-Kern: Geräte (WASAPI über cpal), Ringpuffer, Drift-Ausgleich, Mix-Matrix, Effekte, Programm-Aufnahme |
 | `crates/usbcable` | Faderust Kabel: virtuelles USB-Audiogerät über USB/IP |
-| `crates/app` | Tauri-App: Befehle, Konfiguration, Tray, Updater |
-| `crates/app/ui` | Oberfläche |
+| `crates/core` | Logik hinter der Oberfläche: Konfiguration, Geräte, Programme, Kabel, Fernsteuerung, Updater |
+| `crates/gui` | Das Programm `faderust`: iced-Fenster, Tray, Autostart |
 | `streamdeck` | Stream-Deck-Plugin |
 
-Voraussetzungen: Rust (stable), Node.js 22, unter Windows WebView2.
+Voraussetzungen: Rust (stable); für das Stream-Deck-Plugin Node.js.
 
 ```sh
 cargo test
-cd crates/app/ui && npm ci && npm run build && cd ../../..
 cargo run --release -p faderust
 ```
 
-- `npm run dev` in `crates/app/ui` zeigt die Oberfläche im Browser mit simulierten Geräten.
-- Setup bauen: in `crates/app` `ui/node_modules/.bin/tauri build`, Ergebnis unter `target/release/bundle/nsis/`. Releases entstehen über den Workflow „Release“.
+- Setup bauen: `makensis` mit `installer/faderust.nsi` (Parameter stehen im Kopf der Datei). Releases entstehen über den Workflow „Release“.
 - Engine ohne Oberfläche: `cargo run --release -p faderust-engine --example mixer -- --list`
 
 Vor einem Commit: `cargo fmt`, `cargo clippy -- -D warnings`, `cargo test`. Neue Abhängigkeiten brauchen eine freizügige Lizenz (`cargo deny check`).

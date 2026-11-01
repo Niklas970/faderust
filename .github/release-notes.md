@@ -1,8 +1,10 @@
-## Neu in 0.6.4
+## Neu in 0.7.0
 
-- **USBip-Eintrag verschwindet auch bei bestehender Einrichtung:** Wer das Faderust Kabel schon vor 0.6.3 eingerichtet hat, sah usbip-win2 weiter als eigene App in Windows. Faderust erkennt das jetzt und bietet unter „Geräte“ → „Faderust Kabel“ die Einrichtung noch einmal an (eine Administrator-Abfrage), danach ist der Eintrag ausgeblendet
-- **Geräte-Einstellungen speichern von selbst:** Änderungen im Dialog „Geräte“ werden kurz nach der letzten Eingabe übernommen, der Speichern-Knopf entfällt (es bleibt „Schließen“)
-- **Klarere Namen für das Faderust Kabel:** statt „Lautsprecher (Faderust Cable)“ steht in der Oberfläche „Faderust Kabel (Wiedergabe)“ bzw. „(Aufnahme)“, bei mehreren mit Nummer. Das Kabel meldet Windows außerdem die Namen „Playback“ und „Recording“ (Versuch, ob Windows sie statt „Lautsprecher/Mikrofon“ übernimmt)
+- **Neue Oberfläche:** Faderust läuft jetzt ohne WebView2 (iced statt Tauri). Das spart Arbeitsspeicher und CPU, startet schneller und braucht keine Browser-Komponente mehr
+- **Pult und Matrix** mit Streifen für Geräte und Programme, dB-Skala an allen Fadern, weich gleitende Fader (Mausrad 1 dB pro Schritt, nie „-0“)
+- **Design:** dunkel, hell oder wie Windows, eigene Akzent- und Signalfarbe mit Farbwähler, Deutsch/Englisch
+- **Kompaktansicht und „Immer im Vordergrund“** in der Titelleiste, einzelne Programme aus- und einblendbar
+- **Aufgeräumt:** dezente Trennlinien, kräftigere Navigation, Hinweise und Kabel-Beschreibung überarbeitet
 
 ## Installation
 

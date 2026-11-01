@@ -1,0 +1,19 @@
+[package]
+name = "faderust-core"
+description = "Faderust without a window: configuration, audio thread, Stream Deck remote, USB cable"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+faderust-engine = { path = "../engine" }
+faderust-usbcable = { path = "../usbcable" }
+getrandom = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1.1"
+tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+base64 = "0.22"
+minisign-verify = "0.3"

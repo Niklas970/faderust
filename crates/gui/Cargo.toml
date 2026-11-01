@@ -1,0 +1,20 @@
+[package]
+name = "faderust"
+description = "Faderust: mixer window built with iced"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+faderust-core = { path = "../core" }
+iced = { version = "0.14", features = ["canvas", "tokio", "image"] }
+png = "0.17"
+tokio = { version = "1", features = ["rt"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+tray-icon = { version = "0.25", default-features = false }

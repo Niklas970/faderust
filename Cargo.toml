@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/engine", "crates/app", "crates/usbcable"]
+members = ["crates/engine", "crates/core", "crates/gui", "crates/usbcable"]
 
 [workspace.package]
-version = "0.6.4"
+version = "0.7.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/Niklas970/faderust"

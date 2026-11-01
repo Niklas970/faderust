@@ -31,7 +31,7 @@ jobs:
             # Source and manifests; the lock file decides what gets compiled.
             files: '\.rs$|(^|/)Cargo\.(toml|lock)$|^\.github/workflows/codeql\.yml$'
           - language: javascript-typescript
-            files: '^(crates/app/ui|streamdeck)/|^\.github/workflows/codeql\.yml$'
+            files: '^streamdeck/|^\.github/workflows/codeql\.yml$'
           - language: actions
             files: '^\.github/|^\.github/workflows/codeql\.yml$'
     steps:

@@ -2,10 +2,9 @@
 /target/
 **/*.rs.bk
 
-# Tauri / frontend (E3)
+# Stream Deck plugin build
 node_modules/
 dist/
-crates/app/gen/
 
 # Editors / OS
 .vscode/
@@ -21,7 +20,3 @@ Thumbs.db
 # Local tool state
 .claude/
 CLAUDE.md
-
-# Stream Deck plugin copied in by the release workflow
-crates/app/resources/*.streamDeckPlugin
-crates/app/resources/*.version

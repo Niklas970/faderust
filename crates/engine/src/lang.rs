@@ -10,6 +10,11 @@ pub fn set(code: &str) {
     ENGLISH.store(code.to_lowercase().starts_with("en"), Relaxed);
 }
 
+/// Whether the interface is in English.
+pub fn is_english() -> bool {
+    ENGLISH.load(Relaxed)
+}
+
 /// `german` or `english`, whichever the interface uses.
 pub fn tr(german: &str, english: &str) -> String {
     pick(ENGLISH.load(Relaxed), german, english).to_string()
