@@ -1955,12 +1955,17 @@ impl App {
             .style(move |t, st| {
                 let mut v = key(if on { Look::Primary } else { Look::Secondary })(t, st);
                 if !on {
-                    v.border.color = mix(border(), accent(), 0.5);
+                    v.border.color = mix(border(), accent(), 0.3);
                     let hot = matches!(st, button::Status::Hovered | button::Status::Pressed);
-                    let k = if hot { 0.34 } else { 0.22 };
+                    let lift = if text_color().r > 0.5 {
+                        Color::WHITE
+                    } else {
+                        Color::BLACK
+                    };
+                    let k = if hot { 0.2 } else { 0.12 };
                     v.background = Some(style::vertical(
-                        mix(panel_2(), accent(), k + 0.08),
-                        mix(panel_2(), accent(), k),
+                        mix(panel_2(), lift, k + 0.05),
+                        mix(panel_2(), lift, k),
                     ));
                 }
                 v.border.width = 1.5;
