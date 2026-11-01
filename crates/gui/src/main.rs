@@ -2527,11 +2527,12 @@ impl App {
     /// Thin vertical rule between the groups.
     fn divider<'a>() -> Element<'a, Message> {
         container(space())
-            .width(1)
+            .width(2)
             .height(Length::Fill)
             .padding([6, 0])
             .style(|_| container::Style {
-                background: Some(Background::Color(hairline())),
+                // In the design colour.
+                background: Some(Background::Color(mix(panel(), accent(), 0.6))),
                 ..container::Style::default()
             })
             .into()
