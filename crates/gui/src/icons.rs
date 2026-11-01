@@ -9,7 +9,7 @@ use iced::{Color, Point, Rectangle, Renderer, Size, Theme};
 pub enum Glyph {
     /// A slim window with narrow strips.
     Compact,
-    /// A push pin: the window stays on top.
+    /// Two stacked windows: the window stays on top.
     Pin,
 }
 
@@ -60,36 +60,25 @@ impl<M> canvas::Program<M> for Icon {
                 }
             }
             Glyph::Pin => {
-                // A push pin, tilted: head, collar, tapered body, needle.
-                f.with_save(|f| {
-                    f.translate(iced::Vector::new(ox + 8.0 * k, oy + 8.0 * k));
-                    f.rotate(0.65);
-                    let q = |x: f32, y: f32| Point::new((x - 8.0) * k, (y - 8.0) * k);
-                    let head = Path::rounded_rectangle(
-                        q(6.0, 1.5),
-                        Size::new(4.0 * k, 2.5 * k),
-                        (1.0 * k).into(),
-                    );
-                    let collar = Path::rounded_rectangle(
-                        q(4.8, 4.0),
-                        Size::new(6.4 * k, 1.6 * k),
-                        (0.8 * k).into(),
-                    );
-                    let body = Path::new(|b| {
-                        b.move_to(q(6.0, 5.6));
-                        b.line_to(q(10.0, 5.6));
-                        b.line_to(q(9.0, 10.0));
-                        b.line_to(q(7.0, 10.0));
-                        b.close();
-                    });
-                    for shape in [&head, &collar, &body] {
-                        if self.on {
-                            f.fill(shape, Fill::from(self.color));
-                        }
-                        f.stroke(shape, line);
-                    }
-                    f.stroke(&Path::line(q(8.0, 10.0), q(8.0, 14.8)), line);
+                // Two windows: the front one stays on top of the one behind.
+                let mut dim = self.color;
+                dim.a *= 0.6;
+                let back = Path::new(|b| {
+                    b.move_to(p(2.2, 5.0));
+                    b.line_to(p(2.2, 12.3));
+                    b.line_to(p(3.2, 13.3));
+                    b.line_to(p(10.0, 13.3));
                 });
+                f.stroke(&back, line.with_color(dim));
+                let front = Path::rounded_rectangle(
+                    p(5.5, 2.0),
+                    Size::new(9.0 * k, 7.5 * k),
+                    (1.8 * k).into(),
+                );
+                if self.on {
+                    f.fill(&front, Fill::from(self.color));
+                }
+                f.stroke(&front, line);
             }
         }
         vec![f.into_geometry()]

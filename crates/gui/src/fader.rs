@@ -31,6 +31,8 @@ impl Kind {
 pub struct Fader<'a> {
     pub cache: &'a canvas::Cache,
     pub db: f32,
+    /// Drawn cap position (0..1), gliding towards `db`.
+    pub pos: f32,
     pub muted: bool,
     pub level: f32,
     /// The level already includes this fader (an output's master).
@@ -187,7 +189,7 @@ impl canvas::Program<Message> for Fader<'_> {
 impl Fader<'_> {
     fn draw_body(&self, f: &mut Frame) {
         let total = f.height();
-        let pos = scale::to_pos(self.db);
+        let pos = self.pos;
         let cap_y = Self::y_of(pos, total);
         let off = self.db <= scale::OFF;
         let (top, h) = (Self::top(), Self::height(total));

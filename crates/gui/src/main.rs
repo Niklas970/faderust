@@ -67,6 +67,8 @@ pub struct Strip {
     pub muted: bool,
     /// Meter as drawn (eased towards `target`).
     pub shown: f32,
+    /// Fader position as drawn (0..1, eased towards the real one).
+    pub pos: f32,
     target: f32,
     pub connected: bool,
     /// Input device id (`app:name.exe` for programs).
@@ -100,6 +102,8 @@ pub struct Out {
     pub db: f32,
     pub muted: bool,
     pub shown: f32,
+    /// Fader position as drawn (0..1, eased towards the real one).
+    pub pos: f32,
     target: f32,
     /// Was playing at the last snapshot (a hidden output returns with sound).
     playing: bool,
@@ -433,6 +437,20 @@ fn ease(shown: f32, target: f32, dt: f32) -> f32 {
     } else {
         target.max(shown - 12.0 * dt)
     }
+}
+
+/// Glides the drawn fader position towards the real one; true while it moves.
+fn glide(pos: &mut f32, db: f32, dt: f32) -> bool {
+    let want = scale::to_pos(db);
+    if *pos == want {
+        return false;
+    }
+    if (*pos - want).abs() < 0.0005 {
+        *pos = want;
+    } else {
+        *pos += (want - *pos) * (1.0 - (-dt / 0.045).exp());
+    }
+    true
 }
 
 fn level_of(db: f32) -> f32 {
@@ -1038,6 +1056,7 @@ impl App {
                 db: 0.0,
                 muted: false,
                 shown: -120.0,
+                pos: 0.75,
                 target: -120.0,
                 connected: false,
                 device: String::new(),
@@ -1105,6 +1124,9 @@ impl App {
                 }
             }
             s.shown = ease(s.shown, s.target, dt);
+            if glide(&mut s.pos, s.db, dt) {
+                s.cache.clear();
+            }
         }
         while self.outs.len() < snap.outputs.len() {
             self.outs.push(Out {
@@ -1116,6 +1138,7 @@ impl App {
                 db: 0.0,
                 muted: false,
                 shown: -120.0,
+                pos: 0.75,
                 target: -120.0,
                 playing: false,
             });
@@ -1148,6 +1171,9 @@ impl App {
             }
             m.playing = playing;
             m.shown = ease(m.shown, m.target, dt);
+            if glide(&mut m.pos, m.db, dt) {
+                m.cache.clear();
+            }
         }
     }
 
@@ -2243,6 +2269,7 @@ impl App {
         let fader = Canvas::new(Fader {
             cache: &s.cache,
             db: s.db,
+            pos: s.pos,
             muted: s.muted,
             level: s.shown,
             kind: Kind::Input(i),
@@ -2329,6 +2356,7 @@ impl App {
         let fader = Canvas::new(Fader {
             cache: &m.cache,
             db: m.db,
+            pos: m.pos,
             muted: m.muted,
             level: m.shown,
             kind: Kind::Master(o),
