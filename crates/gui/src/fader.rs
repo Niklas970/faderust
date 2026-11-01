@@ -130,20 +130,19 @@ impl canvas::Program<Message> for Fader<'_> {
                 Some(canvas::Action::capture())
             }
             Mouse(mouse::Event::WheelScrolled { delta }) if cursor.is_over(bounds) => {
-                let y = match delta {
-                    mouse::ScrollDelta::Lines { y, .. } | mouse::ScrollDelta::Pixels { y, .. } => {
-                        *y
-                    }
+                // Fine steps: half a dB per notch.
+                let dy = match delta {
+                    mouse::ScrollDelta::Lines { y, .. } => *y * 0.5,
+                    mouse::ScrollDelta::Pixels { y, .. } => y.signum() * 0.5,
                 };
-                let step = if y > 0.0 { 1.0 } else { -1.0 };
                 let next = if self.db <= scale::OFF {
-                    if step > 0.0 {
+                    if dy > 0.0 {
                         -59.0
                     } else {
                         scale::OFF
                     }
                 } else {
-                    self.db + step
+                    self.db + dy
                 };
                 Some(set(next).and_capture())
             }
@@ -198,9 +197,9 @@ impl Fader<'_> {
         let (sx, cx) = if wide { (51.0, 24.0) } else { (45.0, 26.0) };
         // The scale sits left of the slot: labels end at `lx`, marks follow.
         let (lx, marks) = if wide {
-            (26.0, [29.0, 47.0])
+            (22.0, [29.0, 47.0])
         } else {
-            (21.0, [22.0, 0.0])
+            (18.0, [22.0, 0.0])
         };
         let slot_w = if wide { 14.0 } else { 10.0 };
         let bar_w = if wide { 6.0 } else { 4.0 };
@@ -222,7 +221,7 @@ impl Fader<'_> {
                 content: label.to_string(),
                 position: Point::new(lx, y),
                 color: if zero { text_color() } else { muted_color() },
-                size: Pixels(11.0),
+                size: Pixels(if wide { 11.0 } else { 10.0 }),
                 font: MONO,
                 align_x: Horizontal::Right.into(),
                 align_y: Vertical::Center,

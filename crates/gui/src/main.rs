@@ -1900,7 +1900,7 @@ impl App {
             button(
                 container(
                     {
-                        let icon = text(icon).size(14).color(if on {
+                        let icon = text(icon).size(17).color(if on {
                             on_accent()
                         } else {
                             accent_light()
@@ -1910,7 +1910,7 @@ impl App {
                         } else {
                             row![
                                 icon,
-                                text(label).size(13).font(BOLD).color(if on {
+                                text(label).size(14).font(BOLD).color(if on {
                                     on_accent()
                                 } else {
                                     text_color()
@@ -1923,10 +1923,18 @@ impl App {
                 )
                 .center_y(Length::Fill),
             )
-            .height(if compact { 26 } else { 32 })
-            .padding([0, if compact { 9 } else { 14 }])
+            .height(if compact { 28 } else { 36 })
+            .padding([0, if compact { 10 } else { 16 }])
             .on_press(Message::Open(Some(d)))
-            .style(key(if on { Look::Primary } else { Look::Secondary }))
+            .style(move |t, st| {
+                let mut v = key(if on { Look::Primary } else { Look::Secondary })(t, st);
+                if !on {
+                    v.border.color = mix(border(), accent(), 0.5);
+                }
+                v.border.width = 1.5;
+                v.border.radius = 6.0.into();
+                v
+            })
         };
         let win = |label: &'static str, close: bool, msg: Message| {
             button(container(text(label).size(12).color(muted_color())).center(Length::Fill))
@@ -2215,7 +2223,7 @@ impl App {
                     .color(if on { on_accent() } else { muted_color() })
                     .center(),
             )
-            .width(if narrow { 26.0 } else { 34.0 })
+            .width(if narrow { 22.0 } else { 34.0 })
             .height(22)
             .padding(0)
             .style(key(if on { Look::Primary } else { Look::Secondary }));
@@ -2225,7 +2233,7 @@ impl App {
             }
             .into()
         }))
-        .spacing(4);
+        .spacing(if narrow { 3 } else { 4 });
         container(chips).center_x(Length::Fill).into()
     }
 
@@ -2282,11 +2290,10 @@ impl App {
         };
         let top: Element<'_, Message> = if s.program {
             row![
-                space().width(22),
                 Self::chips(&s.routes, Some(i), narrow),
                 dialogs::tip(
                     button(text("✕").size(10).color(text_color()).center())
-                        .width(22)
+                        .width(20)
                         .height(22)
                         .padding(0)
                         .on_press(Message::Edit(Edit::Dismiss(i)))
@@ -2294,6 +2301,7 @@ impl App {
                     "Programm ausblenden",
                 ),
             ]
+            .spacing(3)
             .align_y(Vertical::Center)
             .into()
         } else {
@@ -2425,15 +2433,20 @@ impl App {
             strips.into()
         };
         container(column![head, strips].spacing(6).height(Length::Fill))
-            .padding(8)
+            .padding([8, 10])
             .width(if fill { Length::Fill } else { Length::Shrink })
             .height(Length::Fill)
+            .into()
+    }
+
+    /// Thin vertical rule between the groups.
+    fn divider<'a>() -> Element<'a, Message> {
+        container(space())
+            .width(1)
+            .height(Length::Fill)
+            .padding([6, 0])
             .style(|_| container::Style {
-                border: Border {
-                    color: hairline(),
-                    width: 1.0,
-                    radius: 8.0.into(),
-                },
+                background: Some(Background::Color(hairline())),
                 ..container::Style::default()
             })
             .into()
@@ -2532,9 +2545,9 @@ impl App {
             true,
         );
         if self.masters_left {
-            row![outputs, devices, programs].spacing(10)
+            row![outputs, Self::divider(), devices, Self::divider(), programs].spacing(2)
         } else {
-            row![devices, programs, outputs].spacing(10)
+            row![devices, Self::divider(), programs, Self::divider(), outputs].spacing(2)
         }
         .height(Length::Fill)
         .into()

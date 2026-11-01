@@ -37,13 +37,15 @@ pub fn clamp(d: f32) -> f32 {
     if d <= -60.0 {
         OFF
     } else {
-        ((d * 2.0).round() / 2.0).min(12.0)
+        ((d * 2.0).round() / 2.0).min(12.0) + 0.0
     }
 }
 
 pub fn format(d: f32) -> String {
     if d <= OFF {
         "−∞".into()
+    } else if d.abs() < 0.05 {
+        "0.0".into()
     } else {
         format!("{}{:.1}", if d > 0.0 { "+" } else { "" }, d)
     }

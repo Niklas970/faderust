@@ -82,7 +82,7 @@ fn frame<'a>(
                     .style(key(Look::Secondary)),
             ]
             .align_y(Vertical::Center),
-            scroll(container(body).padding(iced::Padding::default().right(10))).height(if tall {
+            scroll(container(body).padding(iced::Padding::default().right(18))).height(if tall {
                 Length::Fixed(680.0)
             } else {
                 Length::Shrink
