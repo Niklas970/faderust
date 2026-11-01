@@ -558,7 +558,8 @@ impl<B: AudioBackend> Engine<B> {
         let mut producers = Vec::new();
         for (i, state) in self.inputs.iter().enumerate() {
             match (&self.live_in[i], &state.device) {
-                (Some(_), Some((_, in_format))) => {
+                // A stream that just failed is about to be rebuilt: no lane to it.
+                (Some(live), Some((_, in_format))) if !live.failed.load(Relaxed) => {
                     let stats = Arc::clone(&self.lanes[i][o]);
                     let (producer, lane) = lane(
                         LaneSpec {
@@ -627,7 +628,7 @@ impl<B: AudioBackend> Engine<B> {
         let mut lanes = Vec::new();
         for (o, state) in self.outputs.iter().enumerate() {
             match (&self.live_out[o], &state.device) {
-                (Some(_), Some((_, out_format))) => {
+                (Some(live), Some((_, out_format))) if !live.failed.load(Relaxed) => {
                     let stats = Arc::clone(&self.lanes[i][o]);
                     let (producer, lane) = lane(
                         LaneSpec {
@@ -715,7 +716,7 @@ pub fn feeds_back(output: &str, input: &str) -> bool {
     if let Some(cable) = crate::apps::own_cable(&output) {
         return crate::apps::own_cable(input) == Some(cable);
     }
-    output.contains("input") && output.replacen("input", "output", 1) == input.to_lowercase()
+    output.contains("input") && output.replace("input", "output") == input.to_lowercase()
 }
 
 /// Finds a device whose id equals `pattern` or whose name contains it
@@ -1307,6 +1308,11 @@ mod tests {
         assert!(!feeds_back(
             "Lautsprecher (USB Audio)",
             "Mikrofon (USB Audio)"
+        ));
+        // Every "input" is swapped, not just the first.
+        assert!(feeds_back(
+            "Input Mixer (Cable Input)",
+            "Output Mixer (Cable Output)"
         ));
     }
 
