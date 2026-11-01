@@ -417,6 +417,44 @@ pub fn apply_preset(state: &AppState, name: &str) -> Result<(), String> {
     send(state, Command::ApplyGains)
 }
 
+/// The preset as JSON text for a file, or an error if there is none.
+pub fn export_preset(name: &str, state: &AppState) -> Result<String, String> {
+    let config = state.config.lock().unwrap_or_else(|e| e.into_inner());
+    let preset = config
+        .presets
+        .iter()
+        .find(|p| p.name == name)
+        .ok_or_else(|| {
+            format!(
+                "{} {name}",
+                faderust_engine::lang::tr("Preset gibt es nicht:", "Preset does not exist:")
+            )
+        })?;
+    serde_json::to_string_pretty(preset).map_err(|e| e.to_string())
+}
+
+/// Adds a preset from JSON text (a file made by [`export_preset`]) and
+/// returns its name. An existing preset of that name is replaced.
+pub fn import_preset(text: &str, state: &AppState) -> Result<String, String> {
+    let invalid = || {
+        faderust_engine::lang::tr(
+            "Das ist keine Preset-Datei von Faderust",
+            "This is not a Faderust preset file",
+        )
+    };
+    let mut preset: crate::config::Preset = serde_json::from_str(text).map_err(|_| invalid())?;
+    preset.name = preset.name.trim().to_string();
+    if preset.name.is_empty() || preset.gains.is_empty() {
+        return Err(invalid());
+    }
+    let name = preset.name.clone();
+    edit_presets(state, |c| {
+        c.put_preset(preset);
+        true
+    })?;
+    Ok(name)
+}
+
 pub fn delete_preset(name: String, state: &AppState) -> Result<(), String> {
     edit_presets(state, |c| {
         c.delete_preset(&name);
@@ -732,6 +770,29 @@ mod tests {
         assert_eq!(saved.presets.len(), 1);
         assert_eq!(saved.gains[0][0].db, -6.0);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn preset_exports_and_imports_again() {
+        let (state, _rx, path) = app("preset-export");
+        set_db(&state, 0, -6.0);
+        save_preset("Spielen".into(), &state).unwrap();
+        let text = export_preset("Spielen", &state).unwrap();
+
+        // Into a second setup, under the same name, replacing an old one.
+        let (other, _rx2, path2) = app("preset-import");
+        assert_eq!(import_preset(&text, &other).unwrap(), "Spielen");
+        assert_eq!(import_preset(&text, &other).unwrap(), "Spielen");
+        let c = other.config.lock().unwrap();
+        assert_eq!(c.presets.len(), 1);
+        assert_eq!(c.presets[0].gains[0][0].db, -6.0);
+        drop(c);
+
+        assert!(import_preset("kein json", &other).is_err());
+        assert!(import_preset("{\"name\":\" \",\"gains\":[[]]}", &other).is_err());
+        assert!(export_preset("Gibt es nicht", &state).is_err());
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+        let _ = std::fs::remove_dir_all(path2.parent().unwrap());
     }
 
     #[test]

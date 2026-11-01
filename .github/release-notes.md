@@ -1,9 +1,8 @@
-## Neu in 0.7.1
+## Neu in 0.7.2
 
-- **Programm-Icon:** faderust.exe hat jetzt ein eigenes Icon (Task-Manager, Explorer, Verknüpfungen)
-- **Darstellung wählbar:** im Design-Dialog zwischen Grafikkarte (wenig CPU) und Software (wenig Arbeitsspeicher), gilt nach einem Neustart
-- **Grafikfehler behoben:** Auswahl-Knöpfe in den Dialogen zeigten schwarze und blaue Flecken, sie sind jetzt einfarbig
-- **Navigation:** Knöpfe oben neutral grau statt von der Akzentfarbe getönt
+- **Presets exportieren und importieren:** im Presets-Dialog „Export“ pro Preset (speichert eine Datei) und „Preset importieren …“ (liest eine Datei, ein gleichnamiges Preset wird ersetzt)
+- **Sauberes Schwarz:** Pult, Streifen und Dialoge sind im dunklen Design jetzt reines Schwarz statt leicht grau
+- **Neues Symbol** für „Windows“ in der Navigation (Lautsprecher)
 
 ## Installation
 
