@@ -29,7 +29,7 @@ jobs:
           cp site/index.html public/
           cp assets/logo.svg assets/screenshot.png assets/matrix.png assets/design.png assets/faderust-reel.mp4 public/assets/
       - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: public
       - id: deploy
