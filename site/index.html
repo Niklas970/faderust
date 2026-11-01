@@ -10,7 +10,7 @@
 <meta property="og:description" content="Offener Audio-Mixer für Windows. Jeder Ausgang bekommt seine eigene Mischung.">
 <meta property="og:image" content="assets/screenshot.png">
 <style>
-:root{--bg:#000;--panel:#0d1013;--line:#1e242a;--text:#e8ecef;--muted:#8d98a1;--sig:#4fd1c0;--cu:#e2793f}
+:root{--bg:#000;--panel:#0d1013;--line:#1e242a;--text:#e8ecef;--muted:#8d98a1;--sig:#2fd45e;--cu:#e2793f}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--text);font:17px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -22,7 +22,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:20p
 nav{display:flex;gap:18px;align-items:center;font-size:15px}
 nav a{color:var(--muted);text-decoration:none}
 nav a:hover{color:var(--text)}
-#lang{background:none;border:1px solid var(--line);color:var(--muted);border-radius:6px;padding:3px 9px;cursor:pointer;font:inherit;font-size:13px}
+#lang{background:var(--panel);border:1px solid var(--line);color:var(--muted);border-radius:6px;padding:3px 6px;cursor:pointer;font:inherit;font-size:13px}
 .alpha{display:inline-block;color:var(--cu);border:1px solid var(--cu);border-radius:99px;padding:2px 12px;font-size:13px;letter-spacing:.04em}
 .hero{text-align:center;padding:48px 0 32px}
 h1{font-size:clamp(34px,6vw,56px);line-height:1.1;margin:14px 0 14px}
@@ -61,7 +61,7 @@ footer{border-top:1px solid var(--line);padding:28px 0 48px;color:var(--muted);f
     <a class="hide" href="#features" data-i18n="nav_features">Funktionen</a>
     <a class="hide" href="#install" data-i18n="nav_install">Installation</a>
     <a href="https://github.com/Niklas970/faderust">GitHub</a>
-    <button id="lang" type="button" aria-label="Sprache / Language">EN</button>
+    <select id="lang" aria-label="Sprache / Language"></select>
   </nav>
 </header>
 
@@ -111,7 +111,7 @@ footer{border-top:1px solid var(--line);padding:28px 0 48px;color:var(--muted);f
 </section>
 
 <section>
-  <div class="note"><b data-i18n="alpha_h">Alpha.</b> <span data-i18n="alpha_p">Läuft schon, ist aber noch jung. Feedback willkommen: bitte als Issue auf GitHub melden.</span> <a href="https://github.com/Niklas970/faderust/issues" data-i18n="alpha_l">Issue melden</a></div>
+  <div class="note"><b data-i18n="alpha_h">Alpha.</b> <span data-i18n="alpha_p">Läuft schon, ist aber noch jung. Feedback willkommen: bitte als Issue auf GitHub melden.</span> <a href="https://github.com/Niklas970/faderust/issues" data-i18n="alpha_l">Issue melden</a> <span id="appnote" style="color:var(--muted)"></span></div>
 </section>
 </main>
 
@@ -140,27 +140,133 @@ inst_h:"Installation",
 i1:"Download and run <code>Faderust_*_x64-setup.exe</code>. No admin rights needed.",
 i2:"The setup is not signed, so SmartScreen warns: “More info” → “Run anyway”.",
 i3:"Open Faderust from the Start menu. The app tells you about updates.",
-alpha_h:"Alpha.",alpha_p:"It runs, but it is still young. Feedback welcome: please report problems as an issue on GitHub.",alpha_l:"Report an issue"}};
+alpha_h:"Alpha.",alpha_p:"It runs, but it is still young. Feedback welcome: please report problems as an issue on GitHub.",alpha_l:"Report an issue",
+app_note:"The app itself is available in German and English."},
+fr:{
+nav_features:"Fonctions",nav_install:"Installation",
+h1:"Votre son, votre mix.",
+lead:"Faderust est un mixeur audio léger et ouvert pour Windows, une alternative à Voicemeeter. Chaque sortie a son propre mix, et les appareils peuvent aller et venir pendant l’utilisation.",
+dl:"Télécharger pour Windows",src:"Code source",dlinfo:"Windows 10/11 · gratuit · licence MIT",
+feat_h:"Ce que fait Faderust",
+f1h:"Une table comme Voicemeeter",f1p:"Une tranche avec fader, MUTE et A1–A3 pour chaque appareil et chaque programme. Chaque sortie a un fader master.",
+f2h:"Capturer les programmes directement",f2p:"Discord, Spotify ou le navigateur ont leur propre tranche avec effets, sans pilote supplémentaire.",
+f3h:"Ses propres câbles virtuels",f3p:"L’application installe elle-même jusqu’à quatre « Faderust Kabel ». Pas besoin de VB-Cable.",
+f4h:"Les appareils vont et viennent",f4p:"Bluetooth coupé puis rallumé, USB débranché : Faderust se reconnecte sans interrompre les autres appareils.",
+f5h:"Effets par entrée",f5p:"Réduction de bruit (RNNoise), filtre passe-haut, égaliseur 3 bandes et gate.",
+f6h:"Presets et Stream Deck",f6p:"Presets, démarrage automatique dans la zone de notification, mises à jour dans l’application avec vérification de signature et plugin Stream Deck.",
+views_h:"Deux vues",cap_m:"<b>Matrice :</b> chaque entrée sur chaque sortie, réglée individuellement.",cap_d:"<b>Design :</b> table ou matrice, couleurs, sombre ou clair.",
+reel_h:"En 40 secondes",
+inst_h:"Installation",
+i1:"Téléchargez et lancez <code>Faderust_*_x64-setup.exe</code>. Aucun droit administrateur requis.",
+i2:"Le programme d’installation n’est pas signé, SmartScreen affiche donc un avertissement : « Informations complémentaires » → « Exécuter quand même ».",
+i3:"Ouvrez Faderust depuis le menu Démarrer. L’application signale elle-même les mises à jour.",
+alpha_h:"Alpha.",alpha_p:"Ça fonctionne, mais c’est encore jeune. Vos retours sont les bienvenus : signalez les problèmes via une issue sur GitHub.",alpha_l:"Signaler un problème",
+app_note:"L’application elle-même existe en allemand et en anglais."},
+es:{
+nav_features:"Funciones",nav_install:"Instalación",
+h1:"Tu sonido, tu mezcla.",
+lead:"Faderust es un mezclador de audio ligero y abierto para Windows, una alternativa a Voicemeeter. Cada salida tiene su propia mezcla y los dispositivos pueden ir y venir mientras funciona.",
+dl:"Descargar para Windows",src:"Código fuente",dlinfo:"Windows 10/11 · gratis · licencia MIT",
+feat_h:"Qué hace Faderust",
+f1h:"Una mesa como Voicemeeter",f1p:"Una tira con fader, MUTE y A1–A3 para cada dispositivo y programa. Cada salida tiene un fader master.",
+f2h:"Captura programas directamente",f2p:"Discord, Spotify o el navegador tienen su propia tira con efectos, sin controladores adicionales.",
+f3h:"Cables virtuales propios",f3p:"La aplicación configura por sí misma hasta cuatro «Faderust Kabel». No hace falta VB-Cable.",
+f4h:"Los dispositivos van y vienen",f4p:"Bluetooth apagado y encendido, USB desconectado: Faderust se reconecta sin interrumpir los demás dispositivos.",
+f5h:"Efectos por entrada",f5p:"Supresión de ruido (RNNoise), filtro paso alto, ecualizador de tres bandas y gate.",
+f6h:"Presets y Stream Deck",f6p:"Presets, inicio automático en la bandeja, actualizaciones en la aplicación con comprobación de firma y un plugin para Stream Deck.",
+views_h:"Dos vistas",cap_m:"<b>Matriz:</b> cada entrada en cada salida, ajustada por separado.",cap_d:"<b>Diseño:</b> mesa o matriz, colores, oscuro o claro.",
+reel_h:"En 40 segundos",
+inst_h:"Instalación",
+i1:"Descarga y ejecuta <code>Faderust_*_x64-setup.exe</code>. No requiere permisos de administrador.",
+i2:"El instalador no está firmado, por eso SmartScreen avisa: «Más información» → «Ejecutar de todas formas».",
+i3:"Abre Faderust desde el menú Inicio. La propia aplicación avisa de las actualizaciones.",
+alpha_h:"Alfa.",alpha_p:"Funciona, pero todavía es joven. Tus comentarios son bienvenidos: informa de los problemas como issue en GitHub.",alpha_l:"Informar de un problema",
+app_note:"La aplicación está disponible en alemán e inglés."},
+it:{
+nav_features:"Funzioni",nav_install:"Installazione",
+h1:"Il tuo suono, il tuo mix.",
+lead:"Faderust è un mixer audio leggero e aperto per Windows, un’alternativa a Voicemeeter. Ogni uscita ha il proprio mix e i dispositivi possono andare e venire mentre è in esecuzione.",
+dl:"Scarica per Windows",src:"Codice sorgente",dlinfo:"Windows 10/11 · gratuito · licenza MIT",
+feat_h:"Cosa fa Faderust",
+f1h:"Un banco come Voicemeeter",f1p:"Una striscia con fader, MUTE e A1–A3 per ogni dispositivo e programma. Ogni uscita ha un fader master.",
+f2h:"Cattura i programmi direttamente",f2p:"Discord, Spotify o il browser hanno la propria striscia con effetti, senza driver aggiuntivi.",
+f3h:"Cavi virtuali propri",f3p:"L’app configura da sola fino a quattro «Faderust Kabel». VB-Cable non serve.",
+f4h:"I dispositivi vanno e vengono",f4p:"Bluetooth spento e riacceso, USB scollegata: Faderust si riconnette senza interrompere gli altri dispositivi.",
+f5h:"Effetti per ingresso",f5p:"Riduzione del rumore (RNNoise), filtro passa-alto, equalizzatore a tre bande e gate.",
+f6h:"Preset e Stream Deck",f6p:"Preset, avvio automatico nell’area di notifica, aggiornamenti nell’app con verifica della firma e un plugin per Stream Deck.",
+views_h:"Due viste",cap_m:"<b>Matrice:</b> ogni ingresso su ogni uscita, regolato singolarmente.",cap_d:"<b>Design:</b> banco o matrice, colori, scuro o chiaro.",
+reel_h:"In 40 secondi",
+inst_h:"Installazione",
+i1:"Scarica ed esegui <code>Faderust_*_x64-setup.exe</code>. Non servono diritti di amministratore.",
+i2:"Il programma di installazione non è firmato, quindi SmartScreen avvisa: «Ulteriori informazioni» → «Esegui comunque».",
+i3:"Apri Faderust dal menu Start. Gli aggiornamenti li segnala l’app stessa.",
+alpha_h:"Alfa.",alpha_p:"Funziona, ma è ancora giovane. I feedback sono benvenuti: segnala i problemi come issue su GitHub.",alpha_l:"Segnala un problema",
+app_note:"L’app è disponibile in tedesco e inglese."},
+nl:{
+nav_features:"Functies",nav_install:"Installatie",
+h1:"Jouw geluid, jouw mix.",
+lead:"Faderust is een compacte, open audiomixer voor Windows, een alternatief voor Voicemeeter. Elke uitgang krijgt een eigen mix en apparaten mogen tijdens het gebruik komen en gaan.",
+dl:"Downloaden voor Windows",src:"Broncode",dlinfo:"Windows 10/11 · gratis · MIT-licentie",
+feat_h:"Wat Faderust kan",
+f1h:"Een mengpaneel zoals Voicemeeter",f1p:"Een kanaal met fader, MUTE en A1–A3 voor elk apparaat en elk programma. Elke uitgang heeft een masterfader.",
+f2h:"Programma’s direct opnemen",f2p:"Discord, Spotify of de browser krijgen een eigen kanaal met effecten, zonder extra stuurprogramma.",
+f3h:"Eigen virtuele kabels",f3p:"De app richt zelf tot vier “Faderust Kabel” in. VB-Cable is niet nodig.",
+f4h:"Apparaten komen en gaan",f4p:"Bluetooth uit en weer aan, USB losgekoppeld: Faderust verbindt opnieuw zonder de andere apparaten te onderbreken.",
+f5h:"Effecten per ingang",f5p:"Ruisonderdrukking (RNNoise), low-cut, driebands-EQ en gate.",
+f6h:"Presets en Stream Deck",f6p:"Presets, automatisch starten in het systeemvak, updates in de app met handtekeningcontrole en een Stream Deck-plugin.",
+views_h:"Twee weergaven",cap_m:"<b>Matrix:</b> elke ingang op elke uitgang afzonderlijk geregeld.",cap_d:"<b>Design:</b> paneel of matrix, kleuren, donker of licht.",
+reel_h:"In 40 seconden",
+inst_h:"Installatie",
+i1:"Download en start <code>Faderust_*_x64-setup.exe</code>. Beheerdersrechten zijn niet nodig.",
+i2:"De installer is niet ondertekend, daarom waarschuwt SmartScreen: “Meer informatie” → “Toch uitvoeren”.",
+i3:"Open Faderust via het Startmenu. De app meldt zelf updates.",
+alpha_h:"Alfa.",alpha_p:"Het werkt, maar is nog jong. Feedback is welkom: meld problemen als issue op GitHub.",alpha_l:"Probleem melden",
+app_note:"De app zelf is beschikbaar in het Duits en Engels."},
+pl:{
+nav_features:"Funkcje",nav_install:"Instalacja",
+h1:"Twój dźwięk, twój miks.",
+lead:"Faderust to lekki, otwarty mikser audio dla Windows, alternatywa dla Voicemeetera. Każde wyjście ma własny miks, a urządzenia mogą się pojawiać i znikać podczas pracy.",
+dl:"Pobierz dla Windows",src:"Kod źródłowy",dlinfo:"Windows 10/11 · za darmo · licencja MIT",
+feat_h:"Co potrafi Faderust",
+f1h:"Pulpit jak w Voicemeeterze",f1p:"Kanał z faderem, MUTE i A1–A3 dla każdego urządzenia i programu. Każde wyjście ma fader główny.",
+f2h:"Bezpośrednie przechwytywanie programów",f2p:"Discord, Spotify lub przeglądarka dostają własny kanał z efektami, bez dodatkowego sterownika.",
+f3h:"Własne kable wirtualne",f3p:"Aplikacja sama konfiguruje do czterech „Faderust Kabel”. VB-Cable nie jest potrzebny.",
+f4h:"Urządzenia przychodzą i odchodzą",f4p:"Bluetooth wyłączony i włączony, USB odłączone: Faderust łączy się ponownie, nie przerywając pozostałych urządzeń.",
+f5h:"Efekty dla każdego wejścia",f5p:"Redukcja szumów (RNNoise), filtr górnoprzepustowy, trzypasmowy korektor i bramka szumów.",
+f6h:"Presety i Stream Deck",f6p:"Presety, autostart w zasobniku, aktualizacje w aplikacji z weryfikacją podpisu oraz wtyczka Stream Deck.",
+views_h:"Dwa widoki",cap_m:"<b>Macierz:</b> każde wejście na każdym wyjściu, regulowane osobno.",cap_d:"<b>Wygląd:</b> pulpit lub macierz, kolory, ciemny lub jasny.",
+reel_h:"W 40 sekund",
+inst_h:"Instalacja",
+i1:"Pobierz i uruchom <code>Faderust_*_x64-setup.exe</code>. Uprawnienia administratora nie są potrzebne.",
+i2:"Instalator nie jest podpisany, więc SmartScreen ostrzega: „Więcej informacji” → „Uruchom mimo to”.",
+i3:"Otwórz Faderust z menu Start. O aktualizacjach informuje sama aplikacja.",
+alpha_h:"Alfa.",alpha_p:"Działa, ale jest jeszcze młody. Opinie mile widziane: zgłaszaj problemy jako issue na GitHubie.",alpha_l:"Zgłoś problem",
+app_note:"Sama aplikacja jest dostępna po niemiecku i angielsku."}};
+const NAMES={de:"Deutsch",en:"English",fr:"Français",es:"Español",it:"Italiano",nl:"Nederlands",pl:"Polski"};
 const DE={};document.querySelectorAll("[data-i18n]").forEach(e=>DE[e.dataset.i18n]=e.innerHTML);
-const btn=document.getElementById("lang");
+DE.app_note="Die App selbst gibt es auf Deutsch und Englisch.";
+const sel=document.getElementById("lang");
+for(const k in NAMES){const o=document.createElement("option");o.value=k;o.textContent=NAMES[k];sel.appendChild(o)}
+let ver=null;
 function setLang(l){
+  if(!NAMES[l])l="de";
   document.documentElement.lang=l;
-  document.querySelectorAll("[data-i18n]").forEach(e=>{const v=l==="en"?T.en[e.dataset.i18n]:DE[e.dataset.i18n];if(v!=null)e.innerHTML=v});
-  btn.textContent=l==="en"?"DE":"EN";
+  document.querySelectorAll("[data-i18n]").forEach(e=>{const v=l==="de"?DE[e.dataset.i18n]:T[l][e.dataset.i18n];if(v!=null)e.innerHTML=v});
+  document.getElementById("appnote").textContent=l==="de"?DE.app_note:T[l].app_note;
+  sel.value=l;
   try{localStorage.setItem("lang",l)}catch(e){}
   fillVersion();
 }
-let ver=null;
 function fillVersion(){
   if(!ver)return;
-  const en=document.documentElement.lang==="en";
   document.getElementById("alpha").textContent="Alpha "+ver.replace(/^v/,"").replace(/-alpha.*/,"");
-  document.getElementById("dlinfo").textContent=(en?"Windows 10/11 · free · MIT license · ":"Windows 10/11 · kostenlos · MIT-Lizenz · ")+ver;
+  const l=document.documentElement.lang;
+  document.getElementById("dlinfo").textContent=(l==="de"?"Windows 10/11 · kostenlos · MIT-Lizenz":T[l].dlinfo)+" · "+ver;
 }
-btn.onclick=()=>setLang(document.documentElement.lang==="en"?"de":"en");
+sel.onchange=()=>setLang(sel.value);
 let l=null;try{l=localStorage.getItem("lang")}catch(e){}
-if(!l)l=(navigator.language||"de").startsWith("de")?"de":"en";
-if(l==="en")setLang("en");
+if(!l||!NAMES[l])l=(navigator.language||"de").slice(0,2).toLowerCase();
+setLang(NAMES[l]?l:"en");
 fetch("https://api.github.com/repos/Niklas970/faderust/releases/latest").then(r=>r.ok?r.json():null).then(j=>{
   if(!j)return;
   ver=j.tag_name;
