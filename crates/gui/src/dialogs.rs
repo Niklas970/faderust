@@ -2,15 +2,15 @@
 //! uppercase section headings, grey hints, buttons in the footer.
 
 use crate::i18n::{text, tr};
-use crate::style::{check, input as text_input, key, look_text, pick as pick_list, Look};
+use crate::style::{check, input as text_input, key, look_text, pick as pick_list, scroll, Look};
 use iced::alignment::Vertical;
-use iced::widget::{button, column, container, mouse_area, opaque, row, scrollable, slider, space};
+use iced::widget::{button, column, container, mouse_area, opaque, row, slider, space};
 use iced::{Background, Border, Color, Element, Length};
 
 use crate::style::*;
 use faderust_core::names::device_label;
 
-use crate::{App, Dialog, Edit, Message, HIDE_AFTER, RELEASE};
+use crate::{App, Dialog, Edit, Message, Target, HIDE_AFTER, RELEASE};
 
 fn edit(e: Edit) -> Message {
     Message::Edit(e)
@@ -71,9 +71,19 @@ fn frame<'a>(
 ) -> Element<'a, Message> {
     let card = container(
         column![
-            text(title).size(18).color(text_color()),
-            scrollable(container(body).padding([0, 12])).height(if tall {
-                Length::Fill
+            row![
+                text(title).size(18).color(text_color()),
+                space().width(Length::Fill),
+                button(text("✕").size(12).color(text_color()).center())
+                    .width(28)
+                    .height(28)
+                    .padding(0)
+                    .on_press(close())
+                    .style(key(Look::Secondary)),
+            ]
+            .align_y(Vertical::Center),
+            scroll(container(body).padding(iced::Padding::default().right(10))).height(if tall {
+                Length::Fixed(680.0)
             } else {
                 Length::Shrink
             }),
@@ -84,7 +94,6 @@ fn frame<'a>(
     .padding(20)
     .width(width)
     .max_height(if tall { 780.0 } else { 640.0 })
-    .height(if tall { Length::Fill } else { Length::Shrink })
     .style(|_| container::Style {
         background: Some(Background::Color(panel())),
         border: Border {
@@ -112,8 +121,8 @@ fn frame<'a>(
     )
 }
 
-fn done(label: impl Into<String>) -> Element<'static, Message> {
-    btn(label, close(), true)
+fn no_footer() -> Element<'static, Message> {
+    space().width(0).height(0).into()
 }
 
 pub fn view(app: &App, d: Dialog) -> Element<'_, Message> {
@@ -225,12 +234,9 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
         520.0,
         false,
         body.into(),
-        row![
-            btn("Zurücksetzen", edit(Edit::ResetFx(i)), false),
-            done("Fertig")
-        ]
-        .spacing(8)
-        .into(),
+        row![btn("Zurücksetzen", edit(Edit::ResetFx(i)), false),]
+            .spacing(8)
+            .into(),
     )
 }
 
@@ -452,12 +458,9 @@ fn apps(app: &App) -> Element<'_, Message> {
         640.0,
         false,
         body.into(),
-        row![
-            btn("Aktualisieren", edit(Edit::Refresh), false),
-            done("Schließen")
-        ]
-        .spacing(8)
-        .into(),
+        row![btn("Aktualisieren", edit(Edit::Refresh), false),]
+            .spacing(8)
+            .into(),
     )
 }
 
@@ -488,13 +491,7 @@ fn presets(app: &App) -> Element<'_, Message> {
         hint("Ein Preset merkt sich Fader, Stumm und Effekte aller Eingänge."),
     ]
     .spacing(10);
-    frame(
-        "Presets".into(),
-        460.0,
-        false,
-        body.into(),
-        done("Schließen"),
-    )
+    frame("Presets".into(), 460.0, false, body.into(), no_footer())
 }
 
 fn windows(app: &App) -> Element<'_, Message> {
@@ -597,12 +594,9 @@ fn windows(app: &App) -> Element<'_, Message> {
         700.0,
         false,
         body.into(),
-        row![
-            btn("Aktualisieren", edit(Edit::Refresh), false),
-            done("Schließen")
-        ]
-        .spacing(8)
-        .into(),
+        row![btn("Aktualisieren", edit(Edit::Refresh), false),]
+            .spacing(8)
+            .into(),
     )
 }
 
@@ -686,6 +680,8 @@ fn design(app: &App) -> Element<'_, Message> {
             app.accent_input
                 .clone()
                 .unwrap_or_else(|| accent_now.clone()),
+            Target::Accent,
+            app.picker,
             |t| edit(Edit::AccentHex(t)),
         ),
         h3("Signalfarbe"),
@@ -694,6 +690,8 @@ fn design(app: &App) -> Element<'_, Message> {
             app.signal_input
                 .clone()
                 .unwrap_or_else(|| signal_now.clone()),
+            Target::Signal,
+            app.picker,
             |t| edit(Edit::SignalHex(t)),
         ),
         h3("Helligkeit"),
@@ -721,7 +719,7 @@ fn design(app: &App) -> Element<'_, Message> {
         ]),
     ]
     .spacing(10);
-    frame("Design".into(), 480.0, true, body.into(), done("Fertig"))
+    frame("Design".into(), 480.0, true, body.into(), no_footer())
 }
 
 pub fn tip<'a>(
@@ -746,36 +744,63 @@ pub fn tip<'a>(
     .into()
 }
 
-/// A field for any colour as #rrggbb, with a preview.
+/// Any colour: a picker (opened by the swatch) and a field for #rrggbb.
 fn custom_color(
     value: String,
+    target: Target,
+    picker: Option<(Target, (f32, f32, f32))>,
     on_input: impl Fn(String) -> Message + 'static,
 ) -> Element<'static, Message> {
     let valid = crate::style::parse_hex_input(&value);
     let preview = valid.as_deref().map(crate::style::hex);
-    row![
-        text("Eigene Farbe").size(13).color(muted_color()),
-        text_input("#rrggbb", &value).on_input(on_input).width(110),
-        container(space())
-            .width(28)
-            .height(28)
-            .style(move |_| container::Style {
-                background: Some(Background::Color(preview.unwrap_or(Color::TRANSPARENT))),
-                border: Border {
-                    color: if preview.is_some() {
-                        border()
-                    } else {
-                        danger()
-                    },
-                    width: 1.0,
-                    radius: 14.0.into(),
+    let open = picker.filter(|(t, _)| *t == target);
+    let swatch = button(space())
+        .width(34)
+        .height(28)
+        .padding(0)
+        .on_press(edit(Edit::Picker(target)))
+        .style(move |_, status| button::Style {
+            background: Some(Background::Color(preview.unwrap_or(Color::TRANSPARENT))),
+            border: Border {
+                color: if open.is_some() || matches!(status, button::Status::Hovered) {
+                    accent_light()
+                } else if preview.is_some() {
+                    border()
+                } else {
+                    danger()
                 },
-                ..container::Style::default()
-            }),
+                width: 2.0,
+                radius: 6.0.into(),
+            },
+            ..button::Style::default()
+        });
+    let head = row![
+        text("Eigene Farbe").size(13).color(muted_color()),
+        swatch,
+        text_input("#rrggbb", &value).on_input(on_input).width(100),
+        btn(
+            if open.is_some() {
+                "Farbwähler schließen"
+            } else {
+                "Farbwähler"
+            },
+            edit(Edit::Picker(target)),
+            false
+        ),
     ]
     .spacing(10)
-    .align_y(Vertical::Center)
-    .into()
+    .align_y(Vertical::Center);
+    match open {
+        Some((_, hsv)) => column![
+            head,
+            iced::widget::canvas(crate::picker::Picker { hsv, target })
+                .width(crate::picker::W)
+                .height(crate::picker::H),
+        ]
+        .spacing(10)
+        .into(),
+        None => head.into(),
+    }
 }
 
 fn hex_color(h: &str) -> Color {
@@ -861,7 +886,6 @@ fn log(app: &App) -> Element<'_, Message> {
             btn("Aktualisieren", edit(Edit::Refresh), false),
             btn("Kopieren", edit(Edit::CopyLog), false),
             btn("Ordner öffnen", edit(Edit::OpenLogFolder), false),
-            done("Schließen"),
         ]
         .spacing(8)
         .into(),
@@ -923,7 +947,6 @@ fn selftest(app: &App) -> Element<'_, Message> {
         row![
             btn("Nochmal prüfen", edit(Edit::Refresh), false),
             btn("Bericht kopieren", edit(Edit::CopyChecks), false),
-            done("Schließen"),
         ]
         .spacing(8)
         .into(),
@@ -932,13 +955,7 @@ fn selftest(app: &App) -> Element<'_, Message> {
 
 fn settings(app: &App) -> Element<'_, Message> {
     let Some(draft) = &app.draft else {
-        return frame(
-            "Geräte".into(),
-            720.0,
-            true,
-            hint("Lade …"),
-            done("Schließen"),
-        );
+        return frame("Geräte".into(), 720.0, true, hint("Lade …"), no_footer());
     };
     let device_choices = |list: &[faderust_core::Device], current: &str| -> (Vec<Choice>, Choice) {
         let mut choices: Vec<Choice> = list
@@ -1156,7 +1173,7 @@ fn settings(app: &App) -> Element<'_, Message> {
         hint("Änderungen werden automatisch gespeichert."),
     ]
     .spacing(10);
-    frame("Geräte".into(), 760.0, true, body.into(), done("Schließen"))
+    frame("Geräte".into(), 760.0, true, body.into(), no_footer())
 }
 
 /// "Programm-Mikro": an output on a virtual cable, so Discord, Teams & co.

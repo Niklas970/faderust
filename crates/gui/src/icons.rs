@@ -60,20 +60,36 @@ impl<M> canvas::Program<M> for Icon {
                 }
             }
             Glyph::Pin => {
-                let body = Path::new(|b| {
-                    b.move_to(p(5.0, 2.0));
-                    b.line_to(p(11.0, 2.0));
-                    b.line_to(p(10.5, 4.0));
-                    b.line_to(p(12.5, 8.0));
-                    b.line_to(p(3.5, 8.0));
-                    b.line_to(p(5.5, 4.0));
-                    b.close();
+                // A push pin, tilted: head, collar, tapered body, needle.
+                f.with_save(|f| {
+                    f.translate(iced::Vector::new(ox + 8.0 * k, oy + 8.0 * k));
+                    f.rotate(0.65);
+                    let q = |x: f32, y: f32| Point::new((x - 8.0) * k, (y - 8.0) * k);
+                    let head = Path::rounded_rectangle(
+                        q(6.0, 1.5),
+                        Size::new(4.0 * k, 2.5 * k),
+                        (1.0 * k).into(),
+                    );
+                    let collar = Path::rounded_rectangle(
+                        q(4.8, 4.0),
+                        Size::new(6.4 * k, 1.6 * k),
+                        (0.8 * k).into(),
+                    );
+                    let body = Path::new(|b| {
+                        b.move_to(q(6.0, 5.6));
+                        b.line_to(q(10.0, 5.6));
+                        b.line_to(q(9.0, 10.0));
+                        b.line_to(q(7.0, 10.0));
+                        b.close();
+                    });
+                    for shape in [&head, &collar, &body] {
+                        if self.on {
+                            f.fill(shape, Fill::from(self.color));
+                        }
+                        f.stroke(shape, line);
+                    }
+                    f.stroke(&Path::line(q(8.0, 10.0), q(8.0, 14.8)), line);
                 });
-                if self.on {
-                    f.fill(&body, Fill::from(self.color));
-                }
-                f.stroke(&body, line);
-                f.stroke(&Path::line(p(8.0, 8.0), p(8.0, 14.0)), line);
             }
         }
         vec![f.into_geometry()]

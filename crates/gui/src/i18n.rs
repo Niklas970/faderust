@@ -168,6 +168,8 @@ const TABLE: &[(&str, &str)] = &[
     ("Änderungen werden automatisch gespeichert.", "Changes are saved automatically."),
     ("Ausgang", "Output"),
     ("Sprache", "Language"),
+    ("Farbwähler", "Colour picker"),
+    ("Farbwähler schließen", "Close picker"),
     ("„+ Eingang“ nimmt das Programm auf und stellt es vorher auf", "“+ Input” records the program and first moves it to"),
     (", damit du es nicht doppelt hörst.", ", so you do not hear it twice."),
     ("Eigene Farbe", "Custom colour"),

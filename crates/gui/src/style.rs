@@ -183,6 +183,10 @@ pub fn border() -> Color {
 pub fn text_color() -> Color {
     pal().text
 }
+/// A quiet outline for groups and cards.
+pub fn hairline() -> Color {
+    mix(panel(), border(), 0.5)
+}
 pub fn muted_color() -> Color {
     pal().muted
 }
@@ -408,4 +412,102 @@ pub fn check<'a, M: 'a>(on: bool) -> checkbox::Checkbox<'a, M> {
             text_color: Some(text_color()),
         }
     })
+}
+
+/// A vertical scroll area whose bar is visible and keeps its distance.
+pub fn scroll<'a, M: 'a>(
+    content: impl Into<iced::Element<'a, M>>,
+) -> iced::widget::Scrollable<'a, M> {
+    use iced::widget::scrollable;
+    scrollable(content)
+        .direction(scrollable::Direction::Vertical(
+            scrollable::Scrollbar::new()
+                .width(8)
+                .scroller_width(8)
+                .margin(2),
+        ))
+        .style(scroll_style)
+}
+
+pub fn scroll_style(
+    _: &Theme,
+    status: iced::widget::scrollable::Status,
+) -> iced::widget::scrollable::Style {
+    use iced::widget::scrollable;
+    let hot = matches!(
+        status,
+        scrollable::Status::Hovered {
+            is_vertical_scrollbar_hovered: true,
+            ..
+        } | scrollable::Status::Dragged { .. }
+    );
+    let rail = scrollable::Rail {
+        background: Some(Background::Color(mix(panel(), border(), 0.25))),
+        border: Border {
+            radius: 4.0.into(),
+            ..Border::default()
+        },
+        scroller: scrollable::Scroller {
+            background: Background::Color(if hot {
+                accent()
+            } else {
+                mix(panel(), muted_color(), 0.55)
+            }),
+            border: Border {
+                radius: 4.0.into(),
+                ..Border::default()
+            },
+        },
+    };
+    scrollable::Style {
+        container: iced::widget::container::Style::default(),
+        vertical_rail: rail,
+        horizontal_rail: rail,
+        gap: None,
+        auto_scroll: scrollable::AutoScroll {
+            background: Background::Color(panel()),
+            border: Border::default(),
+            shadow: Shadow::default(),
+            icon: text_color(),
+        },
+    }
+}
+
+/// Hue in degrees (0..360), saturation and value 0..1.
+pub fn hsv_to_rgb(h: f32, s: f32, v: f32) -> Color {
+    let h = h.rem_euclid(360.0) / 60.0;
+    let c = v * s;
+    let x = c * (1.0 - (h % 2.0 - 1.0).abs());
+    let (r, g, b) = match h as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = v - c;
+    Color::from_rgb(r + m, g + m, b + m)
+}
+
+pub fn rgb_to_hsv(c: Color) -> (f32, f32, f32) {
+    let max = c.r.max(c.g).max(c.b);
+    let min = c.r.min(c.g).min(c.b);
+    let d = max - min;
+    let h = if d == 0.0 {
+        0.0
+    } else if max == c.r {
+        60.0 * ((c.g - c.b) / d).rem_euclid(6.0)
+    } else if max == c.g {
+        60.0 * ((c.b - c.r) / d + 2.0)
+    } else {
+        60.0 * ((c.r - c.g) / d + 4.0)
+    };
+    (h, if max == 0.0 { 0.0 } else { d / max }, max)
+}
+
+/// "#rrggbb" for a colour.
+pub fn to_hex(c: Color) -> String {
+    let b = |x: f32| (x.clamp(0.0, 1.0) * 255.0).round() as u8;
+    format!("#{:02x}{:02x}{:02x}", b(c.r), b(c.g), b(c.b))
 }

@@ -51,7 +51,7 @@ impl Fader<'_> {
     /// Width of the track; the meter lies to the right of it.
     fn hit_width(&self) -> f32 {
         if self.narrow {
-            62.0
+            80.0
         } else {
             100.0
         }
@@ -195,17 +195,32 @@ impl Fader<'_> {
 
         // Narrow: no scale, the cap and slot move left (58 px track).
         let wide = !self.narrow;
-        let (sx, cx) = if wide { (51.0, 24.0) } else { (24.0, 0.0) };
+        let (sx, cx) = if wide { (51.0, 24.0) } else { (45.0, 26.0) };
+        // The scale sits left of the slot: labels end at `lx`, marks follow.
+        let (lx, marks) = if wide {
+            (26.0, [29.0, 47.0])
+        } else {
+            (21.0, [22.0, 0.0])
+        };
         let slot_w = if wide { 14.0 } else { 10.0 };
         let bar_w = if wide { 6.0 } else { 4.0 };
         let bar_x = sx + (slot_w - bar_w) / 2.0;
         // Scale: numbers on the left, small marks beside the slot.
-        for (d, label) in scale::TICKS.iter().copied().filter(|_| !self.narrow) {
+        // Fine marks every 3 dB between -24 and +12.
+        for d in (-24..=12).step_by(3).map(|d| d as f32) {
+            let y = Self::y_of(scale::to_pos(d), total);
+            f.fill_rectangle(
+                Point::new(marks[1] - 3.0, y - 0.5),
+                Size::new(3.0, 1.0),
+                mix(panel(), border(), 0.8),
+            );
+        }
+        for (d, label) in scale::TICKS.iter().copied() {
             let y = Self::y_of(scale::to_pos(d), total);
             let zero = d == 0.0;
             f.fill_text(Text {
                 content: label.to_string(),
-                position: Point::new(26.0, y),
+                position: Point::new(lx, y),
                 color: if zero { text_color() } else { muted_color() },
                 size: Pixels(11.0),
                 font: MONO,
@@ -214,8 +229,15 @@ impl Fader<'_> {
                 ..Text::default()
             });
             let mark = if zero { muted_color() } else { border() };
-            for x in [29.0, 47.0] {
-                f.fill_rectangle(Point::new(x, y - 0.5), Size::new(7.0, 1.0), mark);
+            let long = match (wide, zero) {
+                (true, true) => 9.0,
+                (true, false) => 6.0,
+                (false, true) => 4.0,
+                (false, false) => 3.0,
+            };
+            f.fill_rectangle(Point::new(marks[0], y - 0.5), Size::new(long, 1.0), mark);
+            if wide {
+                f.fill_rectangle(Point::new(marks[1], y - 0.5), Size::new(6.0, 1.0), mark);
             }
         }
 
@@ -262,8 +284,9 @@ impl Fader<'_> {
         }
 
         // Cap: graphite gradient, accent edges, index line and a value window.
-        let (cw, ch) = if wide { (68.0, 44.0) } else { (58.0, 40.0) };
+        let (cw, ch) = if wide { (68.0, 44.0) } else { (48.0, 40.0) };
         let cy = cap_y - ch / 2.0;
+        let win_w = if wide { 52.0 } else { 40.0 };
         let cap = Path::rounded_rectangle(Point::new(cx, cy), Size::new(cw, ch), 4.0.into());
         for (grow, alpha) in [(6.0, 0.10), (3.0, 0.18), (1.0, 0.30)] {
             f.fill(
@@ -313,8 +336,8 @@ impl Fader<'_> {
             },
         );
         let win = Path::rounded_rectangle(
-            Point::new(cx + cw / 2.0 - 26.0, cap_y - 10.0),
-            Size::new(52.0, 20.0),
+            Point::new(cx + cw / 2.0 - win_w / 2.0, cap_y - 10.0),
+            Size::new(win_w, 20.0),
             2.0.into(),
         );
         f.fill(&win, Fill::from(rgb(11, 12, 14)));

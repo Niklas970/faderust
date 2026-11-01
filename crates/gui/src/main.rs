@@ -15,6 +15,7 @@ mod dialogs;
 mod fader;
 mod i18n;
 mod icons;
+mod picker;
 mod scale;
 mod shell;
 mod style;
@@ -174,6 +175,7 @@ pub struct App {
     pub mic_default: bool,
     /// What is typed in the colour fields of the design dialog.
     pub accent_input: Option<String>,
+    pub picker: Option<(Target, (f32, f32, f32))>,
     pub signal_input: Option<String>,
     logo: image::Handle,
     #[cfg(windows)]
@@ -240,8 +242,21 @@ fn apply_look(p: &shell::Prefs) {
     faderust_core::lang::set(lang);
 }
 
+/// Which colour the picker edits.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Target {
+    Accent,
+    Signal,
+}
+
 #[derive(Debug, Clone)]
 pub enum Edit {
+    /// Opens or closes the colour picker of a colour.
+    Picker(Target),
+    /// The picker moved: hue, saturation, brightness.
+    Hsv(Target, f32, f32, f32),
+    /// The picker was let go: save the colour.
+    HsvDone,
     Denoise(usize, bool),
     LowCut(usize, u16),
     Eq(usize, usize, f32),
@@ -643,6 +658,10 @@ impl App {
         apply_look(&p);
         shell::save_prefs(&self.dir, &p);
         self.prefs = p;
+        self.clear_caches();
+    }
+
+    fn clear_caches(&self) {
         for s in &self.strips {
             s.cache.clear();
         }
@@ -937,6 +956,7 @@ impl App {
             mic_device: None,
             mic_default: true,
             accent_input: None,
+            picker: None,
             signal_input: None,
             logo: image::Handle::from_bytes(LOGO),
             #[cfg(windows)]
@@ -1744,6 +1764,37 @@ impl App {
                 self.deck_error = r.err().unwrap_or_default();
             }
             Edit::Mode(m) => self.set_look(|p| p.mode = m.into()),
+            Edit::Picker(t) => {
+                self.picker = if self.picker.is_some_and(|(x, _)| x == t) {
+                    None
+                } else {
+                    let hex = match t {
+                        Target::Accent => self.accent(),
+                        Target::Signal => self.signal(),
+                    };
+                    Some((t, style::rgb_to_hsv(style::hex(&hex))))
+                };
+            }
+            Edit::Hsv(t, h, s, v) => {
+                self.picker = Some((t, (h, s, v)));
+                let hex = style::to_hex(style::hsv_to_rgb(h, s, v));
+                let mut p = self.prefs.clone();
+                match t {
+                    Target::Accent => {
+                        self.accent_input = Some(hex.clone());
+                        p.accent = hex;
+                    }
+                    Target::Signal => {
+                        self.signal_input = Some(hex.clone());
+                        p.signal = hex;
+                    }
+                }
+                // Live, without writing the file on every move.
+                apply_look(&p);
+                self.prefs = p;
+                self.clear_caches();
+            }
+            Edit::HsvDone => shell::save_prefs(&self.dir, &self.prefs),
             Edit::AccentHex(t) => {
                 let hex = style::parse_hex_input(&t);
                 self.accent_input = Some(t);
@@ -2145,7 +2196,7 @@ impl App {
             .style(|_| container::Style {
                 background: Some(Background::Color(panel())),
                 border: Border {
-                    color: border(),
+                    color: hairline(),
                     width: 1.0,
                     radius: 4.0.into(),
                 },
@@ -2190,7 +2241,7 @@ impl App {
             post_fader: false,
             narrow,
         })
-        .width(if narrow { 84.0 } else { STRIP_W })
+        .width(if narrow { 104.0 } else { STRIP_W })
         .height(Length::Fill);
         let small = |label: &'static str, msg: Message, w: f32| {
             button(text(label).size(12).color(text_color()).center())
@@ -2231,23 +2282,15 @@ impl App {
         };
         let top: Element<'_, Message> = if s.program {
             row![
-                space().width(20),
+                space().width(22),
                 Self::chips(&s.routes, Some(i), narrow),
                 dialogs::tip(
-                    button(text("×").size(14).color(muted_color()).center())
-                        .width(20)
+                    button(text("✕").size(10).color(text_color()).center())
+                        .width(22)
                         .height(22)
                         .padding(0)
                         .on_press(Message::Edit(Edit::Dismiss(i)))
-                        .style(|_, status| button::Style {
-                            background: None,
-                            text_color: if matches!(status, button::Status::Hovered) {
-                                text_color()
-                            } else {
-                                muted_color()
-                            },
-                            ..button::Style::default()
-                        }),
+                        .style(key(Look::Secondary)),
                     "Programm ausblenden",
                 ),
             ]
@@ -2269,7 +2312,7 @@ impl App {
             .spacing(8)
             .align_x(Horizontal::Center)
             .into(),
-            if narrow { 106.0 } else { 164.0 },
+            if narrow { 126.0 } else { 164.0 },
         )
     }
 
@@ -2284,7 +2327,7 @@ impl App {
             post_fader: true,
             narrow: self.compact,
         })
-        .width(if self.compact { 84.0 } else { STRIP_W })
+        .width(if self.compact { 104.0 } else { STRIP_W })
         .height(Length::Fill);
         let tag = row![
             space().width(22),
@@ -2309,20 +2352,12 @@ impl App {
                 ..container::Style::default()
             }),
             space().width(Length::Fill),
-            button(text("×").size(14).color(muted_color()).center())
+            button(text("✕").size(10).color(text_color()).center())
                 .width(22)
                 .height(22)
                 .padding(0)
                 .on_press(Message::Edit(Edit::HideOut(o, true)))
-                .style(|_, status| button::Style {
-                    background: None,
-                    text_color: if matches!(status, button::Status::Hovered) {
-                        text_color()
-                    } else {
-                        muted_color()
-                    },
-                    ..button::Style::default()
-                }),
+                .style(key(Look::Secondary)),
         ]
         .align_y(Vertical::Center)
         .width(Length::Fill);
@@ -2343,7 +2378,7 @@ impl App {
             .spacing(8)
             .align_x(Horizontal::Center)
             .into(),
-            if self.compact { 106.0 } else { 164.0 },
+            if self.compact { 126.0 } else { 164.0 },
         )
     }
 
@@ -2369,24 +2404,39 @@ impl App {
     fn section<'a>(
         head: Element<'a, Message>,
         cards: Vec<Element<'a, Message>>,
+        fill: bool,
     ) -> Element<'a, Message> {
-        container(
-            column![head, row(cards).spacing(10).height(Length::Fill)]
-                .spacing(6)
-                .height(Length::Fill),
-        )
-        .padding(8)
-        .height(Length::Fill)
-        .style(|_| container::Style {
-            background: Some(Background::Color(mix(bg(), panel(), 0.45))),
-            border: Border {
-                color: border(),
-                width: 1.0,
-                radius: 8.0.into(),
-            },
-            ..container::Style::default()
-        })
-        .into()
+        let strips = row(cards).spacing(10).height(Length::Fill);
+        let strips: Element<'a, Message> = if fill {
+            // The last group takes the rest of the window and scrolls sideways,
+            // so its frame always ends at the window edge.
+            iced::widget::scrollable(container(strips).padding(iced::Padding::default().bottom(10)))
+                .direction(iced::widget::scrollable::Direction::Horizontal(
+                    iced::widget::scrollable::Scrollbar::new()
+                        .width(8)
+                        .scroller_width(8)
+                        .margin(2),
+                ))
+                .style(style::scroll_style)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        } else {
+            strips.into()
+        };
+        container(column![head, strips].spacing(6).height(Length::Fill))
+            .padding(8)
+            .width(if fill { Length::Fill } else { Length::Shrink })
+            .height(Length::Fill)
+            .style(|_| container::Style {
+                border: Border {
+                    color: hairline(),
+                    width: 1.0,
+                    radius: 8.0.into(),
+                },
+                ..container::Style::default()
+            })
+            .into()
     }
 
     fn desk(&self) -> Element<'_, Message> {
@@ -2426,6 +2476,7 @@ impl App {
                 .filter(|&o| !self.outs[o].hidden)
                 .map(|o| self.master(o))
                 .collect(),
+            false,
         );
         let devices = Self::section(
             Self::heading("GERÄTE", None, self.compact),
@@ -2433,6 +2484,7 @@ impl App {
                 .filter(|&i| !self.strips[i].program)
                 .map(|i| self.strip(i))
                 .collect(),
+            false,
         );
         let add: Element<'_, Message> =
             button(text("+ Programm").size(12).font(BOLD).color(accent_light()))
@@ -2477,6 +2529,7 @@ impl App {
                 .filter(|&i| self.strips[i].program && !self.strips[i].hidden)
                 .map(|i| self.strip(i))
                 .collect(),
+            true,
         );
         if self.masters_left {
             row![outputs, devices, programs].spacing(10)
@@ -2607,7 +2660,7 @@ impl App {
                 .style(|_| container::Style {
                     background: Some(Background::Color(panel())),
                     border: Border {
-                        color: border(),
+                        color: hairline(),
                         width: 1.0,
                         radius: 6.0.into(),
                     },
