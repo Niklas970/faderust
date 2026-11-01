@@ -3,7 +3,14 @@ name: Pages
 on:
   push:
     branches: [main]
-    paths: [site/**, assets/**, .github/workflows/pages.yml]
+    paths:
+      - site/**
+      - assets/logo.svg
+      - assets/screenshot.png
+      - assets/matrix.png
+      - assets/design.png
+      - assets/faderust-reel.mp4
+      - .github/workflows/pages.yml
   workflow_dispatch:
 
 permissions:
