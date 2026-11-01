@@ -1,130 +1,138 @@
+<p align="center"><b>English</b> · <a href="README.de.md">Deutsch</a> · <a href="README.fr.md">Français</a> · <a href="README.es.md">Español</a> · <a href="README.it.md">Italiano</a> · <a href="README.nl.md">Nederlands</a> · <a href="README.pl.md">Polski</a></p>
+
 <p align="center"><img src="assets/logo.svg" width="112" alt="Faderust logo"></p>
 
 <h1 align="center">Faderust</h1>
 
 <p align="center">
-  Audio-Mixer für Windows, als schlanker, offener Ersatz für Voicemeeter.<br>
-  Jeder Ausgang bekommt seine eigene Mischung, Geräte dürfen im Betrieb kommen und gehen, virtuelle Kabel bringt Faderust selbst mit.
-</p>
-
-<p align="center">
-  <a href="https://github.com/Niklas970/faderust/releases/latest"><img src="https://img.shields.io/github/v/release/Niklas970/faderust?label=Download" alt="Neueste Version"></a>
+  <a href="https://github.com/Niklas970/faderust/releases/latest"><img src="https://img.shields.io/github/v/release/Niklas970/faderust?label=Download" alt="Latest version"></a>
   <a href="https://github.com/Niklas970/faderust/actions/workflows/ci.yml"><img src="https://github.com/Niklas970/faderust/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/Niklas970/faderust" alt="Lizenz MIT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Niklas970/faderust" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078d4" alt="Windows 10 | 11">
+  <img src="https://img.shields.io/badge/status-alpha-e2793f" alt="Alpha">
+  <a href="https://github.com/Niklas970/faderust/releases"><img src="https://img.shields.io/github/downloads/Niklas970/faderust/total?label=Downloads" alt="Downloads"></a>
+  <a href="https://github.com/Niklas970/faderust/stargazers"><img src="https://img.shields.io/github/stars/Niklas970/faderust?style=flat" alt="Stars"></a>
+  <a href="https://github.com/Niklas970/faderust/commits/main"><img src="https://img.shields.io/github/last-commit/Niklas970/faderust" alt="Last commit"></a>
+  <img src="https://img.shields.io/badge/Rust-stable-dea584?logo=rust&logoColor=white" alt="Rust">
 </p>
-
-![Faderust im Pult mit Geräten, Programmen und drei Ausgängen](assets/screenshot.png)
 
 <p align="center">
-  <a href="assets/faderust-reel.mp4"><img src="assets/faderust-reel.gif" width="270" alt="Faderust in 40 Sekunden"></a><br>
-  <sub>Vorschau, <a href="assets/faderust-reel.mp4">Video in voller Qualität</a> (zum Herunterladen)</sub>
+  Audio mixer for Windows, a lean, open replacement for Voicemeeter.<br>
+  Every output gets its own mix, devices may come and go while it runs, and Faderust brings its own virtual cables.
 </p>
 
-> **Alpha.** Faderust läuft, ist aber noch kaum auf echter Hardware erprobt. Fehler bitte als [Issue](https://github.com/Niklas970/faderust/issues) melden.
+![Faderust desk with devices, programs and three outputs](assets/screenshot.png)
 
-## Was Faderust kann
+<p align="center">
+  <a href="assets/faderust-reel.mp4"><img src="assets/faderust-reel.gif" width="270" alt="Faderust in 40 seconds"></a><br>
+  <sub>Preview, <a href="assets/faderust-reel.mp4">full-quality video</a> (download)</sub>
+</p>
 
-- **Pult wie bei Voicemeeter.** Jedes Gerät und jedes Programm bekommt einen Streifen mit Fader, MUTE und den Knöpfen A1, A2, A3 für die Ausgänge. Jeder Ausgang hat einen eigenen Master-Fader.
-- **Matrix für Feinarbeit.** Alternativ als Tabelle: jeder Eingang auf jedem Ausgang einzeln geregelt, z. B. das Mikro leiser auf dem Kopfhörer als im Stream.
-- **Programme direkt aufnehmen.** Discord, Spotify oder der Browser bekommen einen eigenen Streifen mit Effekten, ganz ohne virtuelles Kabel pro Programm. Stille Programme blendet Faderust aus und holt sie auf Wunsch einzeln zurück („N still, zeigen“).
-- **Eigene virtuelle Kabel, kein Zusatz-Treiber.** Das „Faderust Kabel“ (bis zu vier) richtet die App selbst ein, zum Beispiel eines für das Mikrofon und eines für Programme. Details unter [Faderust Kabel](#faderust-kabel).
-- **Aufgeräumt.** Ausgänge lassen sich mit dem × ausblenden und kommen von selbst zurück, sobald wieder Ton auf ihnen spielt.
-- **Geräte kommen und gehen.** Bluetooth-Kopfhörer aus- und wieder einschalten, USB-Gerät abziehen: Faderust verbindet neu, ohne die anderen Geräte zu unterbrechen.
-- **Multipoint-freundlich.** Bluetooth-Ausgänge gibt Faderust bei Stille frei (nach 30 s, pro Ausgang einstellbar), damit die Kopfhörer zum Handy wechseln können. Kommt wieder Ton, öffnen sie sich von selbst.
-- **Effekte pro Eingang:** Rauschunterdrückung ([RNNoise](https://jmvalin.ca/demo/rnnoise/), gegen Tastatur und Lüfter), Low-Cut, Drei-Band-EQ und Gate. Die Rauschunterdrückung läuft bei Geräten mit 48 kHz und verzögert den Ton um 10 ms.
-- **Deutsch und Englisch.** Die Sprache folgt Windows und lässt sich unter „Design“ umstellen.
-- **Einstellungen speichern sich selbst.** Der Geräte-Dialog übernimmt Änderungen kurz nach der letzten Eingabe.
-- **Selbsttest.** Unter „Geräte“ prüft Faderust Geräte, Puffer, Rückkopplung, Fernsteuerung und Stream-Deck-Plugin und zeigt, was in Ordnung ist und was nicht. Der Bericht lässt sich für ein Issue kopieren.
-- **Windows-Sound aus einer Hand:** Standardgeräte für Wiedergabe, Aufnahme und Anrufe sowie die Lautstärke pro Gerät.
-- **Presets, Autostart im Tray, Updates in der App** (mit Signaturprüfung) und ein **Stream-Deck-Plugin**.
-- **Kompakt und im Vordergrund.** Zwei Knöpfe in der Titelleiste: schmale Ansicht ohne Beschriftungen und „Immer im Vordergrund“, z. B. neben einem Spiel. Beides bleibt gespeichert.
-- **Eigene Farben:** Akzent- und Signalfarbe frei wählbar, dunkel (OLED-Schwarz) oder hell.
+> **Alpha.** Faderust runs, but has hardly been tested on real hardware yet. Please report problems as an [issue](https://github.com/Niklas970/faderust/issues).
 
-## Ansichten
+## What Faderust does
+
+- **A desk like Voicemeeter.** Every device and every program gets a strip with a fader, MUTE and the buttons A1, A2, A3 for the outputs. Each output has its own master fader.
+- **Matrix for fine work.** Alternatively as a table: every input on every output set individually, e.g. the microphone quieter on the headphones than in the stream.
+- **Capture programs directly.** Discord, Spotify or the browser get their own strip with effects, without a virtual cable per program. Faderust hides silent programs and brings them back individually on request ("N silent, show").
+- **Its own virtual cables, no extra driver.** The app sets up the "Faderust Kabel" (up to four) itself, for example one for the microphone and one for programs. Details under [Faderust Kabel](#faderust-kabel).
+- **Tidy.** Outputs can be hidden with the × and come back by themselves as soon as sound plays on them again.
+- **Devices come and go.** Switch Bluetooth headphones off and on, unplug a USB device: Faderust reconnects without interrupting the other devices.
+- **Multipoint friendly.** Faderust releases Bluetooth outputs during silence (after 30 s, adjustable per output) so the headphones can switch to the phone. When sound returns, they reopen by themselves.
+- **Effects per input:** noise suppression ([RNNoise](https://jmvalin.ca/demo/rnnoise/), against keyboard and fan noise), low-cut, three-band EQ and gate. Noise suppression runs on 48 kHz devices and delays the sound by 10 ms.
+- **German and English.** The language follows Windows and can be changed under "Design".
+- **Settings save themselves.** The devices dialog applies changes shortly after the last input.
+- **Self-test.** Under "Devices" Faderust checks devices, buffers, feedback, remote control and the Stream Deck plugin and shows what is fine and what is not. The report can be copied for an issue.
+- **Windows sound in one place:** default devices for playback, recording and calls, plus the volume per device.
+- **Presets, autostart in the tray, in-app updates** (with signature check) and a **Stream Deck plugin**.
+- **Compact and on top.** Two buttons in the title bar: a narrow view without labels and "Always on top", e.g. next to a game. Both are remembered.
+- **Your own colors:** accent and signal color freely selectable, dark (OLED black) or light.
+
+## Views
 
 <table>
   <tr>
-    <td width="68%"><img src="assets/matrix.png" alt="Matrix: jeder Eingang auf jedem Ausgang einzeln geregelt"></td>
-    <td><img src="assets/design.png" alt="Design-Dialog mit Ansicht, Farben und Darstellung"></td>
+    <td width="68%"><img src="assets/matrix.png" alt="Matrix: every input on every output set individually"></td>
+    <td><img src="assets/design.png" alt="Design dialog with view, colors and appearance"></td>
   </tr>
   <tr>
-    <td><b>Matrix:</b> jeder Eingang auf jedem Ausgang einzeln, z. B. das Mikro leiser auf dem Kopfhörer als im Stream.</td>
-    <td><b>Design:</b> Pult oder Matrix, Seite der Ausgänge, Farben, dunkel oder hell.</td>
+    <td><b>Matrix:</b> every input on every output individually, e.g. the microphone quieter on the headphones than in the stream.</td>
+    <td><b>Design:</b> desk or matrix, side of the outputs, colors, dark or light.</td>
   </tr>
 </table>
 
 ## Installation
 
-1. Unter [Releases](https://github.com/Niklas970/faderust/releases/latest) die Datei `Faderust_*_x64-setup.exe` laden und starten. Das Setup braucht keine Admin-Rechte und spricht Deutsch oder Englisch.
-2. Das Setup ist nicht signiert, deshalb warnt Windows SmartScreen: „Weitere Informationen“ → „Trotzdem ausführen“.
-3. Faderust aus dem Startmenü öffnen. Neue Versionen meldet die App oben in der Titelleiste, ein Klick auf die Versionsnummer sucht sofort danach.
+1. Download `Faderust_*_x64-setup.exe` from [Releases](https://github.com/Niklas970/faderust/releases/latest) and run it. The setup needs no admin rights and speaks German or English.
+2. The setup is not signed, so Windows SmartScreen warns: "More info" → "Run anyway".
+3. Open Faderust from the Start menu. The app reports new versions at the top of the title bar; a click on the version number checks right away.
 
-Voraussetzung: Windows 10 (ab Version 2004) oder Windows 11.
+Requirement: Windows 10 (version 2004 or later) or Windows 11.
 
-## Erste Schritte
+## Getting started
 
-1. **Geräte** öffnen und Eingänge (Mikrofon, Line-In, Faderust Kabel) und Ausgänge (Kopfhörer, Lautsprecher, Stream) anlegen. Bluetooth braucht etwa 80 ms Puffer, USB meist 30 bis 60 ms.
-2. Im **Pult** mit A1–A3 wählen, wohin ein Eingang spielt. Der Fader regelt alle eingeschalteten Ausgänge gemeinsam.
-3. Fader bedienen: ziehen, Mausrad (mit Shift feiner), Doppelklick auf 0 dB, oder auf die dB-Zahl darunter klicken und einen Wert eintippen.
-4. **Effekte** unter einem Streifen öffnet Low-Cut, EQ und Gate.
-5. Unter **Design** zwischen Pult und Matrix wechseln, die Seite der Ausgänge und die Farben wählen.
+1. Open **Devices** and create inputs (microphone, line-in, Faderust Kabel) and outputs (headphones, speakers, stream). Bluetooth needs about 80 ms of buffer, USB usually 30 to 60 ms.
+2. In the **desk**, use A1–A3 to choose where an input plays. The fader controls all enabled outputs together.
+3. Using faders: drag, mouse wheel (finer with Shift), double-click for 0 dB, or click the dB number below and type a value.
+4. **Effects** under a strip opens low-cut, EQ and gate.
+5. Under **Design**, switch between desk and matrix and choose the side of the outputs and the colors.
 
-### Programme
+### Programs
 
-**+ Programm** im Pult zeigt alle Programme, die gerade Ton abspielen. **+ Eingang** nimmt eines direkt auf. Damit du es nicht doppelt hörst, stellt Faderust das Programm zuerst auf ein freies Faderust Kabel, das du nicht hörst (falls eingerichtet), und nimmt es dann auf. Ein Programm, das gerade still ist, blendet Faderust aus; **N still, zeigen** holt es zurück.
+**+ Program** in the desk lists all programs that are playing sound right now. **+ Input** captures one directly. So that you do not hear it twice, Faderust first moves the program to a free Faderust Kabel that you do not listen to (if set up) and then captures it. A program that is silent at the moment is hidden by Faderust; **N silent, show** brings it back.
 
-### Mikrofon für Discord, Teams & Co.
+### Microphone for Discord, Teams & co.
 
-Unter **Geräte** legt **+ Programm-Mikro** einen Ausgang auf einem freien Faderust Kabel an, auf dem nur das Mikrofon mit seinen Effekten liegt. Im Programm wählst du die Aufnahme-Seite desselben Kabels als Mikrofon. Rückkopplungen (ein Ausgang spielt auf das Kabel, von dem ein Eingang kommt) schaltet Faderust stumm und zeigt „Schleife“.
+Under **Devices**, **+ Program mic** creates an output on a free Faderust Kabel that carries only the microphone with its effects. In the program, choose the recording side of the same cable as the microphone. Faderust mutes feedback loops (an output plays onto the cable that an input comes from) and shows "Loop".
 
 ### Faderust Kabel
 
-Das Faderust Kabel ist ein virtuelles USB-Soundgerät (Stereo, 48 kHz, 24 Bit), das Faderust selbst bereitstellt. Faderust zeigt es als „Faderust Kabel (Wiedergabe)“ und „Faderust Kabel (Aufnahme)“; was ein Programm auf die Wiedergabe-Seite spielt, kommt auf der Aufnahme-Seite wieder heraus.
+The Faderust Kabel is a virtual USB sound device (stereo, 48 kHz, 24 bit) that Faderust provides itself. Faderust shows it as "Faderust Kabel (Playback)" and "Faderust Kabel (Recording)"; what a program plays to the playback side comes out again on the recording side.
 
-1. Unter **Geräte** → **Faderust Kabel** auf **Einrichten** klicken (einmalig, mit einer Administrator-Abfrage). Faderust lädt dabei [usbip-win2](https://github.com/vadimgrn/usbip-win2) herunter, prüft die Prüfsumme und installiert es im Hintergrund. In der Windows-App-Liste erscheint es nicht extra.
-2. **Faderust Kabel** einschalten und die Anzahl wählen (1 bis 4), zum Beispiel eines für das Mikrofon und eines für Programme. Windows zeigt sie in seinen Einstellungen als „Faderust Cable“, „Faderust Cable 2“ und so weiter.
-3. **Entfernen** nimmt die Einrichtung samt usbip-win2 wieder zurück.
+1. Under **Devices** → **Faderust Kabel** click **Set up** (once, with an administrator prompt). Faderust downloads [usbip-win2](https://github.com/vadimgrn/usbip-win2), verifies the checksum and installs it in the background. It does not appear separately in the Windows app list.
+2. Switch **Faderust Kabel** on and choose the number (1 to 4), for example one for the microphone and one for programs. Windows shows them in its settings as "Faderust Cable", "Faderust Cable 2" and so on.
+3. **Remove** undoes the setup including usbip-win2.
 
-Hinweis: Das Kabel ist noch ein Test und auf wenig Hardware erprobt.
+Note: the cable is still an experiment and has been tested on little hardware.
 
-## Grenzen
+## Limits
 
-- Programme merken sich Fader, Ausgänge und Effekte, solange ihr Streifen im Pult bleibt: Startet Discord neu, kommt es mit seinen alten Einstellungen zurück. Entfernst du den Streifen unter „Geräte“, sind sie weg.
-- Kein eigener Kernel-Treiber. Die virtuellen Kabel („Faderust Kabel“, bis zu vier) sind USB-Soundgeräte, die Faderust selbst per USB/IP bereitstellt. Windows bindet dafür seinen eingebauten USB-Audiotreiber; der USB/IP-Teil ist [usbip-win2](https://github.com/vadimgrn/usbip-win2) (BSD-2, von Microsoft signiert), das die Einrichtung einmalig installiert.
-- Windows liefert den Ton pro Programm, nicht pro Browser-Tab oder Web-App. Alles aus einem Browser läuft über denselben Audio-Prozess.
-- Bluetooth braucht nach einer Freigabe etwa eine Sekunde, bis wieder Ton kommt. Wer das nicht will, stellt den Ausgang auf „Nie frei“.
-- Die Zuordnung „Programm → Gerät“ nutzt dieselbe nicht dokumentierte Windows-Schnittstelle wie der Lautstärkemixer in den Einstellungen.
+- Programs remember faders, outputs and effects as long as their strip stays in the desk: if Discord restarts, it comes back with its old settings. If you remove the strip under "Devices", they are gone.
+- No custom kernel driver. The virtual cables ("Faderust Kabel", up to four) are USB sound devices that Faderust provides itself via USB/IP. Windows uses its built-in USB audio driver for them; the USB/IP part is [usbip-win2](https://github.com/vadimgrn/usbip-win2) (BSD-2, signed by Microsoft), which the setup installs once.
+- Windows delivers sound per program, not per browser tab or web app. Everything from one browser runs through the same audio process.
+- After a release, Bluetooth needs about a second until sound returns. If you do not want that, set the output to "Never release".
+- The "program → device" assignment uses the same undocumented Windows interface as the volume mixer in the settings.
 
-Einstellungen: `%APPDATA%\io.github.niklas970.faderust\config.toml`, daneben das Protokoll `faderust.log`, das bei Fehlern hilft.
+Settings: `%APPDATA%\io.github.niklas970.faderust\config.toml`, next to it the log `faderust.log`, which helps with errors.
 
-## Entwicklung
+## Development
 
-Rust für den Audio-Kern und die Oberfläche ([iced](https://iced.rs), kein WebView2).
+Rust for the audio core and the interface ([iced](https://iced.rs), no WebView2).
 
-| Pfad | Inhalt |
+| Path | Contents |
 |---|---|
-| `crates/engine` | Audio-Kern: Geräte (WASAPI über cpal), Ringpuffer, Drift-Ausgleich, Mix-Matrix, Effekte, Programm-Aufnahme |
-| `crates/usbcable` | Faderust Kabel: virtuelles USB-Audiogerät über USB/IP |
-| `crates/core` | Logik hinter der Oberfläche: Konfiguration, Geräte, Programme, Kabel, Fernsteuerung, Updater |
-| `crates/gui` | Das Programm `faderust`: iced-Fenster, Tray, Autostart |
-| `streamdeck` | Stream-Deck-Plugin |
+| `crates/engine` | Audio core: devices (WASAPI via cpal), ring buffers, drift compensation, mix matrix, effects, program capture |
+| `crates/usbcable` | Faderust Kabel: virtual USB audio device over USB/IP |
+| `crates/core` | Logic behind the interface: configuration, devices, programs, cables, remote control, updater |
+| `crates/gui` | The `faderust` program: iced window, tray, autostart |
+| `streamdeck` | Stream Deck plugin |
 
-Voraussetzungen: Rust (stable); für das Stream-Deck-Plugin Node.js.
+Requirements: Rust (stable); Node.js for the Stream Deck plugin.
 
 ```sh
 cargo test
 cargo run --release -p faderust
 ```
 
-- Setup bauen: `makensis` mit `installer/faderust.nsi` (Parameter stehen im Kopf der Datei). Releases entstehen über den Workflow „Release“.
-- Engine ohne Oberfläche: `cargo run --release -p faderust-engine --example mixer -- --list`
+- Build the setup: `makensis` with `installer/faderust.nsi` (parameters are at the top of the file). Releases are built by the "Release" workflow.
+- Engine without interface: `cargo run --release -p faderust-engine --example mixer -- --list`
 
-Vor einem Commit: `cargo fmt`, `cargo clippy -- -D warnings`, `cargo test`. Neue Abhängigkeiten brauchen eine freizügige Lizenz (`cargo deny check`).
+Before a commit: `cargo fmt`, `cargo clippy -- -D warnings`, `cargo test`. New dependencies need a permissive license (`cargo deny check`).
 
 ## Stream Deck
 
-Das Plugin in [`streamdeck/`](streamdeck/README.md) steuert Faderust vom Elgato Stream Deck: Fader per Drehregler oder Taste, Stummschalten, Presets und Windows-Standardgerät. `com.niklas970.faderust.streamDeckPlugin` aus den [Releases](https://github.com/Niklas970/faderust/releases) doppelklicken (Stream Deck 7.1 oder neuer). Ab da liefert das Setup das Plugin mit: unter „Geräte“ zeigt Faderust, ob eine neuere Plugin-Version bereitliegt, und öffnet sie mit einem Klick in der Stream-Deck-Software, die dann nur noch um Bestätigung bittet.
+The plugin in [`streamdeck/`](streamdeck/README.md) controls Faderust from the Elgato Stream Deck: faders via dial or key, mute, presets and the Windows default device. Double-click `com.niklas970.faderust.streamDeckPlugin` from the [Releases](https://github.com/Niklas970/faderust/releases) (Stream Deck 7.1 or newer). From then on the setup ships the plugin: under "Devices" Faderust shows whether a newer plugin version is available and opens it with one click in the Stream Deck software, which then only asks for confirmation.
 
-## Lizenz
+## License
 
 [MIT](LICENSE)
