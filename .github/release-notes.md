@@ -1,8 +1,10 @@
-## Neu in 0.7.2
+## Neu in 0.7.3
 
-- **Presets exportieren und importieren:** im Presets-Dialog „Export“ pro Preset (speichert eine Datei) und „Preset importieren …“ (liest eine Datei, ein gleichnamiges Preset wird ersetzt)
-- **Sauberes Schwarz:** Pult, Streifen und Dialoge sind im dunklen Design jetzt reines Schwarz statt leicht grau
-- **Neues Symbol** für „Windows“ in der Navigation (Lautsprecher)
+- **Weichere Fader:** Die Fader gleiten wie an einer Feder, mit weichem Start und Ende
+- **Neues Aussehen der Leiste:** größere, gezeichnete Symbole in den Knöpfen oben, Dialog-Knöpfe in reinem Schwarz (hell: Weiß), Trennlinien in der Akzentfarbe
+- **Logo** mit kräftigerem Neon-Grün
+- Die Auswahl „Grafikkarte/Software“ im Design-Dialog ist entfallen
+- Kleine Korrekturen an der Engine (Rückkopplungs-Erkennung, ausgefallene Geräte)
 
 ## Installation
 
