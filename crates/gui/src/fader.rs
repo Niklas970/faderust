@@ -35,6 +35,8 @@ pub struct Fader<'a> {
     pub pos: f32,
     pub muted: bool,
     pub level: f32,
+    /// Peak mark of the meter (same domain as `level`).
+    pub peak: f32,
     /// The level already includes this fader (an output's master).
     pub post_fader: bool,
     /// Without the scale, for the narrower program strips.
@@ -373,33 +375,42 @@ impl Fader<'_> {
             &frame,
             Stroke::default().with_color(border()).with_width(1.0),
         );
-        let shown = if self.muted {
-            scale::OFF
-        } else if self.post_fader {
-            self.level
+        let offset = if self.post_fader {
+            0.0
         } else {
-            self.level + self.db.max(scale::OFF)
+            self.db.max(scale::OFF)
         };
-        let lit = ((shown + 60.0) / 60.0).clamp(0.0, 1.0);
+        let frac_of = |level: f32| ((level + offset + 60.0) / 60.0).clamp(0.0, 1.0);
+        let lit = if self.muted { 0.0 } else { frac_of(self.level) };
         let inner = h - 2.0;
-        let mut y = top + h - 1.0;
-        while y - 4.0 >= top + 1.0 {
-            let frac = (top + h - 1.0 - y + 4.0) / inner;
-            if frac - 4.0 / inner < lit {
-                let color = if frac > 0.95 {
-                    danger()
-                } else if frac > 0.80 {
-                    amber()
-                } else {
-                    signal()
-                };
+        let base = top + h - 1.0;
+        // One continuous bar; signal, amber and clip colours by height.
+        // Solid bands, because gradients draw wrongly on some graphics drivers.
+        for (from, to, color) in [
+            (0.0_f32, 0.80_f32, signal()),
+            (0.80, 0.95, amber()),
+            (0.95, 1.0, danger()),
+        ] {
+            let (lo, hi) = (from.min(lit), to.min(lit));
+            if hi - lo > 0.0005 {
                 f.fill_rectangle(
-                    Point::new(mx + 1.0, y - 4.0),
-                    Size::new(mw - 2.0, 4.0),
+                    Point::new(mx + 1.0, base - inner * hi),
+                    Size::new(mw - 2.0, inner * (hi - lo)),
                     color,
                 );
             }
-            y -= 6.0;
+        }
+        if !self.muted && self.peak > -60.0 {
+            let py = base - inner * frac_of(self.peak);
+            f.fill_rectangle(
+                Point::new(mx + 1.0, (py - 1.5).max(top + 1.0)),
+                Size::new(mw - 2.0, 3.0),
+                if frac_of(self.peak) > 0.95 {
+                    danger()
+                } else {
+                    Color::WHITE
+                },
+            );
         }
     }
 }
