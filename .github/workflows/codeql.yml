@@ -1,9 +1,10 @@
 name: "CodeQL Advanced"
 
-# Advanced setup with a path filter (the template cannot do that): on pull requests
-# each language is only analysed when its own files changed. The Rust analysis
-# is the slowest check by far (about 6 minutes). Pushes to main and the weekly
-# run always analyse everything.
+# Advanced setup with a path filter (the template cannot do that): on pull
+# requests and pushes to main, each language is only analysed when its own files
+# changed. The Rust analysis is the slowest check by far (about 6 minutes), and
+# it ran again on main after every merge. The weekly run (and a manual one)
+# always analyses everything, so nothing goes stale.
 on:
   push:
     branches: [main]
@@ -37,17 +38,27 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # The merge commit of a pull request and its first parent (the base).
-          fetch-depth: 2
+          # Whole history: a push needs the commit before it, a pull request
+          # its base. The repository is small.
+          fetch-depth: 0
       # The check stays green when nothing relevant changed, so a branch rule
       # that requires it is not left waiting.
-      - name: Does this pull request touch ${{ matrix.language }}?
+      - name: Does this change touch ${{ matrix.language }}?
         id: scope
         env:
           FILES: ${{ matrix.files }}
+          BEFORE: ${{ github.event.before }}
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] \
-            && ! git diff --name-only HEAD^1 HEAD | grep -Eq "$FILES"; then
+          range=""
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            range="HEAD^1 HEAD"
+          elif [ "$GITHUB_EVENT_NAME" = "push" ] \
+            && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            # Not for the first push of a branch or after a force push, where
+            # the previous commit is missing: those analyse everything.
+            range="$BEFORE $GITHUB_SHA"
+          fi
+          if [ -n "$range" ] && ! git diff --name-only $range | grep -Eq "$FILES"; then
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "No ${{ matrix.language }} files changed: skipped."
           else
