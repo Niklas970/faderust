@@ -10,11 +10,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::backend::{AudioBackend, BackendError, DeviceInfo, StreamFormat};
+use crate::duck::{InputDuck, Levels};
 use crate::fx::InputFx;
 use crate::lane::{lane, LaneSpec, LaneStats};
 use crate::matrix::MixMatrix;
 use crate::meter::PeakMeter;
-use crate::node::{InputCommand, InputNode, NodeHandle, OutputCommand, OutputNode};
+use crate::node::{DuckLink, InputCommand, InputNode, NodeHandle, OutputCommand, OutputNode};
 
 #[derive(Debug, Clone)]
 pub struct InputConfig {
@@ -201,6 +202,10 @@ pub struct Engine<B: AudioBackend> {
     lanes: Vec<Vec<Arc<LaneStats>>>,
     /// Effect settings per input, stable across reconnections.
     fx: Vec<Arc<InputFx>>,
+    /// Ducking settings per input, stable across reconnections.
+    duck: Vec<Arc<InputDuck>>,
+    /// Last callback peak of every input, read by the ducked ones.
+    levels: Arc<Levels>,
     idle: Vec<Idle>,
     /// Per output: start of the current stall window and the frames dropped
     /// for it by then.
@@ -270,6 +275,8 @@ impl<B: AudioBackend> Engine<B> {
                 .map(|_| (0..n_out).map(|_| Arc::default()).collect())
                 .collect(),
             fx: (0..n_in).map(|_| Arc::default()).collect(),
+            duck: (0..n_in).map(|_| Arc::default()).collect(),
+            levels: Arc::new(Levels::new(n_in)),
             idle: (0..n_out).map(|_| Idle::default()).collect(),
             heard: vec![None; n_in],
             listed: None,
@@ -294,6 +301,11 @@ impl<B: AudioBackend> Engine<B> {
     /// Effect settings of `input`; changes apply while it plays.
     pub fn input_fx(&self, input: usize) -> &Arc<InputFx> {
         &self.fx[input]
+    }
+
+    /// Ducking settings of `input`; changes apply while it plays.
+    pub fn input_duck(&self, input: usize) -> &Arc<InputDuck> {
+        &self.duck[input]
     }
 
     /// Whether `output` is closed because nothing played for it.
@@ -653,6 +665,12 @@ impl<B: AudioBackend> Engine<B> {
             Arc::clone(&state.meter),
             Arc::clone(&self.fx[i]),
             format.sample_rate,
+            DuckLink {
+                index: i,
+                duck: Arc::clone(&self.duck[i]),
+                levels: Arc::clone(&self.levels),
+                matrix: Arc::clone(&self.matrix),
+            },
         );
         let (flag, on_error) = error_flag(state);
         let channels = format.channels as usize;
@@ -703,6 +721,8 @@ impl<B: AudioBackend> Engine<B> {
             live.close();
         }
         self.inputs[i].device = None;
+        // A gone trigger must not keep other inputs down.
+        self.levels.set(i, 0.0);
         for live in self.live_out.iter_mut().flatten() {
             let _ = live.handle.send(OutputCommand::SetLane(i, None));
         }
@@ -1045,6 +1065,31 @@ mod tests {
                 assert_eq!(engine.lane_stats(i, o).underruns.load(Relaxed), 0);
             }
         }
+    }
+
+    #[test]
+    fn game_ducks_while_mic_talks() {
+        let b = FakeBackend::default();
+        b.plug_input("mic", 48_000, 1);
+        b.plug_input("game", 48_000, 2);
+        b.plug_output("usb", 48_000, 2);
+        let mut engine = Engine::new(b.clone(), config(&["mic", "game"], &[("usb", 20)])).unwrap();
+        assert_eq!(connected(&engine.maintain()), 3);
+        engine.input_duck(1).set(crate::DuckSettings {
+            trigger: Some(0),
+            threshold_db: -30.0,
+            amount_db: 12.0,
+            attack_ms: 10.0,
+            release_ms: 100.0,
+        });
+        // Mic at 0.2 (-14 dBFS) talks: game 0.4 drops by 12 dB.
+        let out = b.pump(2000, level);
+        let drop = 10f32.powf(-12.0 / 20.0);
+        assert_level(&out["usb"], 0.2 + 0.4 * drop, 2e-3);
+        // Muting the mic ends the ducking.
+        engine.matrix.set_input_muted(0, true);
+        let out = b.pump(2000, level);
+        assert_level(&out["usb"], 0.4, 2e-3);
     }
 
     #[test]

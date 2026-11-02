@@ -29,7 +29,7 @@ use std::time::{Duration, Instant};
 
 use faderust_core::audio::{Command, Notice, UiState};
 use faderust_core::config::{Config as CoreConfig, InputEntry};
-use faderust_core::config::{Fx as CoreFx, Gain};
+use faderust_core::config::{Duck, Fx as CoreFx, Gain};
 use faderust_core::selftest::Check;
 use faderust_core::update::Update;
 use faderust_core::{cable, AppState, Apps, Devices, Host, StreamDeckStatus, WindowsAudio};
@@ -196,6 +196,8 @@ pub struct App {
     pub strips: Vec<Strip>,
     pub outs: Vec<Out>,
     pub fx: Vec<Fx>,
+    /// Ducking per input, like `fx`.
+    pub duck: Vec<Duck>,
     pub presets: Vec<String>,
     pub new_preset: String,
     /// Windows sound dialog.
@@ -268,6 +270,12 @@ pub enum Edit {
     Gate(usize, bool),
     GateDb(usize, f32),
     ResetFx(usize),
+    /// Which input lowers this one (none = off).
+    DuckTrigger(usize, Option<usize>),
+    DuckThreshold(usize, f32),
+    DuckAmount(usize, f32),
+    DuckAttack(usize, f32),
+    DuckRelease(usize, f32),
     Refresh,
     AppDevice(Vec<u32>, Option<String>),
     AppInput(String, String),
@@ -847,6 +855,7 @@ impl App {
             label,
             device,
             fx: Default::default(),
+            duck: Default::default(),
             muted: false,
         });
         next.gains
@@ -1003,6 +1012,7 @@ impl App {
             strips: vec![],
             outs: vec![],
             fx: vec![],
+            duck: vec![],
             presets: vec![],
             new_preset: String::new(),
             win: None,
@@ -1085,9 +1095,11 @@ impl App {
                 anchor: None,
             });
             self.fx.push(CoreFx::default().into());
+            self.duck.push(Duck::default());
         }
         self.strips.truncate(snap.inputs.len());
         self.fx.truncate(snap.inputs.len());
+        self.duck.truncate(snap.inputs.len());
         for (i, (s, d)) in self.strips.iter_mut().zip(&snap.inputs).enumerate() {
             let row: Vec<Gain> = (0..snap.outputs.len())
                 .map(|o| {
@@ -1133,6 +1145,9 @@ impl App {
             if self.dialog != Some(Dialog::Fx(i)) {
                 if let Some(fx) = d.fx {
                     self.fx[i] = fx.into();
+                }
+                if let Some(duck) = d.duck {
+                    self.duck[i] = duck;
                 }
             }
             s.shown = ease(s.shown, s.target, dt);
@@ -1486,14 +1501,30 @@ impl App {
         }
     }
 
+    fn set_duck(&mut self, i: usize, f: impl FnOnce(&mut Duck)) {
+        if let Some(duck) = self.duck.get_mut(i) {
+            f(duck);
+            let duck = *duck;
+            self.send(Command::SetDuck(i, duck));
+        }
+    }
+
     fn edit(&mut self, e: Edit) {
         match e {
+            Edit::DuckTrigger(i, t) => self.set_duck(i, |d| d.trigger = t),
+            Edit::DuckThreshold(i, v) => self.set_duck(i, |d| d.threshold_db = v),
+            Edit::DuckAmount(i, v) => self.set_duck(i, |d| d.amount_db = v),
+            Edit::DuckAttack(i, v) => self.set_duck(i, |d| d.attack_ms = v),
+            Edit::DuckRelease(i, v) => self.set_duck(i, |d| d.release_ms = v),
             Edit::Denoise(i, on) => self.set_fx(i, |f| f.denoise = on),
             Edit::LowCut(i, hz) => self.set_fx(i, |f| f.low_cut = hz),
             Edit::Eq(i, b, v) => self.set_fx(i, |f| f.eq[b] = v),
             Edit::Gate(i, on) => self.set_fx(i, |f| f.gate = on),
             Edit::GateDb(i, v) => self.set_fx(i, |f| f.gate_db = v),
-            Edit::ResetFx(i) => self.set_fx(i, |f| *f = CoreFx::default().into()),
+            Edit::ResetFx(i) => {
+                self.set_fx(i, |f| *f = CoreFx::default().into());
+                self.set_duck(i, |d| *d = Duck::default());
+            }
             Edit::Refresh => {
                 let t = self.refresh_dialog();
                 self.jobs.push(t);
@@ -1569,6 +1600,7 @@ impl App {
                             label: format!("Eingang {}", c.inputs.len() + 1),
                             device,
                             fx: Default::default(),
+                            duck: Default::default(),
                             muted: false,
                         });
                         c.gains
@@ -1585,6 +1617,7 @@ impl App {
                 self.draft_edit(|c| {
                     if i < c.inputs.len() {
                         c.inputs.remove(i);
+                        c.duck_after_remove(i);
                         if i < c.gains.len() {
                             c.gains.remove(i);
                         }
@@ -1603,6 +1636,7 @@ impl App {
                     if j >= 0 && (j as usize) < c.inputs.len() {
                         let j = j as usize;
                         c.inputs.swap(i, j);
+                        c.duck_after_swap(i, j);
                         if i < c.gains.len() && j < c.gains.len() {
                             c.gains.swap(i, j);
                         }

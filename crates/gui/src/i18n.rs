@@ -20,6 +20,15 @@ const TABLE: &[(&str, &str)] = &[
     ("Ansicht", "View"),
     ("Anzahl Kabel", "Number of cables"),
     ("Aufnahme", "Recording"),
+    ("Absenkung", "Reduction"),
+    ("Auslöser", "Trigger"),
+    ("Ducking", "Ducking"),
+    ("Einsatz", "Attack"),
+    ("Rückkehr", "Release"),
+    (
+        "Wird leiser, sobald der gewählte Eingang spricht, z. B. Musik unter dem Mikrofon.",
+        "Gets quieter while the chosen input is loud, e.g. music under the microphone.",
+    ),
     ("Aus", "Off"),
     (
         "Ausgabegeräte pro Programm gibt es nur unter Windows.",
