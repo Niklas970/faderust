@@ -68,6 +68,9 @@ pub struct Strip {
     pub muted: bool,
     /// Meter as drawn (eased towards `target`).
     pub shown: f32,
+    /// Peak mark of the meter and how long it still holds (seconds).
+    pub peak: f32,
+    pub peak_hold: f32,
     /// Fader position as drawn (0..1, eased towards the real one).
     pub pos: f32,
     /// Speed of the fader glide (the spring's velocity).
@@ -105,6 +108,9 @@ pub struct Out {
     pub db: f32,
     pub muted: bool,
     pub shown: f32,
+    /// Peak mark of the meter and how long it still holds (seconds).
+    pub peak: f32,
+    pub peak_hold: f32,
     /// Fader position as drawn (0..1, eased towards the real one).
     pub pos: f32,
     /// Speed of the fader glide (the spring's velocity).
@@ -456,12 +462,25 @@ fn hide_secs(label: &str) -> u64 {
     }
 }
 
-/// Meter smoothing: fast up, slow down.
+/// Meter smoothing: fast up, a little slower down. Strips and outputs use
+/// this same curve, so their bars move in step.
 fn ease(shown: f32, target: f32, dt: f32) -> f32 {
     if target > shown {
-        shown + (target - shown) * (1.0 - (-dt / 0.06).exp())
+        shown + (target - shown) * (1.0 - (-dt / 0.025).exp())
     } else {
-        target.max(shown - 12.0 * dt)
+        target.max(shown - 20.0 * dt)
+    }
+}
+
+/// Peak mark: jumps up with the level, holds for a second, then falls.
+fn peak_step(peak: &mut f32, hold: &mut f32, shown: f32, dt: f32) {
+    if shown >= *peak {
+        *peak = shown;
+        *hold = 1.0;
+    } else if *hold > 0.0 {
+        *hold -= dt;
+    } else {
+        *peak = (*peak - 14.0 * dt).max(shown);
     }
 }
 
@@ -1110,6 +1129,8 @@ impl App {
                 db: 0.0,
                 muted: false,
                 shown: -120.0,
+                peak: -120.0,
+                peak_hold: 0.0,
                 pos: 0.75,
                 vel: 0.0,
                 target: -120.0,
@@ -1184,6 +1205,7 @@ impl App {
                 }
             }
             s.shown = ease(s.shown, s.target, dt);
+            peak_step(&mut s.peak, &mut s.peak_hold, s.shown, dt);
             if glide(&mut s.pos, &mut s.vel, s.db, dt) {
                 s.cache.clear();
             }
@@ -1198,6 +1220,8 @@ impl App {
                 db: 0.0,
                 muted: false,
                 shown: -120.0,
+                peak: -120.0,
+                peak_hold: 0.0,
                 pos: 0.75,
                 vel: 0.0,
                 target: -120.0,
@@ -1232,6 +1256,7 @@ impl App {
             }
             m.playing = playing;
             m.shown = ease(m.shown, m.target, dt);
+            peak_step(&mut m.peak, &mut m.peak_hold, m.shown, dt);
             if glide(&mut m.pos, &mut m.vel, m.db, dt) {
                 m.cache.clear();
             }
@@ -2472,6 +2497,7 @@ impl App {
             pos: s.pos,
             muted: s.muted,
             level: s.shown,
+            peak: s.peak,
             kind: Kind::Input(i),
             post_fader: false,
             narrow,
@@ -2559,6 +2585,7 @@ impl App {
             pos: m.pos,
             muted: m.muted,
             level: m.shown,
+            peak: m.peak,
             kind: Kind::Master(o),
             post_fader: true,
             narrow: self.tight(),
