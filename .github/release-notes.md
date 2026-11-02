@@ -1,10 +1,8 @@
-## What's new in 0.7.3
+## What's new in 0.7.4
 
-- **Smoother faders:** faders glide like on a spring, with a soft start and stop
-- **New look of the top bar:** larger drawn icons in the buttons, dialog buttons in pure black (light theme: white), dividers in the accent colour
-- **Logo** with a stronger neon green
-- The "graphics card / software" choice in the Design dialog is gone
-- Small engine fixes (feedback detection, failed devices)
+- **Ducking:** an input (e.g. music or a game) gets quieter while another one is loud, e.g. when you speak into the microphone; set it per input in the effects dialog, off by default
+- **Mini mode:** new button in the title bar, shows only the faders in a narrow always-on-top window
+- **Smoother level meters:** one continuous bar with a peak mark, faster rise, and the same motion for outputs, devices and programs
 
 ## Installation
 
@@ -16,13 +14,11 @@ All features and a guide are in the [README](https://github.com/Niklas970/faderu
 
 ---
 
-## Neu in 0.7.3
+## Neu in 0.7.4
 
-- **Weichere Fader:** Die Fader gleiten wie an einer Feder, mit weichem Start und Ende
-- **Neues Aussehen der Leiste:** größere, gezeichnete Symbole in den Knöpfen oben, Dialog-Knöpfe in reinem Schwarz (hell: Weiß), Trennlinien in der Akzentfarbe
-- **Logo** mit kräftigerem Neon-Grün
-- Die Auswahl „Grafikkarte/Software“ im Design-Dialog ist entfallen
-- Kleine Korrekturen an der Engine (Rückkopplungs-Erkennung, ausgefallene Geräte)
+- **Ducking:** Ein Eingang (z. B. Musik oder Spiel) wird leiser, solange ein anderer laut ist, etwa wenn du ins Mikro sprichst; pro Eingang im Effekte-Dialog einstellbar, standardmäßig aus
+- **Mini-Modus:** neuer Knopf in der Titelleiste, zeigt nur die Fader in einem schmalen Fenster, das im Vordergrund bleibt
+- **Weichere Pegelanzeigen:** ein durchgehender Balken mit Spitzenmarke, schnellerer Anstieg und gleiche Bewegung für Ausgänge, Geräte und Programme
 
 ## Installation
 
