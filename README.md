@@ -1,4 +1,4 @@
-<p align="center"><b>English</b> · <a href="README.de.md">Deutsch</a> · <a href="README.fr.md">Français</a> · <a href="README.es.md">Español</a> · <a href="README.it.md">Italiano</a> · <a href="README.nl.md">Nederlands</a> · <a href="README.pl.md">Polski</a></p>
+<p align="center"><b>English</b> · <a href="README.de.md">Deutsch</a></p>
 
 <p align="center"><img src="assets/logo.svg" width="112" alt="Faderust logo"></p>
 
