@@ -21,12 +21,12 @@
   Jeder Ausgang bekommt seine eigene Mischung, Geräte dürfen im Betrieb kommen und gehen, virtuelle Kabel bringt Faderust selbst mit.
 </p>
 
-![Faderust im Pult mit Geräten, Programmen und drei Ausgängen](assets/screenshot.png)
-
 <p align="center">
-  <a href="assets/faderust-reel.mp4"><img src="assets/faderust-reel.gif" width="270" alt="Faderust in 40 Sekunden"></a><br>
+  <a href="assets/faderust-reel.mp4"><img src="assets/faderust-reel.gif" width="320" alt="Faderust in 40 Sekunden"></a><br>
   <sub>Vorschau, <a href="assets/faderust-reel.mp4">Video in voller Qualität</a> (zum Herunterladen)</sub>
 </p>
+
+![Faderust im Pult mit Geräten, Programmen und drei Ausgängen](assets/screenshot.png)
 
 > **Alpha.** Faderust läuft, ist aber noch kaum auf echter Hardware erprobt. Fehler bitte als [Issue](https://github.com/Niklas970/faderust/issues) melden.
 

@@ -21,12 +21,12 @@
   Elke uitgang krijgt een eigen mix, apparaten mogen tijdens het gebruik komen en gaan, en Faderust brengt zijn eigen virtuele kabels mee.
 </p>
 
-![Faderust-paneel met apparaten, programma’s en drie uitgangen](assets/screenshot.png)
-
 <p align="center">
-  <a href="assets/faderust-reel.mp4"><img src="assets/faderust-reel.gif" width="270" alt="Faderust in 40 seconden"></a><br>
+  <a href="assets/faderust-reel.mp4"><img src="assets/faderust-reel.gif" width="320" alt="Faderust in 40 seconden"></a><br>
   <sub>Voorbeeld, <a href="assets/faderust-reel.mp4">video in volle kwaliteit</a> (om te downloaden)</sub>
 </p>
+
+![Faderust-paneel met apparaten, programma’s en drie uitgangen](assets/screenshot.png)
 
 > **Alfa.** Faderust werkt, maar is nog nauwelijks op echte hardware getest. Meld problemen graag als [issue](https://github.com/Niklas970/faderust/issues).
 

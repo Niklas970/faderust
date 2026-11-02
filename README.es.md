@@ -21,12 +21,12 @@
   Cada salida tiene su propia mezcla, los dispositivos pueden ir y venir mientras funciona, y Faderust trae sus propios cables virtuales.
 </p>
 
-![Mesa de Faderust con dispositivos, programas y tres salidas](assets/screenshot.png)
-
 <p align="center">
-  <a href="assets/faderust-reel.mp4"><img src="assets/faderust-reel.gif" width="270" alt="Faderust en 40 segundos"></a><br>
+  <a href="assets/faderust-reel.mp4"><img src="assets/faderust-reel.gif" width="320" alt="Faderust en 40 segundos"></a><br>
   <sub>Vista previa, <a href="assets/faderust-reel.mp4">vídeo en calidad completa</a> (para descargar)</sub>
 </p>
+
+![Mesa de Faderust con dispositivos, programas y tres salidas](assets/screenshot.png)
 
 > **Alfa.** Faderust funciona, pero apenas se ha probado en hardware real. Informa de los problemas como [issue](https://github.com/Niklas970/faderust/issues).
 

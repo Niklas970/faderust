@@ -21,12 +21,12 @@
   Chaque sortie a son propre mix, les appareils peuvent aller et venir en cours d’utilisation, et Faderust apporte ses propres câbles virtuels.
 </p>
 
-![Table de mixage Faderust avec appareils, programmes et trois sorties](assets/screenshot.png)
-
 <p align="center">
-  <a href="assets/faderust-reel.mp4"><img src="assets/faderust-reel.gif" width="270" alt="Faderust en 40 secondes"></a><br>
+  <a href="assets/faderust-reel.mp4"><img src="assets/faderust-reel.gif" width="320" alt="Faderust en 40 secondes"></a><br>
   <sub>Aperçu, <a href="assets/faderust-reel.mp4">vidéo en pleine qualité</a> (à télécharger)</sub>
 </p>
+
+![Table de mixage Faderust avec appareils, programmes et trois sorties](assets/screenshot.png)
 
 > **Alpha.** Faderust fonctionne, mais a encore à peine été testé sur du vrai matériel. Merci de signaler les problèmes via une [issue](https://github.com/Niklas970/faderust/issues).
 

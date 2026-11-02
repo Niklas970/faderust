@@ -21,12 +21,12 @@
   Every output gets its own mix, devices may come and go while it runs, and Faderust brings its own virtual cables.
 </p>
 
-![Faderust desk with devices, programs and three outputs](assets/screenshot.png)
-
 <p align="center">
-  <a href="assets/faderust-reel.mp4"><img src="assets/faderust-reel.gif" width="270" alt="Faderust in 40 seconds"></a><br>
+  <a href="assets/faderust-reel.mp4"><img src="assets/faderust-reel.gif" width="320" alt="Faderust in 40 seconds"></a><br>
   <sub>Preview, <a href="assets/faderust-reel.mp4">full-quality video</a> (download)</sub>
 </p>
+
+![Faderust desk with devices, programs and three outputs](assets/screenshot.png)
 
 > **Alpha.** Faderust runs, but has hardly been tested on real hardware yet. Please report problems as an [issue](https://github.com/Niklas970/faderust/issues).
 
