@@ -52,6 +52,8 @@ pub enum Command {
     /// Mute of a whole input.
     SetInputMuted(usize, bool),
     SetFx(usize, Fx),
+    /// Ducking of an input.
+    SetDuck(usize, crate::config::Duck),
     /// The gains in the config changed as a whole (preset loaded).
     ApplyGains,
     Reconfigure,
@@ -91,6 +93,9 @@ pub struct UiDevice {
     /// Inputs only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fx: Option<Fx>,
+    /// Inputs only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duck: Option<crate::config::Duck>,
     /// Outputs only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub master: Option<crate::config::Gain>,
@@ -177,6 +182,7 @@ fn build(config: &Config, skip: Option<&str>) -> Option<Engine<CpalBackend>> {
     apply_gains(&engine, config);
     for (i, input) in config.inputs.iter().enumerate() {
         engine.input_fx(i).set(input.fx.into());
+        engine.input_duck(i).set(input.duck.into());
     }
     Some(engine)
 }
@@ -379,6 +385,21 @@ fn run(
                                 input.fx = settings.into();
                                 if let Some(e) = &engine {
                                     e.input_fx(i).set(settings);
+                                }
+                                dirty_since.get_or_insert_with(Instant::now);
+                            }
+                        }
+                        Command::SetDuck(i, duck) => {
+                            let mut c = config.lock().unwrap_or_else(|e| e.into_inner());
+                            let n = c.inputs.len();
+                            if let Some(input) = c.inputs.get_mut(i) {
+                                let settings =
+                                    faderust_engine::DuckSettings::from(duck).sanitized();
+                                input.duck = settings.into();
+                                input.duck.trigger =
+                                    input.duck.trigger.filter(|t| *t < n && *t != i);
+                                if let Some(e) = &engine {
+                                    e.input_duck(i).set(input.duck.into());
                                 }
                                 dirty_since.get_or_insert_with(Instant::now);
                             }
@@ -786,6 +807,7 @@ fn device(
         buffer_ms,
         released: false,
         fx: None,
+        duck: None,
         master: None,
         muted: None,
     }
@@ -798,6 +820,7 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
         .enumerate()
         .map(|(i, c)| UiDevice {
             fx: Some(c.fx),
+            duck: Some(c.duck),
             muted: Some(c.muted),
             ..device(
                 &c.label,
@@ -871,6 +894,7 @@ mod tests {
             buffer_ms,
             released: false,
             fx: None,
+            duck: None,
             master: None,
             muted: None,
         }

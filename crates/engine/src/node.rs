@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
+use crate::duck::{Ducker, InputDuck, Levels};
 use crate::fx::{FxChain, InputFx};
 use crate::lane::{Lane, LaneStats};
 use crate::matrix::MixMatrix;
@@ -93,6 +94,16 @@ impl<C> Queues<C> {
 /// Frames an input node converts and processes at once.
 const INPUT_BLOCK_FRAMES: usize = 64;
 
+/// What an input node needs for ducking: its own slot, the settings, the
+/// published levels of all inputs and the matrix (a muted input triggers
+/// nothing).
+pub struct DuckLink {
+    pub index: usize,
+    pub duck: Arc<InputDuck>,
+    pub levels: Arc<Levels>,
+    pub matrix: Arc<MixMatrix>,
+}
+
 /// Input side: converts device frames to the stereo bus, runs the input
 /// effects and fans the result out to one ring buffer per output.
 pub struct InputNode {
@@ -101,6 +112,9 @@ pub struct InputNode {
     meter: Arc<PeakMeter>,
     fx: Arc<InputFx>,
     chain: FxChain,
+    link: DuckLink,
+    ducker: Ducker,
+    sample_rate: f32,
     queues: Queues<InputCommand>,
 }
 
@@ -111,6 +125,7 @@ impl InputNode {
         meter: Arc<PeakMeter>,
         fx: Arc<InputFx>,
         sample_rate: u32,
+        link: DuckLink,
     ) -> (Self, NodeHandle<InputCommand>) {
         let (queues, handle) = queues();
         (
@@ -119,6 +134,9 @@ impl InputNode {
                 meter,
                 fx,
                 chain: FxChain::new(sample_rate),
+                link,
+                ducker: Ducker::new(),
+                sample_rate: sample_rate.max(1) as f32,
                 queues,
             },
             handle,
@@ -145,6 +163,15 @@ impl InputNode {
             return;
         }
         let mut block = [0.0f32; INPUT_BLOCK_FRAMES * BUS_CHANNELS];
+        let total = data.len() / channels;
+        let (g0, g1) = self.ducker.advance(
+            self.link.index,
+            &self.link.duck,
+            &self.link.levels,
+            total as f32 / self.sample_rate,
+        );
+        let mut done = 0usize;
+        let mut peak = 0.0f32;
         for chunk in data.chunks(INPUT_BLOCK_FRAMES * channels) {
             let frames = chunk.len() / channels;
             let block = &mut block[..frames * BUS_CHANNELS];
@@ -159,6 +186,18 @@ impl InputNode {
             self.chain.process(&self.fx, block);
             // Metered after the effects, so the gate shows.
             self.meter.update(block);
+            peak = block
+                .iter()
+                .fold(peak, |m, v| if v.is_finite() { m.max(v.abs()) } else { m });
+            if g0 != 1.0 || g1 != 1.0 {
+                let step = (g1 - g0) / total.max(1) as f32;
+                for (n, frame) in block.chunks_exact_mut(BUS_CHANNELS).enumerate() {
+                    let g = g0 + step * (done + n) as f32;
+                    frame[0] *= g;
+                    frame[1] *= g;
+                }
+            }
+            done += frames;
 
             for (producer, stats) in self.lanes.iter_mut().flatten() {
                 let writable = (producer.slots() / BUS_CHANNELS).min(frames);
@@ -177,6 +216,12 @@ impl InputNode {
                 out.commit_all();
             }
         }
+        let own = if self.link.matrix.is_input_muted(self.link.index) {
+            0.0
+        } else {
+            peak
+        };
+        self.link.levels.set(self.link.index, own);
     }
 }
 
@@ -302,6 +347,12 @@ mod tests {
             Arc::new(PeakMeter::new()),
             Arc::new(InputFx::new()),
             in_rate,
+            DuckLink {
+                index: 0,
+                duck: Arc::new(InputDuck::new()),
+                levels: Arc::new(Levels::new(1)),
+                matrix: Arc::clone(&matrix),
+            },
         );
         let (output, _) = OutputNode::new(
             0,

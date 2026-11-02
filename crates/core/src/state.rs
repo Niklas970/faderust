@@ -482,6 +482,7 @@ pub fn initial_config() -> Config {
                 label: "Mikrofon".into(),
                 device: d.name,
                 fx: Default::default(),
+                duck: Default::default(),
                 muted: false,
             })
             .into_iter()
@@ -710,6 +711,7 @@ mod tests {
             label: label.into(),
             device: label.into(),
             fx: Default::default(),
+            duck: Default::default(),
             muted: false,
         };
         Config {

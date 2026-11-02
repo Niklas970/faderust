@@ -560,6 +560,7 @@ mod tests {
                 label: "Mikro".into(),
                 device: "USB".into(),
                 fx: Default::default(),
+                duck: Default::default(),
                 muted: false,
             }],
             outputs: vec![crate::config::OutputEntry {

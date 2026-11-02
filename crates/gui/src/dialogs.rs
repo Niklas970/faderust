@@ -229,6 +229,8 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
             }),
         ],
         hint("Der Balken zeigt den Pegel, der Strich die Schwelle."),
+        h3("Ducking"),
+        duck(app, i),
     ]
     .spacing(8);
     frame(
@@ -240,6 +242,97 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
             .spacing(8)
             .into(),
     )
+}
+
+/// Ducking: this input gets quieter while another one is loud.
+fn duck(app: &App, i: usize) -> Element<'static, Message> {
+    let d = app.duck.get(i).copied().unwrap_or_default();
+    let off = Choice {
+        id: String::new(),
+        label: tr("Aus").to_string(),
+    };
+    let mut choices = vec![off.clone()];
+    for (j, s) in app.strips.iter().enumerate().filter(|(j, _)| *j != i) {
+        choices.push(Choice {
+            id: j.to_string(),
+            label: s.label.clone(),
+        });
+    }
+    let current = d
+        .trigger
+        .and_then(|t| choices.iter().find(|c| c.id == t.to_string()).cloned())
+        .unwrap_or(off);
+    let line = |name: &'static str,
+                range: std::ops::RangeInclusive<f32>,
+                value: f32,
+                unit: &'static str,
+                step: f32,
+                make: fn(usize, f32) -> Edit| {
+        row![
+            container(text(name).size(13).color(text_color())).width(150),
+            slider(range, value, move |v| edit(make(i, v))).step(step),
+            container(
+                text(format!("{value:.0} {unit}"))
+                    .font(MONO)
+                    .size(13)
+                    .color(text_color())
+            )
+            .width(70)
+            .align_right(Length::Fill),
+        ]
+        .spacing(10)
+        .align_y(Vertical::Center)
+    };
+    let mut body = column![
+        row![
+            container(text("Auslöser").size(13).color(text_color())).width(150),
+            pick_list(choices, Some(current), move |c| edit(Edit::DuckTrigger(
+                i,
+                c.id.parse().ok()
+            )))
+            .width(Length::Fill),
+        ]
+        .spacing(10)
+        .align_y(Vertical::Center),
+        hint("Wird leiser, sobald der gewählte Eingang spricht, z. B. Musik unter dem Mikrofon."),
+    ]
+    .spacing(8);
+    if d.trigger.is_some() {
+        body = body
+            .push(line(
+                "Schwelle",
+                -80.0..=-10.0,
+                d.threshold_db,
+                "dB",
+                1.0,
+                Edit::DuckThreshold,
+            ))
+            .push(line(
+                "Absenkung",
+                0.0..=40.0,
+                d.amount_db,
+                "dB",
+                1.0,
+                Edit::DuckAmount,
+            ))
+            .push(line(
+                "Einsatz",
+                1.0..=500.0,
+                d.attack_ms,
+                "ms",
+                1.0,
+                Edit::DuckAttack,
+            ))
+            .push(line(
+                "Rückkehr",
+                20.0..=3000.0,
+                d.release_ms,
+                "ms",
+                10.0,
+                Edit::DuckRelease,
+            ));
+    }
+    body.into()
 }
 
 /// A device for a pick list: shown by its label, identified by `id`.

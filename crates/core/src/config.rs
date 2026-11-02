@@ -4,7 +4,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use faderust_engine::FxSettings;
+use faderust_engine::{DuckSettings, FxSettings};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -15,6 +15,9 @@ pub struct InputEntry {
     pub device: String,
     #[serde(default)]
     pub fx: Fx,
+    /// Lowers this input while another one is loud.
+    #[serde(default)]
+    pub duck: Duck,
     /// Silences the input everywhere without touching its routing.
     #[serde(default)]
     pub muted: bool,
@@ -65,6 +68,48 @@ impl From<Fx> for FxSettings {
             high_db: f.high_db,
             gate: f.gate,
             gate_db: f.gate_db,
+        }
+    }
+}
+
+/// Ducking, see [`faderust_engine::DuckSettings`].
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Duck {
+    /// Index of the input that lowers this one; none = off.
+    pub trigger: Option<usize>,
+    pub threshold_db: f32,
+    pub amount_db: f32,
+    pub attack_ms: f32,
+    pub release_ms: f32,
+}
+
+impl Default for Duck {
+    fn default() -> Self {
+        DuckSettings::default().into()
+    }
+}
+
+impl From<DuckSettings> for Duck {
+    fn from(s: DuckSettings) -> Self {
+        Self {
+            trigger: s.trigger,
+            threshold_db: s.threshold_db,
+            amount_db: s.amount_db,
+            attack_ms: s.attack_ms,
+            release_ms: s.release_ms,
+        }
+    }
+}
+
+impl From<Duck> for DuckSettings {
+    fn from(d: Duck) -> Self {
+        Self {
+            trigger: d.trigger,
+            threshold_db: d.threshold_db,
+            amount_db: d.amount_db,
+            attack_ms: d.attack_ms,
+            release_ms: d.release_ms,
         }
     }
 }
@@ -163,8 +208,12 @@ impl Config {
         for p in &mut self.presets {
             fit_gains(&mut p.gains, inputs, outputs);
         }
-        for i in &mut self.inputs {
+        let n = self.inputs.len();
+        for (index, i) in self.inputs.iter_mut().enumerate() {
             i.fx = FxSettings::from(i.fx).sanitized().into();
+            i.duck = DuckSettings::from(i.duck).sanitized().into();
+            // A trigger that no longer exists, or the input itself, is off.
+            i.duck.trigger = i.duck.trigger.filter(|t| *t < n && *t != index);
         }
         for o in &mut self.outputs {
             o.buffer_ms = o
@@ -173,6 +222,28 @@ impl Config {
             o.release_secs = o.release_secs.min(3600);
         }
         self
+    }
+
+    /// Fixes the ducking triggers after input `removed` was taken out.
+    pub fn duck_after_remove(&mut self, removed: usize) {
+        for i in &mut self.inputs {
+            i.duck.trigger = match i.duck.trigger {
+                Some(t) if t == removed => None,
+                Some(t) if t > removed => Some(t - 1),
+                t => t,
+            };
+        }
+    }
+
+    /// Fixes the ducking triggers after inputs `a` and `b` swapped places.
+    pub fn duck_after_swap(&mut self, a: usize, b: usize) {
+        for i in &mut self.inputs {
+            i.duck.trigger = match i.duck.trigger {
+                Some(t) if t == a => Some(b),
+                Some(t) if t == b => Some(a),
+                t => t,
+            };
+        }
     }
 
     /// Stores the current faders as preset `name`, replacing one of that name.
@@ -249,6 +320,7 @@ mod tests {
                 label: "Mikro".into(),
                 device: "USB".into(),
                 fx: Fx::default(),
+                duck: Duck::default(),
                 muted: false,
             }],
             outputs: vec![
@@ -346,6 +418,7 @@ mod tests {
                 denoise: true,
                 ..Fx::default()
             },
+            duck: Duck::default(),
             muted: true,
         });
         let c = c.normalized();
@@ -420,5 +493,38 @@ mod tests {
             toml::from_str("[[outputs]]\nlabel = \"A\"\ndevice = \"x\"\nreleaseAfterS = 30\n")
                 .unwrap();
         assert_eq!(c.outputs[0].device, "x");
+    }
+
+    #[test]
+    fn duck_survives_save_and_drops_dead_triggers() {
+        let mut c = sample();
+        c.inputs.push(c.inputs[0].clone());
+        c.inputs.push(c.inputs[0].clone());
+        c.inputs[0].duck.trigger = Some(1);
+        c.inputs[1].duck.trigger = Some(1); // itself
+        c.inputs[2].duck.trigger = Some(7); // gone
+        let c = c.normalized();
+        assert_eq!(c.inputs[0].duck.trigger, Some(1));
+        assert_eq!(c.inputs[1].duck.trigger, None);
+        assert_eq!(c.inputs[2].duck.trigger, None);
+        let text = toml::to_string_pretty(&c).unwrap();
+        let back: Config = toml::from_str(&text).unwrap();
+        assert_eq!(back.inputs[0].duck, c.inputs[0].duck);
+    }
+
+    #[test]
+    fn duck_follows_removed_and_swapped_inputs() {
+        let mut c = sample();
+        for _ in 0..2 {
+            c.inputs.push(c.inputs[0].clone());
+        }
+        c.inputs[0].duck.trigger = Some(2);
+        c.inputs[1].duck.trigger = Some(1);
+        c.duck_after_swap(1, 2);
+        assert_eq!(c.inputs[0].duck.trigger, Some(1));
+        assert_eq!(c.inputs[1].duck.trigger, Some(2));
+        c.duck_after_remove(1);
+        assert_eq!(c.inputs[0].duck.trigger, None);
+        assert_eq!(c.inputs[1].duck.trigger, Some(1));
     }
 }
