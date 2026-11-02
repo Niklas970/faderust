@@ -11,6 +11,8 @@ pub enum Glyph {
     Compact,
     /// Two stacked windows: the window stays on top.
     Pin,
+    /// A small window with a corner arrow (mini mode).
+    Mini,
     /// A loudspeaker with sound waves (Windows sound).
     Speaker,
     /// A bookmark (presets).
@@ -87,6 +89,20 @@ impl<M> canvas::Program<M> for Icon {
                     f.fill(&front, Fill::from(self.color));
                 }
                 f.stroke(&front, line);
+            }
+            Glyph::Mini => {
+                let frame = Path::rounded_rectangle(
+                    p(2.0, 2.0),
+                    Size::new(12.0 * k, 12.0 * k),
+                    (2.0 * k).into(),
+                );
+                f.stroke(&frame, line);
+                let inner = Path::rounded_rectangle(
+                    p(8.0, 8.0),
+                    Size::new(4.5 * k, 4.5 * k),
+                    (1.0 * k).into(),
+                );
+                f.fill(&inner, Fill::from(self.color));
             }
             Glyph::Speaker => {
                 // Cabinet with a cone, and two waves.
