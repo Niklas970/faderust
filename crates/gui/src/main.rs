@@ -9,7 +9,7 @@
 //! presets, programs, Windows sound, devices, tray, autostart, updates.
 //!
 //! `FADERUST_SHOT=out.png` saves one screenshot after a moment and exits;
-//! `FADERUST_VIEW=matrix` and `FADERUST_DIALOG=<name>` pick what it shows.
+//! `FADERUST_VIEW=matrix` and `FADERUST_DIALOG=<name>` and `FADERUST_MINI=1` pick what it shows.
 
 mod dialogs;
 mod fader;
@@ -171,6 +171,10 @@ pub struct App {
     pub view: View,
     pub masters_left: bool,
     pub compact: bool,
+    /// Mini mode: only the faders, no title bar, always on top.
+    pub mini: bool,
+    /// Window size and pin state to restore when leaving mini mode.
+    mini_prev: Option<(Size, bool)>,
     pub pinned: bool,
     pub hide_after: &'static str,
     pub dialog: Option<Dialog>,
@@ -331,6 +335,10 @@ pub enum Message {
     SetView(View),
     WinId(Option<window::Id>),
     ToggleCompact,
+    /// Enter or leave mini mode.
+    ToggleMini,
+    /// The window size is known: enter mini mode.
+    MiniEnter(Size),
     DismissNotice,
     TogglePin,
     CloseRequested,
@@ -745,6 +753,11 @@ impl App {
         }
     }
 
+    /// Narrow strips: compact view or mini mode.
+    fn tight(&self) -> bool {
+        self.compact || self.mini
+    }
+
     /// Closing the window keeps the mixer running in the tray.
     fn hide(&mut self) -> Task<Message> {
         self.visible.store(false, Ordering::Relaxed);
@@ -990,6 +1003,8 @@ impl App {
             },
             masters_left: !prefs.masters_right,
             compact: prefs.compact,
+            mini: std::env::var_os("FADERUST_MINI").is_some(),
+            mini_prev: None,
             pinned: prefs.pinned,
             hide_after: match prefs.hide_after {
                 Some(0) => HIDE_AFTER[0],
@@ -1303,6 +1318,49 @@ impl App {
                 }
                 for o in &self.outs {
                     o.cache.clear();
+                }
+            }
+            Message::ToggleMini => {
+                if self.mini {
+                    self.mini = false;
+                    self.clear_caches();
+                    let (size, was_pinned) = self
+                        .mini_prev
+                        .take()
+                        .unwrap_or((Size::new(1400.0, 860.0), self.pinned));
+                    self.pinned = was_pinned;
+                    if let Some(id) = self.win_id {
+                        return Task::batch([
+                            window::resize(id, size),
+                            window::set_level(
+                                id,
+                                if was_pinned {
+                                    window::Level::AlwaysOnTop
+                                } else {
+                                    window::Level::Normal
+                                },
+                            ),
+                        ]);
+                    }
+                } else if let Some(id) = self.win_id {
+                    return window::size(id).map(Message::MiniEnter);
+                }
+            }
+            Message::MiniEnter(size) => {
+                self.mini_prev = Some((size, self.pinned));
+                self.mini = true;
+                self.dialog = None;
+                self.pinned = true;
+                self.clear_caches();
+                if let Some(id) = self.win_id {
+                    // Room for every visible strip in the narrow layout.
+                    let count = self.strips.iter().filter(|s| !s.hidden).count()
+                        + self.outs.iter().filter(|o| !o.hidden).count();
+                    let width = (count as f32 * 110.0 + 24.0).clamp(220.0, 1400.0);
+                    return Task::batch([
+                        window::resize(id, Size::new(width, 560.0)),
+                        window::set_level(id, window::Level::AlwaysOnTop),
+                    ]);
                 }
             }
             Message::TogglePin => {
@@ -2152,6 +2210,35 @@ impl App {
             .into(),
             None => brand.into(),
         };
+        if self.mini {
+            let slim = container(
+                row![
+                    space().width(Length::Fill),
+                    toggle(
+                        icons::Glyph::Compact,
+                        true,
+                        "Mini-Modus beenden",
+                        Message::ToggleMini
+                    ),
+                    win("✕", true, Message::CloseRequested),
+                ]
+                .align_y(Vertical::Center),
+            )
+            .height(26)
+            .width(Length::Fill)
+            .style(|_| container::Style {
+                background: Some(Background::Color(panel())),
+                border: Border {
+                    color: border(),
+                    width: 1.0,
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            });
+            return iced::widget::mouse_area(slim)
+                .on_press(Message::Drag)
+                .into();
+        }
         let bar = container(
             row![
                 brand,
@@ -2174,6 +2261,7 @@ impl App {
                     },
                     Message::ToggleCompact
                 ),
+                toggle(icons::Glyph::Mini, false, "Mini-Modus", Message::ToggleMini),
                 toggle(
                     icons::Glyph::Pin,
                     self.pinned,
@@ -2343,7 +2431,7 @@ impl App {
 
     fn strip(&self, i: usize) -> Element<'_, Message> {
         let s = &self.strips[i];
-        let narrow = s.program || self.compact;
+        let narrow = s.program || self.tight();
         let fader = Canvas::new(Fader {
             cache: &s.cache,
             db: s.db,
@@ -2439,9 +2527,9 @@ impl App {
             level: m.shown,
             kind: Kind::Master(o),
             post_fader: true,
-            narrow: self.compact,
+            narrow: self.tight(),
         })
-        .width(if self.compact { 104.0 } else { STRIP_W })
+        .width(if self.tight() { 104.0 } else { STRIP_W })
         .height(Length::Fill);
         let tag = row![
             space().width(22),
@@ -2479,7 +2567,7 @@ impl App {
             column![
                 tag,
                 Self::name_label(&m.label),
-                if self.compact {
+                if self.tight() {
                     Element::from(space().height(0))
                 } else {
                     Self::note(&m.note, m.note_on)
@@ -2492,7 +2580,7 @@ impl App {
             .spacing(8)
             .align_x(Horizontal::Center)
             .into(),
-            if self.compact { 126.0 } else { 164.0 },
+            if self.tight() { 126.0 } else { 164.0 },
         )
     }
 
@@ -2590,7 +2678,7 @@ impl App {
                         Message::Edit(Edit::HideOut(0, false)),
                     )
                 }),
-                self.compact,
+                self.tight(),
             ),
             (0..self.outs.len())
                 .filter(|&o| !self.outs[o].hidden)
@@ -2599,7 +2687,7 @@ impl App {
             false,
         );
         let devices = Self::section(
-            Self::heading("GERÄTE", None, self.compact),
+            Self::heading("GERÄTE", None, self.tight()),
             (0..self.strips.len())
                 .filter(|&i| !self.strips[i].program)
                 .map(|i| self.strip(i))
@@ -2644,7 +2732,7 @@ impl App {
             add
         };
         let programs = Self::section(
-            Self::heading("PROGRAMME", Some(extra), self.compact),
+            Self::heading("PROGRAMME", Some(extra), self.tight()),
             (0..self.strips.len())
                 .filter(|&i| self.strips[i].program && !self.strips[i].hidden)
                 .map(|i| self.strip(i))
