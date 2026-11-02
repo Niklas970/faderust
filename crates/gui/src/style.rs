@@ -292,7 +292,18 @@ fn key_style(look: Look, status: button::Status, flat: bool) -> button::Style {
         // Dialog rows of many keys render wrongly with gradients on some
         // graphics drivers, so those use one solid colour.
         background: Some(if flat {
-            Background::Color(mix(top, bottom, 0.5))
+            Background::Color(
+                if look == Look::Secondary && status == button::Status::Active {
+                    // Plain black on dark, plain white on light.
+                    if text_color().r > 0.5 {
+                        Color::BLACK
+                    } else {
+                        Color::WHITE
+                    }
+                } else {
+                    mix(top, bottom, 0.5)
+                },
+            )
         } else {
             vertical(top, bottom)
         }),

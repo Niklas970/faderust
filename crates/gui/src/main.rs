@@ -70,6 +70,8 @@ pub struct Strip {
     pub shown: f32,
     /// Fader position as drawn (0..1, eased towards the real one).
     pub pos: f32,
+    /// Speed of the fader glide (the spring's velocity).
+    vel: f32,
     target: f32,
     pub connected: bool,
     /// Input device id (`app:name.exe` for programs).
@@ -105,6 +107,8 @@ pub struct Out {
     pub shown: f32,
     /// Fader position as drawn (0..1, eased towards the real one).
     pub pos: f32,
+    /// Speed of the fader glide (the spring's velocity).
+    vel: f32,
     target: f32,
     /// Was playing at the last snapshot (a hidden output returns with sound).
     playing: bool,
@@ -306,8 +310,6 @@ pub enum Edit {
     Accent(String),
     Signal(String),
     Lang(&'static str),
-    /// Software drawing (true) or graphics card (false); applies at the next start.
-    Software(bool),
     HideAfter(&'static str),
     NewPreset(String),
     SavePreset,
@@ -447,18 +449,33 @@ fn ease(shown: f32, target: f32, dt: f32) -> f32 {
     }
 }
 
-/// Glides the drawn fader position towards the real one; true while it moves.
-fn glide(pos: &mut f32, db: f32, dt: f32) -> bool {
+/// Glides the drawn fader position towards the real one with a critically
+/// damped spring (soft start, soft stop); true while it moves.
+fn glide(pos: &mut f32, vel: &mut f32, db: f32, dt: f32) -> bool {
     let want = scale::to_pos(db);
     if *pos == want {
         return false;
     }
-    if (*pos - want).abs() < 0.0005 {
+    let change = *pos - want;
+    if change.abs() < 0.0003 && vel.abs() < 0.01 {
         *pos = want;
-    } else {
-        *pos += (want - *pos) * (1.0 - (-dt / 0.045).exp());
+        *vel = 0.0;
+        return true;
     }
+    // Smooth damping: reaches the target in about `SMOOTH` seconds.
+    const SMOOTH: f32 = 0.08;
+    let omega = 2.0 / SMOOTH;
+    let x = omega * dt;
+    let k = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x);
+    let temp = (*vel + omega * change) * dt;
+    *vel = (*vel - omega * temp) * k;
+    *pos = want + (change + temp) * k;
     true
+}
+
+/// True while a fader is still gliding.
+fn gliding(pos: f32, db: f32) -> bool {
+    pos != scale::to_pos(db)
 }
 
 fn level_of(db: f32) -> f32 {
@@ -1069,6 +1086,7 @@ impl App {
                 muted: false,
                 shown: -120.0,
                 pos: 0.75,
+                vel: 0.0,
                 target: -120.0,
                 connected: false,
                 device: String::new(),
@@ -1136,7 +1154,7 @@ impl App {
                 }
             }
             s.shown = ease(s.shown, s.target, dt);
-            if glide(&mut s.pos, s.db, dt) {
+            if glide(&mut s.pos, &mut s.vel, s.db, dt) {
                 s.cache.clear();
             }
         }
@@ -1151,6 +1169,7 @@ impl App {
                 muted: false,
                 shown: -120.0,
                 pos: 0.75,
+                vel: 0.0,
                 target: -120.0,
                 playing: false,
             });
@@ -1183,7 +1202,7 @@ impl App {
             }
             m.playing = playing;
             m.shown = ease(m.shown, m.target, dt);
-            if glide(&mut m.pos, m.db, dt) {
+            if glide(&mut m.pos, &mut m.vel, m.db, dt) {
                 m.cache.clear();
             }
         }
@@ -1861,7 +1880,6 @@ impl App {
                 self.set_look(|p| p.signal = c);
             }
             Edit::Lang(l) => self.set_look(|p| p.lang = l.into()),
-            Edit::Software(on) => self.set_look(|p| p.software = on),
             Edit::MastersLeft(l) => {
                 self.masters_left = l;
                 self.save_prefs();
@@ -1965,66 +1983,63 @@ impl App {
 
     fn titlebar(&self) -> Element<'_, Message> {
         let compact = self.compact;
-        let nav =
-            |icon: &'static str, glyph: Option<icons::Glyph>, label: &'static str, d: Dialog| {
-                let on = self.dialog == Some(d);
-                button(
-                    container(
-                        {
-                            let color = if on { on_accent() } else { accent_light() };
-                            let icon: Element<'_, Message> = match glyph {
-                                Some(glyph) => Canvas::new(icons::Icon {
-                                    glyph,
-                                    color,
-                                    on: false,
-                                })
-                                .width(19)
-                                .height(19)
-                                .into(),
-                                None => text(icon).size(17).color(color).into(),
-                            };
-                            if compact {
-                                row![icon]
-                            } else {
-                                row![
-                                    icon,
-                                    text(label).size(14).font(BOLD).color(if on {
-                                        on_accent()
-                                    } else {
-                                        text_color()
-                                    })
-                                ]
-                            }
-                        }
-                        .spacing(7)
-                        .align_y(Vertical::Center),
-                    )
-                    .center_y(Length::Fill),
-                )
-                .height(if compact { 28 } else { 36 })
-                .padding([0, if compact { 12 } else { 22 }])
-                .on_press(Message::Open(Some(d)))
-                .style(move |t, st| {
-                    let mut v = key(if on { Look::Primary } else { Look::Secondary })(t, st);
-                    if !on {
-                        v.border.color = mix(border(), accent(), 0.3);
-                        let hot = matches!(st, button::Status::Hovered | button::Status::Pressed);
-                        let lift = if text_color().r > 0.5 {
-                            Color::WHITE
+        let nav = |glyph: icons::Glyph, label: &'static str, d: Dialog| {
+            let on = self.dialog == Some(d);
+            button(
+                container(
+                    {
+                        let color = if on { on_accent() } else { accent_light() };
+                        let icon: Element<'_, Message> = Canvas::new(icons::Icon {
+                            glyph,
+                            color,
+                            on: false,
+                        })
+                        .width(24)
+                        .height(24)
+                        .into();
+                        if compact {
+                            row![icon]
                         } else {
-                            Color::BLACK
-                        };
-                        let k = if hot { 0.2 } else { 0.12 };
-                        v.background = Some(style::vertical(
-                            mix(panel_2(), lift, k + 0.05),
-                            mix(panel_2(), lift, k),
-                        ));
+                            row![
+                                icon,
+                                text(label).size(14).font(BOLD).color(if on {
+                                    on_accent()
+                                } else {
+                                    text_color()
+                                })
+                            ]
+                        }
                     }
-                    v.border.width = 1.5;
-                    v.border.radius = 6.0.into();
-                    v
-                })
-            };
+                    .spacing(7)
+                    .align_y(Vertical::Center),
+                )
+                .center_y(Length::Fill),
+            )
+            .height(if compact { 28 } else { 36 })
+            .padding([0, if compact { 12 } else { 22 }])
+            .on_press(Message::Open(Some(d)))
+            .style(move |t, st| {
+                let mut v = key(if on { Look::Primary } else { Look::Secondary })(t, st);
+                if !on {
+                    v.border.color = mix(border(), accent(), 0.3);
+                    let hot = matches!(st, button::Status::Hovered | button::Status::Pressed);
+                    // Plain black on dark, plain white on light.
+                    let (base, lift) = if text_color().r > 0.5 {
+                        (Color::BLACK, Color::WHITE)
+                    } else {
+                        (Color::WHITE, Color::BLACK)
+                    };
+                    v.background = Some(Background::Color(if hot {
+                        mix(base, lift, 0.12)
+                    } else {
+                        base
+                    }));
+                }
+                v.border.width = 1.5;
+                v.border.radius = 6.0.into();
+                v
+            })
+        };
         let win = |label: &'static str, close: bool, msg: Message| {
             button(container(text(label).size(12).color(muted_color())).center(Length::Fill))
                 .width(46)
@@ -2142,10 +2157,10 @@ impl App {
                 brand,
                 space().width(Length::Fill),
                 row![
-                    nav("⚐", None, "Presets", Dialog::Presets),
-                    nav("", Some(icons::Glyph::Speaker), "Windows", Dialog::Windows),
-                    nav("≡", None, "Geräte", Dialog::Settings),
-                    nav("◐", None, "Design", Dialog::Design),
+                    nav(icons::Glyph::Bookmark, "Presets", Dialog::Presets),
+                    nav(icons::Glyph::Speaker, "Windows", Dialog::Windows),
+                    nav(icons::Glyph::Sliders, "Geräte", Dialog::Settings),
+                    nav(icons::Glyph::Disc, "Design", Dialog::Design),
                 ]
                 .spacing(6),
                 space().width(16),
@@ -2533,11 +2548,12 @@ impl App {
     /// Thin vertical rule between the groups.
     fn divider<'a>() -> Element<'a, Message> {
         container(space())
-            .width(1)
+            .width(2)
             .height(Length::Fill)
             .padding([6, 0])
             .style(|_| container::Style {
-                background: Some(Background::Color(hairline())),
+                // In the design colour.
+                background: Some(Background::Color(mix(panel(), accent(), 0.6))),
                 ..container::Style::default()
             })
             .into()
@@ -3008,8 +3024,15 @@ impl App {
     }
 
     fn subscription(&self) -> Subscription<Message> {
+        let moving = self.strips.iter().any(|s| gliding(s.pos, s.db))
+            || self.outs.iter().any(|m| gliding(m.pos, m.db));
         let every = if shell::is_visible(&self.visible) {
-            33
+            // Faster while a fader glides, so the movement is fluid.
+            if moving {
+                11
+            } else {
+                33
+            }
         } else {
             250
         };
@@ -3106,11 +3129,6 @@ fn main() -> iced::Result {
         Err(()) => return Ok(()),
     }
     let minimized = std::env::args().any(|a| a == shell::MINIMIZED_ARG);
-    // The drawing backend is picked from the saved choice unless the
-    // environment already says which one to use.
-    if std::env::var_os("ICED_BACKEND").is_none() && shell::load_prefs(&config_dir()).software {
-        std::env::set_var("ICED_BACKEND", "tiny-skia");
-    }
     iced::application(App::new, App::update, App::view)
         .subscription(App::subscription)
         .theme(theme)
@@ -3126,4 +3144,23 @@ fn main() -> iced::Result {
         })
         .title("Faderust")
         .run()
+}
+
+#[cfg(test)]
+mod glide_tests {
+    use super::*;
+
+    #[test]
+    fn fader_glides_without_overshoot_and_settles() {
+        let (mut pos, mut vel) = (0.2_f32, 0.0_f32);
+        let want = scale::to_pos(0.0);
+        let mut last = pos;
+        for _ in 0..300 {
+            glide(&mut pos, &mut vel, 0.0, 1.0 / 90.0);
+            assert!(pos >= last - 1e-6 && pos <= want + 1e-4, "overshoot");
+            last = pos;
+        }
+        assert_eq!(pos, want);
+        assert!(!glide(&mut pos, &mut vel, 0.0, 1.0 / 90.0));
+    }
 }

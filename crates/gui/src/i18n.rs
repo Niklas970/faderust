@@ -176,12 +176,6 @@ const TABLE: &[(&str, &str)] = &[
     ("Faderust-Preset", "Faderust preset"),
     ("Dateiauswahl gibt es nur unter Windows", "File dialogs are only available on Windows"),
     ("Das Preset braucht einen Namen", "The preset needs a name"),
-    ("Grafikkarte", "Graphics card"),
-    ("Software", "Software"),
-    (
-        "Grafikkarte braucht wenig Prozessor, Software wenig Arbeitsspeicher. Gilt nach einem Neustart von Faderust.",
-        "Graphics card uses little CPU, software uses little memory. Applies after restarting Faderust.",
-    ),
     ("Farbwähler", "Colour picker"),
     ("Farbwähler schließen", "Close picker"),
     ("„+ Eingang“ nimmt das Programm auf und stellt es vorher auf", "“+ Input” records the program and first moves it to"),
