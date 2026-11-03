@@ -772,6 +772,24 @@ fn design(app: &App) -> Element<'_, Message> {
         ]),
         h3("Stille Programme ausblenden"),
         segmented(hide),
+        h3("Pegel-Versatz"),
+        segmented(
+            [-50, 0, 50, 100]
+                .into_iter()
+                .map(|ms| {
+                    (
+                        if ms > 0 {
+                            format!("+{ms} ms")
+                        } else {
+                            format!("{ms} ms")
+                        },
+                        app.prefs.meter_offset == ms,
+                        edit(Edit::MeterOffset(ms)),
+                    )
+                })
+                .collect(),
+        ),
+        hint("Verschiebt die Eingangsbalken gegen die Ausgangsbalken, falls sie nicht im Takt laufen."),
         h3("Akzentfarbe"),
         accents,
         custom_color(

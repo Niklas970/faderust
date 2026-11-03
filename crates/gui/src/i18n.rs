@@ -149,6 +149,11 @@ const TABLE: &[(&str, &str)] = &[
     ("Standardgerät", "Default device"),
     ("Starten", "Start"),
     ("Stille Programme ausblenden", "Hide silent programs"),
+    ("Pegel-Versatz", "Meter offset"),
+    (
+        "Verschiebt die Eingangsbalken gegen die Ausgangsbalken, falls sie nicht im Takt laufen.",
+        "Shifts the input meters against the output meters if they are not in step.",
+    ),
     (
         "Stream Deck nicht verbunden. Plugin einrichten oder neu installieren:",
         "Stream Deck not connected. Set up or reinstall the plugin:",

@@ -2,7 +2,7 @@
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering::Relaxed};
+use std::sync::atomic::{AtomicI32, AtomicU64, AtomicUsize, Ordering::Relaxed};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -21,6 +21,15 @@ use crate::config::{Config, Fx};
 use crate::log;
 
 const EMIT_EVERY: Duration = Duration::from_millis(50);
+
+/// Fine adjustment of the input meters against the outputs, in ms (the
+/// user's setting; positive holds the input meters back longer).
+static METER_OFFSET_MS: AtomicI32 = AtomicI32::new(0);
+
+/// Sets the fine adjustment of the input meters, in ms.
+pub fn set_meter_offset_ms(ms: i32) {
+    METER_OFFSET_MS.store(ms.clamp(-200, 400), Relaxed);
+}
 /// How often released outputs are checked for returning signal.
 const WAKE_EVERY: Duration = Duration::from_millis(10);
 /// A pause this long between two rounds of the engine thread means the
@@ -693,34 +702,52 @@ fn retire(engine: Option<Engine<CpalBackend>>) {
 }
 
 /// Holds back the input meters by the time the sound needs to reach the
-/// outputs (their buffers), so an input and the output playing it light up
-/// together instead of the input leading.
+/// outputs, so an input and the output playing it light up together
+/// instead of the input leading. The delay is what each input really waits
+/// on its way: the queue of its lanes plus the output buffers, and the
+/// user's fine adjustment. It is not rounded to whole snapshots; the level
+/// between two snapshots is interpolated.
 #[derive(Default)]
 struct LevelDelay {
     history: Vec<VecDeque<f32>>,
 }
 
+/// The longest delay held back, in snapshots (one second).
+const MAX_DELAY_TICKS: f32 = 20.0;
+
 impl LevelDelay {
     fn apply(&mut self, state: &mut UiState) {
-        let ms: Vec<u32> = state
-            .outputs
-            .iter()
-            .filter(|o| o.connected)
-            .filter_map(|o| o.buffer_ms)
-            .collect();
-        let ticks = if ms.is_empty() {
-            0
-        } else {
-            let mean = ms.iter().sum::<u32>() as f32 / ms.len() as f32;
-            (mean / EMIT_EVERY.as_millis() as f32).round() as usize
-        };
+        let tick = EMIT_EVERY.as_millis() as f32;
+        let offset = METER_OFFSET_MS.load(Relaxed) as f32;
         self.history.resize_with(state.inputs.len(), VecDeque::new);
-        for (input, hist) in state.inputs.iter_mut().zip(&mut self.history) {
+        for (i, (input, hist)) in state.inputs.iter_mut().zip(&mut self.history).enumerate() {
+            let (mut sum, mut n) = (0.0_f32, 0.0_f32);
+            for (o, out) in state
+                .outputs
+                .iter()
+                .enumerate()
+                .filter(|(_, o)| o.connected)
+            {
+                let queued = state
+                    .lanes
+                    .get(i)
+                    .and_then(|row| row.get(o))
+                    .map_or(0.0, |l| l.fill_ms);
+                sum += queued + out.buffer_ms.unwrap_or(0) as f32;
+                n += 1.0;
+            }
+            let ms = if n > 0.0 { sum / n } else { 0.0 };
+            let delay = ((ms + offset).max(0.0) / tick).min(MAX_DELAY_TICKS);
             hist.push_back(input.level_db);
-            while hist.len() > ticks + 1 {
+            while hist.len() > delay.ceil() as usize + 2 {
                 hist.pop_front();
             }
-            input.level_db = hist.front().copied().unwrap_or(input.level_db);
+            // The newest entry is "now"; look `delay` snapshots back.
+            let at = ((hist.len() - 1) as f32 - delay).max(0.0);
+            let (lo, frac) = (at.floor() as usize, at.fract());
+            let a = hist[lo];
+            let b = hist.get(lo + 1).copied().unwrap_or(a);
+            input.level_db = a + (b - a) * frac;
         }
     }
 }
@@ -916,6 +943,29 @@ mod tests {
         }
         // 100 ms buffer = two 50 ms ticks of delay.
         assert_eq!(seen, [-10.0, -10.0, -10.0, -20.0]);
+    }
+
+    #[test]
+    fn input_delay_includes_the_lane_queue_and_is_not_rounded() {
+        use super::UiLane;
+        let mut delay = LevelDelay::default();
+        let mut seen = Vec::new();
+        for level in [-10.0, -20.0, -30.0, -40.0] {
+            let mut state = UiState {
+                inputs: vec![ui_device(true, level, None)],
+                outputs: vec![ui_device(true, -120.0, Some(50))],
+                gains: Vec::new(),
+                // 25 ms in the lane + 50 ms buffer = 75 ms = 1.5 snapshots.
+                lanes: vec![vec![UiLane {
+                    fill_ms: 25.0,
+                    ..UiLane::default()
+                }]],
+            };
+            delay.apply(&mut state);
+            seen.push(state.inputs[0].level_db);
+        }
+        // Halfway between the last two levels once the history is deep enough.
+        assert_eq!(seen, [-10.0, -10.0, -15.0, -25.0]);
     }
 
     #[test]
