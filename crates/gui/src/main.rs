@@ -3180,6 +3180,18 @@ impl App {
         .into()
     }
 
+    /// Whether every meter has fallen to the floor and nothing is eased.
+    fn quiet(&self) -> bool {
+        const FLOOR: f32 = -100.0;
+        self.strips
+            .iter()
+            .all(|s| s.shown <= FLOOR && s.peak <= FLOOR && s.target <= FLOOR)
+            && self
+                .outs
+                .iter()
+                .all(|m| m.shown <= FLOOR && m.peak <= FLOOR && m.target <= FLOOR)
+    }
+
     fn subscription(&self) -> Subscription<Message> {
         let moving = self.strips.iter().any(|s| gliding(s.pos, s.db))
             || self.outs.iter().any(|m| gliding(m.pos, m.db));
@@ -3187,6 +3199,9 @@ impl App {
             // Faster while a fader glides, so the movement is fluid.
             if moving {
                 11
+            } else if self.quiet() {
+                // Nothing plays and nothing moves: redraw less often.
+                66
             } else {
                 33
             }
