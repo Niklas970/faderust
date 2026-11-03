@@ -59,6 +59,28 @@
   </tr>
 </table>
 
+## Einstellungsfenster
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="assets/dialog-presets.png" alt="Presets"><br><b>Presets</b><br>Fader, Stumm und Effekte aller Eingänge speichern und laden.</td>
+    <td width="50%" valign="top"><img src="assets/dialog-windows.png" alt="Windows"><br><b>Windows</b><br>Standardgeräte und Lautstärken von Windows.</td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="assets/dialog-devices.png" alt="Geräte"><br><b>Geräte</b><br>Eingänge, Ausgänge, Freigabezeit und Faderust Kabel.</td>
+    <td width="50%" valign="top"><img src="assets/dialog-apps.png" alt="Programme"><br><b>Programme</b><br>Programme einem Kabel zuweisen und als Eingang hinzufügen.</td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="assets/dialog-effects.png" alt="Effekte"><br><b>Effekte</b><br>Rauschfilter, Low-Cut, EQ, Gate und Ducking.</td>
+  </tr>
+</table>
+
 ## Installation
 
 1. Unter [Releases](https://github.com/Niklas970/faderust/releases/latest) die Datei `Faderust_*_x64-setup.exe` laden und starten. Das Setup braucht keine Admin-Rechte und spricht Deutsch oder Englisch.
