@@ -59,6 +59,36 @@
   </tr>
 </table>
 
+## Settings windows
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="assets/dialog-presets.png" alt="Presets"><br><b>Presets</b><br>Save and load fader, mute and effects of all inputs.</td>
+    <td width="50%" valign="top"><img src="assets/dialog-windows.png" alt="Windows"><br><b>Windows</b><br>Default devices and volumes of Windows.</td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="assets/dialog-devices.png" alt="Devices"><br><b>Devices</b><br>Inputs, outputs, release time and Faderust Cable.</td>
+    <td width="50%" valign="top"><img src="assets/dialog-apps.png" alt="Programs"><br><b>Programs</b><br>Assign programs to a cable and add them as inputs.</td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="assets/dialog-effects.png" alt="Effects"><br><b>Effects</b><br>Noise filter, low-cut, EQ, gate and ducking.</td>
+    <td width="50%" valign="top"><img src="assets/dialog-design.png" alt="Design"><br><b>Design</b><br>View, colors and appearance.</td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="assets/dialog-log.png" alt="Log"><br><b>Log</b><br>Latest messages, copyable for an issue.</td>
+    <td width="50%" valign="top"><img src="assets/dialog-selftest.png" alt="Self-test"><br><b>Self-test</b><br>Checks devices, buffer, remote control and plugin.</td>
+  </tr>
+</table>
+
 ## Installation
 
 1. Download `Faderust_*_x64-setup.exe` from [Releases](https://github.com/Niklas970/faderust/releases/latest) and run it. The setup needs no admin rights and speaks German or English.
