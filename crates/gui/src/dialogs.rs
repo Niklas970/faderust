@@ -165,6 +165,20 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
             .label(tr("Hintergrundgeräusche entfernen"))
             .on_toggle(move |v| edit(Edit::Denoise(i, v))),
         hint("Filtert Tastatur, Lüfter und Rauschen aus der Stimme."),
+        row![
+            container(text("Stärke").size(13).color(text_color())).width(150),
+            segmented(
+                [("Leicht", 0.4_f32), ("Mittel", 0.7), ("Stark", 1.0)]
+                    .into_iter()
+                    .map(|(name, amount)| (
+                        tr(name),
+                        (f.denoise_amount - amount).abs() < 0.05,
+                        edit(Edit::DenoiseAmount(i, amount))
+                    ))
+                    .collect()
+            ),
+        ]
+        .align_y(Vertical::Center),
         h3("Low-Cut"),
         segmented(
             [0u16, 80, 120, 160]

@@ -15,6 +15,8 @@ use nnnoiseless::DenoiseState;
 pub struct FxSettings {
     /// RNNoise noise suppression (keyboard, fans). Only at 48 kHz.
     pub denoise: bool,
+    /// How much of the noise suppression is applied, 0…1 (1 = fully).
+    pub denoise_amount: f32,
     /// High-pass corner in Hz, 0 = off.
     pub low_cut_hz: f32,
     /// Shelf at 120 Hz, dB.
@@ -32,6 +34,7 @@ impl Default for FxSettings {
     fn default() -> Self {
         Self {
             denoise: false,
+            denoise_amount: 1.0,
             low_cut_hz: 0.0,
             low_db: 0.0,
             mid_db: 0.0,
@@ -55,6 +58,7 @@ impl FxSettings {
         };
         Self {
             denoise: self.denoise,
+            denoise_amount: clamp(self.denoise_amount, d.denoise_amount, 0.0, 1.0),
             low_cut_hz: clamp(self.low_cut_hz, d.low_cut_hz, 0.0, 400.0),
             low_db: clamp(self.low_db, 0.0, -12.0, 12.0),
             mid_db: clamp(self.mid_db, 0.0, -12.0, 12.0),
@@ -69,6 +73,7 @@ impl FxSettings {
 #[derive(Debug)]
 pub struct InputFx {
     denoise: AtomicBool,
+    denoise_amount: AtomicU32,
     low_cut_hz: AtomicU32,
     low_db: AtomicU32,
     mid_db: AtomicU32,
@@ -83,6 +88,7 @@ impl Default for InputFx {
     fn default() -> Self {
         let fx = Self {
             denoise: AtomicBool::new(false),
+            denoise_amount: AtomicU32::new(0),
             low_cut_hz: AtomicU32::new(0),
             low_db: AtomicU32::new(0),
             mid_db: AtomicU32::new(0),
@@ -105,6 +111,7 @@ impl InputFx {
         let s = s.sanitized();
         let r = Ordering::Relaxed;
         self.denoise.store(s.denoise, r);
+        self.denoise_amount.store(s.denoise_amount.to_bits(), r);
         self.low_cut_hz.store(s.low_cut_hz.to_bits(), r);
         self.low_db.store(s.low_db.to_bits(), r);
         self.mid_db.store(s.mid_db.to_bits(), r);
@@ -119,6 +126,7 @@ impl InputFx {
         let f = |a: &AtomicU32| f32::from_bits(a.load(r));
         FxSettings {
             denoise: self.denoise.load(r),
+            denoise_amount: f(&self.denoise_amount),
             low_cut_hz: f(&self.low_cut_hz),
             low_db: f(&self.low_db),
             mid_db: f(&self.mid_db),
@@ -326,6 +334,8 @@ struct Denoiser {
     output: [f32; RNN_FRAME],
     pos: usize,
     tail: TailHold,
+    /// Share of the processed signal in the output, 0…1.
+    amount: f32,
 }
 
 impl Denoiser {
@@ -336,6 +346,7 @@ impl Denoiser {
             output: [0.0; RNN_FRAME],
             pos: 0,
             tail: TailHold::default(),
+            amount: 1.0,
         }
     }
 
@@ -375,6 +386,11 @@ impl Denoiser {
             self.pos = 0;
             self.state.process_frame(&mut self.output, &self.input);
             self.hold_tail();
+            if self.amount < 1.0 {
+                for (out, input) in self.output.iter_mut().zip(&self.input) {
+                    *out += (*input - *out) * (1.0 - self.amount);
+                }
+            }
             for v in &mut self.output {
                 *v = (*v / RNN_SCALE).clamp(-1.0, 1.0);
             }
@@ -450,6 +466,8 @@ impl FxChain {
                 left.clear();
                 right.clear();
             }
+            left.amount = s.denoise_amount;
+            right.amount = s.denoise_amount;
             for frame in frames.chunks_exact_mut(2) {
                 frame[0] = left.run(frame[0]);
                 frame[1] = right.run(frame[1]);
@@ -584,6 +602,29 @@ mod tests {
         };
         let out = run(s, sine(440.0, 0.5, 4800));
         assert!(out[..RNN_FRAME * 2].iter().all(|v| *v == 0.0));
+    }
+
+    /// The amount only blends after the suppression: 0 plays the input
+    /// (one frame late), 1 the suppressed signal, in between the average.
+    #[test]
+    fn denoise_amount_blends_between_input_and_suppressed() {
+        let input = noise(0.1, 48_000);
+        let run_with = |amount: f32| {
+            let s = FxSettings {
+                denoise: true,
+                denoise_amount: amount,
+                ..Default::default()
+            };
+            run(s, input.clone())
+        };
+        let (full, half, none) = (run_with(1.0), run_with(0.5), run_with(0.0));
+        let delay = RNN_FRAME * 2;
+        for n in delay..input.len() {
+            assert!((none[n] - input[n - delay]).abs() < 1e-4, "{n}");
+            let mid = (full[n] + none[n]) / 2.0;
+            assert!((half[n] - mid).abs() < 1e-4, "{n}");
+        }
+        assert!(rms(&full) != rms(&none));
     }
 
     #[test]
