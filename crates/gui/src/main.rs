@@ -126,6 +126,7 @@ pub struct Out {
 #[derive(Clone, PartialEq)]
 pub struct Fx {
     pub denoise: bool,
+    pub denoise_amount: f32,
     pub low_cut: u16,
     pub eq: [f32; 3],
     pub gate: bool,
@@ -136,6 +137,7 @@ impl From<CoreFx> for Fx {
     fn from(f: CoreFx) -> Self {
         Fx {
             denoise: f.denoise,
+            denoise_amount: f.denoise_amount,
             low_cut: f.low_cut_hz.round() as u16,
             eq: [f.low_db, f.mid_db, f.high_db],
             gate: f.gate,
@@ -148,6 +150,7 @@ impl From<&Fx> for CoreFx {
     fn from(f: &Fx) -> Self {
         CoreFx {
             denoise: f.denoise,
+            denoise_amount: f.denoise_amount,
             low_cut_hz: f.low_cut as f32,
             low_db: f.eq[0],
             mid_db: f.eq[1],
@@ -283,6 +286,7 @@ pub enum Edit {
     /// The picker was let go: save the colour.
     HsvDone,
     Denoise(usize, bool),
+    DenoiseAmount(usize, f32),
     LowCut(usize, u16),
     Eq(usize, usize, f32),
     Gate(usize, bool),
@@ -1650,6 +1654,7 @@ impl App {
             Edit::DuckAttack(i, v) => self.set_duck(i, |d| d.attack_ms = v),
             Edit::DuckRelease(i, v) => self.set_duck(i, |d| d.release_ms = v),
             Edit::Denoise(i, on) => self.set_fx(i, |f| f.denoise = on),
+            Edit::DenoiseAmount(i, a) => self.set_fx(i, |f| f.denoise_amount = a),
             Edit::LowCut(i, hz) => self.set_fx(i, |f| f.low_cut = hz),
             Edit::Eq(i, b, v) => self.set_fx(i, |f| f.eq[b] = v),
             Edit::Gate(i, on) => self.set_fx(i, |f| f.gate = on),

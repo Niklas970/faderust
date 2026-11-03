@@ -29,6 +29,8 @@ pub struct InputEntry {
 pub struct Fx {
     /// RNNoise noise suppression (48 kHz devices only).
     pub denoise: bool,
+    /// Share of the noise suppression, 0…1 (1 = fully).
+    pub denoise_amount: f32,
     /// High-pass corner in Hz, 0 = off.
     pub low_cut_hz: f32,
     pub low_db: f32,
@@ -48,6 +50,7 @@ impl From<FxSettings> for Fx {
     fn from(s: FxSettings) -> Self {
         Self {
             denoise: s.denoise,
+            denoise_amount: s.denoise_amount,
             low_cut_hz: s.low_cut_hz,
             low_db: s.low_db,
             mid_db: s.mid_db,
@@ -62,6 +65,7 @@ impl From<Fx> for FxSettings {
     fn from(f: Fx) -> Self {
         Self {
             denoise: f.denoise,
+            denoise_amount: f.denoise_amount,
             low_cut_hz: f.low_cut_hz,
             low_db: f.low_db,
             mid_db: f.mid_db,
