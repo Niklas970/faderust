@@ -108,6 +108,7 @@ const TABLE: &[(&str, &str)] = &[
     ("Mit Windows starten (im Tray, ohne Fenster)", "Start with Windows (in the tray, no window)"),
     ("Nach 2 min", "After 2 min"),
     ("Nach 5 s", "After 5 s"),
+    ("Beendete", "Closed"),
     ("Nie frei", "Never free"),
     ("Nie", "Never"),
     (
@@ -150,6 +151,10 @@ const TABLE: &[(&str, &str)] = &[
     ("Starten", "Start"),
     ("Stille Programme ausblenden", "Hide silent programs"),
     ("Pegel-Versatz", "Meter offset"),
+    (
+        "„Beendete“ blendet nur Programme aus, die geschlossen sind. Stille, aber geöffnete bleiben sichtbar.",
+        "“Closed” hides only programs that are closed. Silent but open ones stay visible.",
+    ),
     (
         "Verschiebt die Eingangsbalken gegen die Ausgangsbalken, falls sie nicht im Takt laufen.",
         "Shifts the input meters against the output meters if they are not in step.",
