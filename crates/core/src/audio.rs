@@ -703,45 +703,174 @@ fn retire(engine: Option<Engine<CpalBackend>>) {
 
 /// Holds back the input meters by the time the sound needs to reach the
 /// outputs, so an input and the output playing it light up together
-/// instead of the input leading. The delay is what each input really waits
-/// on its way: the queue of its lanes plus the output buffers, and the
-/// user's fine adjustment. It is not rounded to whole snapshots; the level
-/// between two snapshots is interpolated.
+/// instead of the input leading. The delay is measured, not set by hand:
+/// the input levels are compared with the level of each output over the
+/// last few seconds, and the shift that fits best is the delay. Until the
+/// music is lively enough to tell, it is estimated from the lane queue and
+/// the output buffer. The user's fine adjustment is added on top. It is
+/// not rounded to whole snapshots; the level between two snapshots is
+/// interpolated.
 #[derive(Default)]
 struct LevelDelay {
+    /// Raw input levels in dB, newest last.
     history: Vec<VecDeque<f32>>,
+    /// Output levels in dB, newest last.
+    out_history: Vec<VecDeque<f32>>,
+    /// Measured delay per output, in snapshots.
+    lag: Vec<Option<f32>>,
 }
 
 /// The longest delay held back, in snapshots (one second).
 const MAX_DELAY_TICKS: f32 = 20.0;
+/// Snapshots compared when measuring (four seconds), and kept in history.
+const WINDOW: usize = 80;
+const HISTORY: usize = WINDOW + MAX_DELAY_TICKS as usize + 10;
+
+fn linear(db: f32) -> f32 {
+    if db <= -100.0 {
+        0.0
+    } else {
+        10.0_f32.powf(db / 20.0)
+    }
+}
+
+/// The delay in snapshots by which `y` follows `x`: the shift with the best
+/// match over the last `WINDOW` snapshots, or `None` while the signal is too
+/// flat or too unlike to tell.
+fn measure_lag(x: &[f32], y: &[f32]) -> Option<f32> {
+    let max = MAX_DELAY_TICKS as usize;
+    if x.len() != y.len() || x.len() < WINDOW + max {
+        return None;
+    }
+    let n = x.len();
+    let ys = &y[n - WINDOW..];
+    let mean_y = ys.iter().sum::<f32>() / WINDOW as f32;
+    let var_y = ys.iter().map(|v| (v - mean_y).powi(2)).sum::<f32>();
+    // Quiet or steady: nothing to line up.
+    if mean_y < 1e-4 || (var_y / WINDOW as f32).sqrt() < 0.15 * mean_y {
+        return None;
+    }
+    let corr: Vec<f32> = (0..=max)
+        .map(|k| {
+            let xs = &x[n - WINDOW - k..n - k];
+            let mean_x = xs.iter().sum::<f32>() / WINDOW as f32;
+            let var_x = xs.iter().map(|v| (v - mean_x).powi(2)).sum::<f32>();
+            if var_x <= 0.0 {
+                return 0.0;
+            }
+            let cov: f32 = xs
+                .iter()
+                .zip(ys)
+                .map(|(a, b)| (a - mean_x) * (b - mean_y))
+                .sum();
+            cov / (var_x * var_y).sqrt()
+        })
+        .collect();
+    // The smallest shift wins a tie.
+    let (mut best, mut top) = (0, corr[0]);
+    for (k, &c) in corr.iter().enumerate() {
+        if c > top + 1e-4 {
+            (best, top) = (k, c);
+        }
+    }
+    if top < 0.6 {
+        return None;
+    }
+    // A parabola through the best shift and its neighbours gives the part
+    // of a snapshot in between.
+    let shift = if best > 0 && best < max {
+        let (c0, c2) = (corr[best - 1], corr[best + 1]);
+        let denom = c0 - 2.0 * top + c2;
+        if denom < -1e-6 {
+            (0.5 * (c0 - c2) / denom).clamp(-0.5, 0.5)
+        } else {
+            0.0
+        }
+    } else {
+        0.0
+    };
+    Some((best as f32 + shift).max(0.0))
+}
+
+fn push_capped(hist: &mut VecDeque<f32>, value: f32) {
+    hist.push_back(value);
+    while hist.len() > HISTORY {
+        hist.pop_front();
+    }
+}
 
 impl LevelDelay {
+    /// Updates the measured delay of every connected output.
+    fn measure(&mut self, state: &UiState) {
+        for (o, out) in state.outputs.iter().enumerate() {
+            if !out.connected {
+                self.lag[o] = None;
+                continue;
+            }
+            let y: Vec<f32> = self.out_history[o].iter().map(|&db| linear(db)).collect();
+            // What the inputs add up to on this output.
+            let mut x = vec![0.0_f32; y.len()];
+            for (i, hist) in self.history.iter().enumerate() {
+                let gain = state.gains.get(i).and_then(|r| r.get(o));
+                let g = gain.map_or(0.0, |g| if g.muted { 0.0 } else { linear(g.db) });
+                if g == 0.0 || hist.len() != x.len() {
+                    continue;
+                }
+                for (sum, &db) in x.iter_mut().zip(hist) {
+                    *sum += g * linear(db);
+                }
+            }
+            if let Some(lag) = measure_lag(&x, &y) {
+                self.lag[o] = Some(match self.lag[o] {
+                    Some(old) => old + (lag - old) * 0.15,
+                    None => lag,
+                });
+            }
+        }
+    }
+
     fn apply(&mut self, state: &mut UiState) {
         let tick = EMIT_EVERY.as_millis() as f32;
         let offset = METER_OFFSET_MS.load(Relaxed) as f32;
         self.history.resize_with(state.inputs.len(), VecDeque::new);
-        for (i, (input, hist)) in state.inputs.iter_mut().zip(&mut self.history).enumerate() {
-            let (mut sum, mut n) = (0.0_f32, 0.0_f32);
-            for (o, out) in state
-                .outputs
-                .iter()
-                .enumerate()
-                .filter(|(_, o)| o.connected)
-            {
-                let queued = state
-                    .lanes
-                    .get(i)
-                    .and_then(|row| row.get(o))
-                    .map_or(0.0, |l| l.fill_ms);
-                sum += queued + out.buffer_ms.unwrap_or(0) as f32;
-                n += 1.0;
-            }
-            let ms = if n > 0.0 { sum / n } else { 0.0 };
+        self.out_history
+            .resize_with(state.outputs.len(), VecDeque::new);
+        self.lag.resize(state.outputs.len(), None);
+        for (hist, input) in self.history.iter_mut().zip(&state.inputs) {
+            push_capped(hist, input.level_db);
+        }
+        for (hist, out) in self.out_history.iter_mut().zip(&state.outputs) {
+            push_capped(hist, out.level_db);
+        }
+        self.measure(state);
+        let measured: Vec<f32> = self.lag.iter().flatten().copied().collect();
+        for (i, (input, hist)) in state.inputs.iter_mut().zip(&self.history).enumerate() {
+            let ms = if measured.is_empty() {
+                // Not measurable yet: the queue of the lanes plus the buffers.
+                let (mut sum, mut n) = (0.0_f32, 0.0_f32);
+                for (o, out) in state
+                    .outputs
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, o)| o.connected)
+                {
+                    let queued = state
+                        .lanes
+                        .get(i)
+                        .and_then(|row| row.get(o))
+                        .map_or(0.0, |l| l.fill_ms);
+                    sum += queued + out.buffer_ms.unwrap_or(0) as f32;
+                    n += 1.0;
+                }
+                if n > 0.0 {
+                    sum / n
+                } else {
+                    0.0
+                }
+            } else {
+                measured.iter().sum::<f32>() / measured.len() as f32 * tick
+            };
             let delay = ((ms + offset).max(0.0) / tick).min(MAX_DELAY_TICKS);
-            hist.push_back(input.level_db);
-            while hist.len() > delay.ceil() as usize + 2 {
-                hist.pop_front();
-            }
             // The newest entry is "now"; look `delay` snapshots back.
             let at = ((hist.len() - 1) as f32 - delay).max(0.0);
             let (lo, frac) = (at.floor() as usize, at.fract());
@@ -966,6 +1095,43 @@ mod tests {
         }
         // Halfway between the last two levels once the history is deep enough.
         assert_eq!(seen, [-10.0, -10.0, -15.0, -25.0]);
+    }
+
+    #[test]
+    fn input_delay_is_measured_from_the_output_levels() {
+        use super::UiLane;
+        // The output repeats the input 3 snapshots (150 ms) later, while the
+        // queue and buffer say 0: the measurement must win.
+        let raw = |t: usize| -> f32 {
+            let v = ((t * 37 + 11) % 17) as f32 / 17.0;
+            -50.0 + 40.0 * v
+        };
+        let mut delay = LevelDelay::default();
+        let (mut shown, mut played) = (Vec::new(), Vec::new());
+        for t in 0..160 {
+            let out = if t >= 3 { raw(t - 3) } else { -120.0 };
+            let mut state = UiState {
+                inputs: vec![ui_device(true, raw(t), None)],
+                outputs: vec![ui_device(true, out, Some(0))],
+                gains: vec![vec![Gain {
+                    db: 0.0,
+                    muted: false,
+                }]],
+                lanes: vec![vec![UiLane::default()]],
+            };
+            delay.apply(&mut state);
+            shown.push(state.inputs[0].level_db);
+            played.push(state.outputs[0].level_db);
+        }
+        // Once measured, the shown input lines up with the output.
+        for t in 140..160 {
+            assert!(
+                (shown[t] - played[t]).abs() < 1.5,
+                "t={t} shown={} played={}",
+                shown[t],
+                played[t]
+            );
+        }
     }
 
     #[test]

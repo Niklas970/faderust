@@ -804,7 +804,7 @@ fn design(app: &App) -> Element<'_, Message> {
                 })
                 .collect(),
         ),
-        hint("Verschiebt die Eingangsbalken gegen die Ausgangsbalken, falls sie nicht im Takt laufen."),
+        hint("Der Gleichlauf wird automatisch gemessen. Hier nur nachjustieren, falls es noch nicht passt."),
         h3("Akzentfarbe"),
         accents,
         custom_color(

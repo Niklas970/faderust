@@ -160,8 +160,8 @@ const TABLE: &[(&str, &str)] = &[
         "“Closed” hides only programs that are closed. Silent but open ones stay visible.",
     ),
     (
-        "Verschiebt die Eingangsbalken gegen die Ausgangsbalken, falls sie nicht im Takt laufen.",
-        "Shifts the input meters against the output meters if they are not in step.",
+        "Der Gleichlauf wird automatisch gemessen. Hier nur nachjustieren, falls es noch nicht passt.",
+        "The sync is measured automatically. Only fine-tune here if it still does not fit.",
     ),
     (
         "Stream Deck nicht verbunden. Plugin einrichten oder neu installieren:",
