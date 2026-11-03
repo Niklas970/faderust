@@ -78,14 +78,6 @@
 <table>
   <tr>
     <td width="50%" valign="top"><img src="assets/dialog-effects.png" alt="Effects"><br><b>Effects</b><br>Noise filter, low-cut, EQ, gate and ducking.</td>
-    <td width="50%" valign="top"><img src="assets/dialog-design.png" alt="Design"><br><b>Design</b><br>View, colors and appearance.</td>
-  </tr>
-</table>
-
-<table>
-  <tr>
-    <td width="50%" valign="top"><img src="assets/dialog-log.png" alt="Log"><br><b>Log</b><br>Latest messages, copyable for an issue.</td>
-    <td width="50%" valign="top"><img src="assets/dialog-selftest.png" alt="Self-test"><br><b>Self-test</b><br>Checks devices, buffer, remote control and plugin.</td>
   </tr>
 </table>
 

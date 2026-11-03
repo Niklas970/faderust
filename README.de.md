@@ -78,14 +78,6 @@
 <table>
   <tr>
     <td width="50%" valign="top"><img src="assets/dialog-effects.png" alt="Effekte"><br><b>Effekte</b><br>Rauschfilter, Low-Cut, EQ, Gate und Ducking.</td>
-    <td width="50%" valign="top"><img src="assets/dialog-design.png" alt="Design"><br><b>Design</b><br>Ansicht, Farben und Darstellung.</td>
-  </tr>
-</table>
-
-<table>
-  <tr>
-    <td width="50%" valign="top"><img src="assets/dialog-log.png" alt="Protokoll"><br><b>Protokoll</b><br>Letzte Meldungen, kopierbar für ein Issue.</td>
-    <td width="50%" valign="top"><img src="assets/dialog-selftest.png" alt="Selbsttest"><br><b>Selbsttest</b><br>Prüft Geräte, Puffer, Fernsteuerung und Plugin.</td>
   </tr>
 </table>
 
