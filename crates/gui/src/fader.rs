@@ -198,15 +198,15 @@ impl Fader<'_> {
 
         // Narrow: no scale, the cap and slot move left (58 px track).
         let wide = !self.narrow;
-        let (sx, cx) = if wide { (51.0, 24.0) } else { (45.0, 30.0) };
+        let (sx, cx) = if wide { (49.0, 24.0) } else { (44.0, 30.0) };
         // The scale sits left of the slot: labels end at `lx`, marks follow.
         let (lx, marks) = if wide {
             (22.0, [29.0, 47.0])
         } else {
             (18.0, [22.0, 0.0])
         };
-        let slot_w = if wide { 14.0 } else { 10.0 };
-        let bar_w = if wide { 6.0 } else { 4.0 };
+        let slot_w = if wide { 18.0 } else { 12.0 };
+        let bar_w = if wide { 10.0 } else { 6.0 };
         let bar_x = sx + (slot_w - bar_w) / 2.0;
         // Scale: numbers on the left, small marks beside the slot.
         // Fine marks every 3 dB between -24 and +12.
