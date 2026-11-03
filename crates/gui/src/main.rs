@@ -126,6 +126,7 @@ pub struct Out {
 #[derive(Clone, PartialEq)]
 pub struct Fx {
     pub denoise: bool,
+    pub denoise_amount: f32,
     pub low_cut: u16,
     pub eq: [f32; 3],
     pub gate: bool,
@@ -136,6 +137,7 @@ impl From<CoreFx> for Fx {
     fn from(f: CoreFx) -> Self {
         Fx {
             denoise: f.denoise,
+            denoise_amount: f.denoise_amount,
             low_cut: f.low_cut_hz.round() as u16,
             eq: [f.low_db, f.mid_db, f.high_db],
             gate: f.gate,
@@ -148,6 +150,7 @@ impl From<&Fx> for CoreFx {
     fn from(f: &Fx) -> Self {
         CoreFx {
             denoise: f.denoise,
+            denoise_amount: f.denoise_amount,
             low_cut_hz: f.low_cut as f32,
             low_db: f.eq[0],
             mid_db: f.eq[1],
@@ -283,6 +286,7 @@ pub enum Edit {
     /// The picker was let go: save the colour.
     HsvDone,
     Denoise(usize, bool),
+    DenoiseAmount(usize, f32),
     LowCut(usize, u16),
     Eq(usize, usize, f32),
     Gate(usize, bool),
@@ -1650,6 +1654,7 @@ impl App {
             Edit::DuckAttack(i, v) => self.set_duck(i, |d| d.attack_ms = v),
             Edit::DuckRelease(i, v) => self.set_duck(i, |d| d.release_ms = v),
             Edit::Denoise(i, on) => self.set_fx(i, |f| f.denoise = on),
+            Edit::DenoiseAmount(i, a) => self.set_fx(i, |f| f.denoise_amount = a),
             Edit::LowCut(i, hz) => self.set_fx(i, |f| f.low_cut = hz),
             Edit::Eq(i, b, v) => self.set_fx(i, |f| f.eq[b] = v),
             Edit::Gate(i, on) => self.set_fx(i, |f| f.gate = on),
@@ -3211,6 +3216,18 @@ impl App {
         .into()
     }
 
+    /// Whether every meter has fallen to the floor and nothing is eased.
+    fn quiet(&self) -> bool {
+        const FLOOR: f32 = -100.0;
+        self.strips
+            .iter()
+            .all(|s| s.shown <= FLOOR && s.peak <= FLOOR && s.target <= FLOOR)
+            && self
+                .outs
+                .iter()
+                .all(|m| m.shown <= FLOOR && m.peak <= FLOOR && m.target <= FLOOR)
+    }
+
     fn subscription(&self) -> Subscription<Message> {
         let moving = self.strips.iter().any(|s| gliding(s.pos, s.db))
             || self.outs.iter().any(|m| gliding(m.pos, m.db));
@@ -3218,6 +3235,9 @@ impl App {
             // Faster while a fader glides, so the movement is fluid.
             if moving {
                 11
+            } else if self.quiet() {
+                // Nothing plays and nothing moves: redraw less often.
+                66
             } else {
                 33
             }
