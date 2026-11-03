@@ -2,6 +2,7 @@
 
 - **Level meters in sync:** the input meters now follow the real delay to the output, so inputs and outputs move together; a new "Meter offset" setting in the Design dialog lets you fine-tune it
 - **Even blocks:** the programs block is now as tall as the other blocks
+- **Hide closed programs only:** new choice "Closed" under "Hide silent programs" in the Design dialog; silent programs stay visible as long as they are open
 
 ## Installation
 
@@ -17,6 +18,7 @@ All features and a guide are in the [README](https://github.com/Niklas970/faderu
 
 - **Pegel im Gleichlauf:** Die Eingangs-Pegel folgen jetzt genau der Verzögerung bis zum Ausgang, sodass Ein- und Ausgänge zusammen laufen; mit der neuen Einstellung „Pegel-Versatz“ im Design-Dialog lässt es sich fein abstimmen
 - **Gleich hohe Blöcke:** Der Programm-Block ist jetzt so hoch wie die anderen Blöcke
+- **Nur geschlossene Programme ausblenden:** neue Wahl „Beendete“ unter „Stille Programme ausblenden“ im Design-Dialog; stille Programme bleiben sichtbar, solange sie geöffnet sind
 
 ## Installation
 
