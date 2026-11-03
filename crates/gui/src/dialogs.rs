@@ -162,7 +162,7 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
     let body = column![
         h3("Rauschfilter"),
         check(f.denoise)
-            .label("Hintergrundgeräusche entfernen")
+            .label(tr("Hintergrundgeräusche entfernen"))
             .on_toggle(move |v| edit(Edit::Denoise(i, v))),
         hint("Filtert Tastatur, Lüfter und Rauschen aus der Stimme."),
         h3("Low-Cut"),
@@ -187,7 +187,7 @@ fn fx(app: &App, i: usize) -> Element<'_, Message> {
         band(2, "Höhen", "8 kHz"),
         h3("Gate"),
         check(f.gate)
-            .label("Stumm unter der Schwelle")
+            .label(tr("Stumm unter der Schwelle"))
             .on_toggle(move |v| edit(Edit::Gate(i, v))),
         row![
             container(text("Schwelle").size(13).color(text_color())).width(150),
@@ -1216,7 +1216,7 @@ fn settings(app: &App) -> Element<'_, Message> {
                 col = col
                     .push(
                         check(u.running)
-                            .label("Faderust Kabel verwenden")
+                            .label(tr("Faderust Kabel verwenden"))
                             .on_toggle(|v| edit(Edit::UsbEnable(v))),
                     )
                     .push(
@@ -1272,7 +1272,7 @@ fn settings(app: &App) -> Element<'_, Message> {
         mic_section(app),
         h3("Start"),
         check(app.autostart)
-            .label("Mit Windows starten (im Tray, ohne Fenster)")
+            .label(tr("Mit Windows starten (im Tray, ohne Fenster)"))
             .on_toggle(|v| edit(Edit::Autostart(v))),
         h3("Faderust Kabel"),
         cable_section,
