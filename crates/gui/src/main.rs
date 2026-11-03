@@ -56,7 +56,10 @@ pub const RELEASE: &[(u32, &str)] = &[
     (30, "Frei nach 30 s"),
     (120, "Frei nach 2 min"),
 ];
-pub const HIDE_AFTER: &[&str] = &["Nie", "Nach 5 s", "Nach 2 min"];
+pub const HIDE_AFTER: &[&str] = &["Nie", "Nach 5 s", "Nach 2 min", "Beendete"];
+
+/// Stored in `ui.json` for "Beendete": hide only programs that are closed.
+const CLOSED_ONLY: u64 = u64::MAX;
 
 /// Row before a strip move and the `(output, dB)` pairs the move applied.
 type Anchor = (Vec<Gain>, Vec<(usize, f32)>);
@@ -379,6 +382,8 @@ pub enum Message {
     Mute(usize),
     MasterMute(usize),
     Frame(Instant),
+    /// Refreshes the list of open programs (only while "Beendete" is chosen).
+    PollApps,
     Shot(window::Screenshot),
     Id(Option<window::Id>),
     Loaded(Loaded),
@@ -463,6 +468,11 @@ fn hide_secs(label: &str) -> u64 {
         "Nach 2 min" => 120,
         _ => 0,
     }
+}
+
+/// "Beendete": silent programs stay as long as they are open, only closed ones leave.
+fn hide_closed(label: &str) -> bool {
+    label == "Beendete"
 }
 
 /// Meter smoothing: fast up, a little slower down. Strips and outputs use
@@ -762,7 +772,11 @@ impl App {
             masters_right: !self.masters_left,
             compact: self.compact,
             pinned: self.pinned,
-            hide_after: Some(hide_secs(self.hide_after)),
+            hide_after: Some(if hide_closed(self.hide_after) {
+                CLOSED_ONLY
+            } else {
+                hide_secs(self.hide_after)
+            }),
             keep: self
                 .strips
                 .iter()
@@ -1040,6 +1054,7 @@ impl App {
             hide_after: match prefs.hide_after {
                 Some(0) => HIDE_AFTER[0],
                 Some(5) => HIDE_AFTER[1],
+                Some(CLOSED_ONLY) => HIDE_AFTER[3],
                 _ => HIDE_AFTER[2],
             },
             visible,
@@ -1094,7 +1109,11 @@ impl App {
             shot: std::env::var("FADERUST_SHOT").ok(),
         };
         app.refresh_presets();
-        let task = Task::batch([app.open(dialog), window::latest().map(Message::WinId)]);
+        let mut tasks = vec![app.open(dialog), window::latest().map(Message::WinId)];
+        if hide_closed(app.hide_after) {
+            tasks.push(app.load_apps());
+        }
+        let task = Task::batch(tasks);
         (app, task)
     }
 
@@ -1124,6 +1143,7 @@ impl App {
     fn apply(&mut self, snap: &UiState, dt: f32) {
         let now = Instant::now();
         let secs = hide_secs(self.hide_after);
+        let closed_only = hide_closed(self.hide_after);
         let startup = now.duration_since(self.started) < Duration::from_secs(4);
         while self.strips.len() < snap.inputs.len() {
             self.strips.push(Strip {
@@ -1193,8 +1213,15 @@ impl App {
             if s.connected && s.target > -60.0 {
                 s.dismissed = false;
             }
+            // Open = Windows still lists an audio session of the program.
+            let closed = closed_only
+                && self.apps_data.as_ref().is_some_and(|data| {
+                    let exe = s.device.strip_prefix("app:").unwrap_or_default();
+                    !data.apps.iter().any(|a| a.exe.eq_ignore_ascii_case(exe))
+                });
             s.hidden = s.program
                 && (s.dismissed
+                    || (closed && !s.keep && !s.revealed)
                     || (secs > 0
                         && !s.keep
                         && !s.revealed
@@ -1515,6 +1542,7 @@ impl App {
                     self.send(Command::SetMasterMuted(o, muted));
                 }
             }
+            Message::PollApps => self.jobs.push(self.load_apps()),
             Message::Frame(now) => {
                 #[cfg_attr(not(windows), allow(unused_mut))]
                 let mut show = INSTANCE
@@ -2012,6 +2040,9 @@ impl App {
             Edit::HideAfter(h) => {
                 self.hide_after = h;
                 self.save_prefs();
+                if hide_closed(h) {
+                    self.jobs.push(self.load_apps());
+                }
             }
             Edit::NewPreset(t) => self.new_preset = t,
             Edit::SavePreset => {
@@ -3193,8 +3224,14 @@ impl App {
         } else {
             250
         };
+        let poll = if hide_closed(self.hide_after) {
+            iced::time::every(Duration::from_secs(3)).map(|_| Message::PollApps)
+        } else {
+            Subscription::none()
+        };
         Subscription::batch([
             iced::time::every(Duration::from_millis(every)).map(Message::Frame),
+            poll,
             window::close_requests().map(|_| Message::CloseRequested),
         ])
     }

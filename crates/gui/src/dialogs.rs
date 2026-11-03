@@ -772,6 +772,7 @@ fn design(app: &App) -> Element<'_, Message> {
         ]),
         h3("Stille Programme ausblenden"),
         segmented(hide),
+        hint("„Beendete“ blendet nur Programme aus, die geschlossen sind. Stille, aber geöffnete bleiben sichtbar."),
         h3("Pegel-Versatz"),
         segmented(
             [-50, 0, 50, 100]
