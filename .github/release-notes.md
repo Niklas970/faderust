@@ -1,8 +1,12 @@
-## What's new in 0.7.4
+## What's new in 0.7.5
 
-- **Ducking:** an input (e.g. music or a game) gets quieter while another one is loud, e.g. when you speak into the microphone; set it per input in the effects dialog, off by default
-- **Mini mode:** new button in the title bar, shows only the faders in a narrow always-on-top window
-- **Smoother level meters:** one continuous bar with a peak mark, faster rise, and the same motion for outputs, devices and programs
+- **Level meters in sync:** the input meters now follow the real delay to the output, so inputs and outputs move together; a new "Meter offset" setting in the Design dialog lets you fine-tune it
+- **Even blocks:** the programs block is now as tall as the other blocks
+- **Hide closed programs only:** new choice "Closed" under "Hide silent programs" in the Design dialog; silent programs stay visible as long as they are open
+- **Noise filter strength:** choose Light, Medium or Strong
+- **Bluetooth outputs reopen faster** after being released (retry every 150 ms)
+- **Less CPU when silent:** the window redraws at only 15 Hz while nothing plays
+- Fixed a missing translation of the checkboxes
 
 ## Installation
 
@@ -14,11 +18,15 @@ All features and a guide are in the [README](https://github.com/Niklas970/faderu
 
 ---
 
-## Neu in 0.7.4
+## Neu in 0.7.5
 
-- **Ducking:** Ein Eingang (z. B. Musik oder Spiel) wird leiser, solange ein anderer laut ist, etwa wenn du ins Mikro sprichst; pro Eingang im Effekte-Dialog einstellbar, standardmäßig aus
-- **Mini-Modus:** neuer Knopf in der Titelleiste, zeigt nur die Fader in einem schmalen Fenster, das im Vordergrund bleibt
-- **Weichere Pegelanzeigen:** ein durchgehender Balken mit Spitzenmarke, schnellerer Anstieg und gleiche Bewegung für Ausgänge, Geräte und Programme
+- **Pegel im Gleichlauf:** Die Eingangs-Pegel folgen jetzt genau der Verzögerung bis zum Ausgang, sodass Ein- und Ausgänge zusammen laufen; mit der neuen Einstellung „Pegel-Versatz“ im Design-Dialog lässt es sich fein abstimmen
+- **Gleich hohe Blöcke:** Der Programm-Block ist jetzt so hoch wie die anderen Blöcke
+- **Nur geschlossene Programme ausblenden:** neue Wahl „Beendete“ unter „Stille Programme ausblenden“ im Design-Dialog; stille Programme bleiben sichtbar, solange sie geöffnet sind
+- **Rauschfilter-Stärke:** Leicht, Mittel oder Stark wählbar
+- **Bluetooth-Ausgänge öffnen schneller** nach der Freigabe (Neuversuch alle 150 ms)
+- **Weniger CPU bei Stille:** das Fenster zeichnet nur noch mit 15 Hz, solange nichts spielt
+- Fehlende Übersetzung der Kontrollkästchen behoben
 
 ## Installation
 
