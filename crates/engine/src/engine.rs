@@ -50,6 +50,11 @@ const STALL_FRAMES: u64 = 48_000;
 const RECHECK_EVERY: Duration = Duration::from_secs(10);
 /// A pause between two `maintain` calls longer than this counts as sleep.
 const SLEEP_GAP: Duration = Duration::from_secs(10);
+/// A released output whose reopening failed is tried again this often while
+/// sound plays, without waiting for the slower `maintain`.
+const REOPEN_EVERY: Duration = Duration::from_millis(150);
+/// After this long of failed reopening, `maintain` takes over.
+const REOPEN_FOR: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Default)]
 pub struct EngineConfig {
@@ -228,6 +233,8 @@ struct Idle {
     /// Whether the connected device is worth releasing at all, see
     /// [`AudioBackend::releasable`].
     releasable: bool,
+    /// Set after a failed reopening: when to try again, and since when.
+    reopen: Option<(Instant, Instant)>,
 }
 
 /// Whether a slot has no working stream, so `maintain` must look for its
@@ -458,6 +465,7 @@ impl<B: AudioBackend> Engine<B> {
             if self.has_signal(o, now) {
                 self.idle[o].quiet_since = None;
                 self.idle[o].released = false;
+                self.idle[o].reopen = None;
             } else if self.live_out[o].is_some() && self.idle[o].releasable {
                 let since = *self.idle[o].quiet_since.get_or_insert(now);
                 if now.duration_since(since) >= after {
@@ -467,6 +475,7 @@ impl<B: AudioBackend> Engine<B> {
                         released: true,
                         device,
                         releasable: true,
+                        reopen: None,
                     };
                     self.disconnect_output(o);
                     events.push(EngineEvent::Released { slot: o });
@@ -490,13 +499,30 @@ impl<B: AudioBackend> Engine<B> {
         }
         self.listen(now);
         for o in 0..self.outputs.len() {
-            if self.idle[o].released && self.has_signal(o, now) {
-                self.idle[o].released = false;
-                // Without a remembered device, maintain finds it.
-                if let Some(device) = self.idle[o].device.take() {
-                    events.push(self.connect_output(o, device));
-                }
+            if !(self.idle[o].released && self.has_signal(o, now)) {
+                continue;
             }
+            let (next, since) = self.idle[o].reopen.unwrap_or((now, now));
+            if now < next {
+                continue;
+            }
+            // Without a remembered device, maintain finds it.
+            let Some(device) = self.idle[o].device.clone() else {
+                self.idle[o].released = false;
+                continue;
+            };
+            let event = self.connect_output(o, device);
+            if matches!(event, EngineEvent::ConnectFailed { .. })
+                && now.duration_since(since) < REOPEN_FOR
+            {
+                // A Bluetooth device often needs a moment: try again soon.
+                self.idle[o].reopen = Some((now + REOPEN_EVERY, since));
+            } else {
+                self.idle[o].released = false;
+                self.idle[o].device = None;
+                self.idle[o].reopen = None;
+            }
+            events.push(event);
         }
         if !events.is_empty() {
             self.block_loops();
@@ -1185,6 +1211,43 @@ mod tests {
         );
         b.pump(100, level);
         assert_eq!(connected(&engine.maintain_at(at(40))), 1);
+    }
+
+    #[test]
+    fn failed_reopen_is_retried_quickly_by_wake() {
+        let b = FakeBackend::default();
+        b.plug_input("game", 48_000, 2);
+        b.plug_output("bt", 48_000, 2);
+        let mut cfg = config(&["game"], &[("bt", 80)]);
+        cfg.outputs[0].release_after = Some(Duration::from_secs(5));
+        let mut engine = Engine::new(b.clone(), cfg).unwrap();
+        let t0 = Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        let quiet = |_: &str| 0.0;
+        engine.maintain_at(at(0));
+        b.pump(100, quiet);
+        engine.maintain_at(at(1_000));
+        b.pump(100, quiet);
+        assert_eq!(
+            engine.maintain_at(at(7_000)),
+            vec![EngineEvent::Released { slot: 0 }]
+        );
+
+        // Sound returns, but the device is not ready yet.
+        b.break_device("bt", true);
+        b.pump(100, level);
+        let failed = |e: &[EngineEvent]| {
+            e.iter()
+                .filter(|e| matches!(e, EngineEvent::ConnectFailed { .. }))
+                .count()
+        };
+        assert_eq!(failed(&engine.wake_at(at(8_000))), 1);
+        assert!(engine.is_released(0));
+        // Too early for another try, then the next one succeeds.
+        assert!(engine.wake_at(at(8_050)).is_empty());
+        b.break_device("bt", false);
+        assert_eq!(connected(&engine.wake_at(at(8_200))), 1);
+        assert!(!engine.is_released(0));
     }
 
     #[test]
