@@ -8,11 +8,14 @@ use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const MAX_BYTES: u64 = 512 * 1024;
+const MAX_BYTES: u64 = 256 * 1024;
 
 static PATH: OnceLock<PathBuf> = OnceLock::new();
 /// Bytes in the current file, to start over while the app keeps running.
 static SIZE: Mutex<u64> = Mutex::new(0);
+/// The last message and how often it came again right after, so a message
+/// that repeats every second fills one line instead of the file.
+static LAST: Mutex<(String, u64)> = Mutex::new((String::new(), 0));
 
 /// Starts logging to `path` and records panics there too.
 pub fn init(path: PathBuf) {
@@ -45,6 +48,26 @@ pub fn init(path: PathBuf) {
 pub fn write(message: &str) {
     eprintln!("{message}");
     let Some(path) = PATH.get() else { return };
+    {
+        let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+        if last.0 == message {
+            last.1 += 1;
+            return;
+        }
+        let repeats = std::mem::take(&mut last.1);
+        last.0 = message.to_owned();
+        drop(last);
+        if repeats > 0 {
+            line_out(
+                path,
+                &format!("(vorige Meldung noch {repeats}-mal wiederholt)"),
+            );
+        }
+    }
+    line_out(path, message);
+}
+
+fn line_out(path: &std::path::Path, message: &str) {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
@@ -82,6 +105,12 @@ pub fn path() -> Option<&'static PathBuf> {
 /// one is short), oldest first. Empty when nothing was logged yet.
 pub fn tail(lines: usize) -> String {
     PATH.get().map_or_else(String::new, |p| tail_of(p, lines))
+}
+
+/// The whole current log file, for copying.
+pub fn all() -> String {
+    PATH.get()
+        .map_or_else(String::new, |p| fs::read_to_string(p).unwrap_or_default())
 }
 
 fn tail_of(path: &std::path::Path, lines: usize) -> String {
