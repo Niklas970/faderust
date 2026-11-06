@@ -1,12 +1,9 @@
-## What's new in 0.7.5
+## What's new in 0.7.6
 
-- **Level meters in sync:** the input meters now follow the real delay to the output, so inputs and outputs move together; a new "Meter offset" setting in the Design dialog lets you fine-tune it
-- **Even blocks:** the programs block is now as tall as the other blocks
-- **Hide closed programs only:** new choice "Closed" under "Hide silent programs" in the Design dialog; silent programs stay visible as long as they are open
-- **Noise filter strength:** choose Light, Medium or Strong
-- **Bluetooth outputs reopen faster** after being released (retry every 150 ms)
-- **Less CPU when silent:** the window redraws at only 15 Hz while nothing plays
-- Fixed a missing translation of the checkboxes
+- **Level meters in sync, automatically:** Faderust now measures the delay between inputs and outputs and holds the input meters back accordingly, so no manual setting is needed ("Meter offset" stays as an optional fine adjustment)
+- **Wider fader track:** the orange bar of the fader is thicker
+- **Smaller, easier-to-copy log:** repeated messages are folded into one line, the file stays small, and the log dialog has "Copy all" next to "Copy"
+- Updated file dialog library (rfd) and Stream Deck plugin dependencies
 
 ## Installation
 
@@ -18,15 +15,12 @@ All features and a guide are in the [README](https://github.com/Niklas970/faderu
 
 ---
 
-## Neu in 0.7.5
+## Neu in 0.7.6
 
-- **Pegel im Gleichlauf:** Die Eingangs-Pegel folgen jetzt genau der Verzögerung bis zum Ausgang, sodass Ein- und Ausgänge zusammen laufen; mit der neuen Einstellung „Pegel-Versatz“ im Design-Dialog lässt es sich fein abstimmen
-- **Gleich hohe Blöcke:** Der Programm-Block ist jetzt so hoch wie die anderen Blöcke
-- **Nur geschlossene Programme ausblenden:** neue Wahl „Beendete“ unter „Stille Programme ausblenden“ im Design-Dialog; stille Programme bleiben sichtbar, solange sie geöffnet sind
-- **Rauschfilter-Stärke:** Leicht, Mittel oder Stark wählbar
-- **Bluetooth-Ausgänge öffnen schneller** nach der Freigabe (Neuversuch alle 150 ms)
-- **Weniger CPU bei Stille:** das Fenster zeichnet nur noch mit 15 Hz, solange nichts spielt
-- Fehlende Übersetzung der Kontrollkästchen behoben
+- **Pegel im Gleichlauf, automatisch:** Faderust misst jetzt die Verzögerung zwischen Ein- und Ausgängen und hält die Eingangsbalken entsprechend zurück, eine Handeinstellung ist nicht nötig („Pegel-Versatz“ bleibt als optionaler Feinabgleich)
+- **Breitere Fader-Bahn:** der orange Balken am Fader ist dicker
+- **Kleineres, leichter kopierbares Protokoll:** Wiederholte Meldungen werden zu einer Zeile zusammengefasst, die Datei bleibt klein, und im Protokoll-Dialog gibt es neben „Kopieren“ auch „Alles kopieren“
+- Dateidialog-Bibliothek (rfd) und Stream-Deck-Plugin-Abhängigkeiten aktualisiert
 
 ## Installation
 
