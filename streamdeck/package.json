@@ -17,7 +17,7 @@
     "ws": "^8.22.0"
   },
   "devDependencies": {
-    "@elgato/cli": "^1.10.3",
+    "@elgato/cli": "^1.10.4",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-terser": "^1.0.2",
