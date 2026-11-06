@@ -993,7 +993,7 @@ fn log(app: &App) -> Element<'_, Message> {
         Some(t) => t.clone(),
     };
     let body = column![
-        hint("Was Faderust zuletzt gemeldet hat. Bei einem Fehler bitte den Text kopieren und in ein Issue einfügen."),
+        hint("Was Faderust zuletzt gemeldet hat. Gezeigt sind die letzten 150 Zeilen. „Kopieren“ legt sie in die Zwischenablage, „Alles kopieren“ die ganze Datei. Bei einem Fehler bitte in ein Issue einfügen."),
         container(text(text_).font(MONO).size(12).color(text_color()))
             .padding(10)
             .width(Length::Fill)
@@ -1016,6 +1016,7 @@ fn log(app: &App) -> Element<'_, Message> {
         row![
             btn("Aktualisieren", edit(Edit::Refresh), false),
             btn("Kopieren", edit(Edit::CopyLog), false),
+            btn("Alles kopieren", edit(Edit::CopyLogAll), false),
             btn("Ordner öffnen", edit(Edit::OpenLogFolder), false),
         ]
         .spacing(8)

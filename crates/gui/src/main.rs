@@ -327,6 +327,7 @@ pub enum Edit {
     Autostart(bool),
     OpenLogFolder,
     CopyLog,
+    CopyLogAll,
     CopyChecks,
     InstallDeck,
     MastersLeft(bool),
@@ -402,6 +403,8 @@ pub enum Loaded {
     Devices(Result<Devices, String>),
     Usb(cable::Status),
     Log(String),
+    /// The whole log file, on its way to the clipboard.
+    LogAll(String),
     Selftest(Result<Vec<Check>, String>),
     Deck(StreamDeckStatus),
     Done(Then, Result<(), String>),
@@ -855,7 +858,7 @@ impl App {
 
     fn load_log(&self) -> Task<Message> {
         blocking(
-            || faderust_core::log::tail(400),
+            || faderust_core::log::tail(150),
             |t| Message::Loaded(Loaded::Log(t)),
         )
     }
@@ -989,6 +992,10 @@ impl App {
             }
             Loaded::Usb(s) => self.usb = Some(s),
             Loaded::Log(t) => self.log_text = Some(t),
+            Loaded::LogAll(t) => {
+                self.jobs.push(iced::clipboard::write(t));
+                self.say("info", "Ganzes Protokoll kopiert".into());
+            }
             Loaded::Selftest(Ok(c)) => self.checks = Some(c),
             Loaded::Selftest(Err(e)) => self.dialog_error = e,
             Loaded::Deck(d) => self.deck = Some(d),
@@ -1959,6 +1966,11 @@ impl App {
                     self.jobs.push(iced::clipboard::write(t.clone()));
                     self.say("info", "Protokoll kopiert".into());
                 }
+            }
+            Edit::CopyLogAll => {
+                self.jobs.push(blocking(faderust_core::log::all, |t| {
+                    Message::Loaded(Loaded::LogAll(t))
+                }));
             }
             Edit::CopyChecks => {
                 if let Some(c) = &self.checks {
