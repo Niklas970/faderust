@@ -57,9 +57,17 @@ impl Fader<'_> {
     /// Width of the track; the meter lies to the right of it.
     fn hit_width(&self) -> f32 {
         if self.narrow {
-            80.0
+            80.0 - self.shift()
         } else {
             100.0
+        }
+    }
+    /// Without the scale the whole drawing moves left by this much.
+    fn shift(&self) -> f32 {
+        if self.narrow && !self.labels {
+            26.0
+        } else {
+            0.0
         }
     }
     fn top() -> f32 {
@@ -201,6 +209,7 @@ impl Fader<'_> {
         // Narrow: no scale, the cap and slot move left (58 px track).
         let wide = !self.narrow;
         let (sx, cx) = if wide { (49.0, 24.0) } else { (44.0, 30.0) };
+        let (sx, cx) = (sx - self.shift(), cx - self.shift());
         // The scale sits left of the slot: labels end at `lx`, marks follow.
         let (lx, marks) = if wide {
             (22.0, [29.0, 47.0])
@@ -375,6 +384,7 @@ impl Fader<'_> {
         } else {
             (106.0, 16.0)
         };
+        let mx = mx - self.shift();
         let frame = Path::rounded_rectangle(Point::new(mx, top), Size::new(mw, h), 2.0.into());
         f.fill(&frame, Fill::from(well()));
         f.stroke(

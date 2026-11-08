@@ -812,7 +812,7 @@ impl App {
 
     /// Window width for `count` narrow strips.
     fn mini_width(count: usize) -> f32 {
-        (count as f32 * 136.0 + 36.0).clamp(220.0, 1600.0)
+        (count as f32 * 134.0 + 36.0).clamp(220.0, 1600.0)
     }
 
     /// Narrow strips: compact mode.
@@ -2592,7 +2592,13 @@ impl App {
             narrow,
             labels: !self.mini,
         })
-        .width(if narrow { 104.0 } else { STRIP_W })
+        .width(if self.mini {
+            78.0
+        } else if narrow {
+            104.0
+        } else {
+            STRIP_W
+        })
         .height(Length::Fill);
         let small = |label: &'static str, msg: Message, w: f32| {
             button(text(label).size(12).color(text_color()).center())
@@ -2658,7 +2664,7 @@ impl App {
             column![
                 top,
                 Self::name_label(&s.label),
-                space().height(14),
+                space().height(if self.mini { 0 } else { 14 }),
                 fader,
                 if self.mini {
                     Element::from(space().height(0))
@@ -2671,7 +2677,13 @@ impl App {
             .spacing(8)
             .align_x(Horizontal::Center)
             .into(),
-            if narrow { 126.0 } else { 164.0 },
+            if self.mini {
+                124.0
+            } else if narrow {
+                126.0
+            } else {
+                164.0
+            },
             !s.muted && s.shown > -60.0,
         )
     }
@@ -2690,7 +2702,13 @@ impl App {
             narrow: self.tight(),
             labels: !self.mini,
         })
-        .width(if self.tight() { 104.0 } else { STRIP_W })
+        .width(if self.mini {
+            78.0
+        } else if self.tight() {
+            104.0
+        } else {
+            STRIP_W
+        })
         .height(Length::Fill);
         let tag = row![
             space().width(22),
@@ -2745,7 +2763,13 @@ impl App {
             .spacing(8)
             .align_x(Horizontal::Center)
             .into(),
-            if self.tight() { 126.0 } else { 164.0 },
+            if self.mini {
+                124.0
+            } else if self.tight() {
+                126.0
+            } else {
+                164.0
+            },
             !m.muted && m.shown > -60.0,
         )
     }
