@@ -5,8 +5,8 @@
       <stop offset="1" stop-color="#000000"/>
     </linearGradient>
     <linearGradient id="cap" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffe0c4"/>
-      <stop offset="1" stop-color="#ee7a2c"/>
+      <stop offset="0" stop-color="#ffd9b0"/>
+      <stop offset="1" stop-color="#ff8a1f"/>
     </linearGradient>
     <linearGradient id="signal" gradientUnits="userSpaceOnUse" x1="0" y1="20" x2="0" y2="51">
       <stop offset="0" stop-color="#00e676"/>
@@ -29,7 +29,7 @@
     <rect x="25" y="19.5" width="14" height="9" rx="2.6"/>
     <rect x="38" y="36.5" width="14" height="9" rx="2.6"/>
   </g>
-  <g stroke="#4a1c05" stroke-opacity="0.85" stroke-width="1.2" stroke-linecap="round">
+  <g stroke="#4d2200" stroke-opacity="0.85" stroke-width="1.2" stroke-linecap="round">
     <line x1="15" y1="35" x2="23" y2="35"/>
     <line x1="28" y1="24" x2="36" y2="24"/>
     <line x1="41" y1="41" x2="49" y2="41"/>
