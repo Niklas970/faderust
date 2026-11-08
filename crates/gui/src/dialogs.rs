@@ -771,19 +771,6 @@ fn design(app: &App) -> Element<'_, Message> {
                 Message::SetView(crate::View::Matrix)
             ),
         ]),
-        h3("Ausgänge"),
-        segmented(vec![
-            (
-                "Links".into(),
-                app.masters_left,
-                edit(Edit::MastersLeft(true))
-            ),
-            (
-                "Rechts".into(),
-                !app.masters_left,
-                edit(Edit::MastersLeft(false))
-            ),
-        ]),
         h3("Stille Programme ausblenden"),
         segmented(hide),
         hint("„Beendete“ blendet nur Programme aus, die geschlossen sind. Stille, aber geöffnete bleiben sichtbar."),

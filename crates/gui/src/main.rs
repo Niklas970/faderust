@@ -181,7 +181,6 @@ pub enum Dialog {
 
 pub struct App {
     pub view: View,
-    pub masters_left: bool,
     /// Compact mode: narrow strips, slim title bar, window sized to fit, on top.
     pub mini: bool,
     /// Window size and pin state to restore when leaving mini mode.
@@ -331,7 +330,6 @@ pub enum Edit {
     CopyLogAll,
     CopyChecks,
     InstallDeck,
-    MastersLeft(bool),
     Mode(&'static str),
     OutputEdge(bool),
     AccentHex(String),
@@ -776,7 +774,6 @@ impl App {
                 "desk"
             }
             .into(),
-            masters_right: !self.masters_left,
             pinned: self.pinned,
             hide_after: Some(if hide_closed(self.hide_after) {
                 CLOSED_ONLY
@@ -1071,7 +1068,6 @@ impl App {
             } else {
                 View::Desk
             },
-            masters_left: !prefs.masters_right,
             mini: std::env::var_os("FADERUST_MINI").is_some(),
             mini_prev: None,
             mini_count: 0,
@@ -2069,10 +2065,6 @@ impl App {
                 self.set_look(|p| p.signal = c);
             }
             Edit::Lang(l) => self.set_look(|p| p.lang = l.into()),
-            Edit::MastersLeft(l) => {
-                self.masters_left = l;
-                self.save_prefs();
-            }
             Edit::Autostart(on) => match shell::set_autostart(on) {
                 Ok(()) => self.autostart = on,
                 Err(e) => self.dialog_error = e,
@@ -2945,13 +2937,10 @@ impl App {
                 .collect(),
             true,
         );
-        if self.masters_left {
-            row![outputs, Self::divider(), devices, Self::divider(), programs].spacing(2)
-        } else {
-            row![devices, Self::divider(), programs, Self::divider(), outputs].spacing(2)
-        }
-        .height(Length::Fill)
-        .into()
+        row![outputs, Self::divider(), devices, Self::divider(), programs]
+            .spacing(2)
+            .height(Length::Fill)
+            .into()
     }
 
     fn matrix(&self) -> Element<'_, Message> {

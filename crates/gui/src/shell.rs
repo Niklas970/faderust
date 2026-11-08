@@ -105,7 +105,6 @@ pub fn set_autostart(on: bool) -> Result<(), String> {
 pub struct Prefs {
     /// "desk" or "matrix".
     pub view: String,
-    pub masters_right: bool,
     /// Seconds of silence after which a program leaves the desk; `None` is the default.
     pub hide_after: Option<u64>,
     /// Programs kept on the desk even when silent (input device ids).
