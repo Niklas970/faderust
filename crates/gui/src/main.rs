@@ -181,7 +181,6 @@ pub enum Dialog {
 
 pub struct App {
     pub view: View,
-    pub masters_left: bool,
     pub compact: bool,
     /// Mini mode: only the faders, no title bar, always on top.
     pub mini: bool,
@@ -331,7 +330,6 @@ pub enum Edit {
     CopyLogAll,
     CopyChecks,
     InstallDeck,
-    MastersLeft(bool),
     Mode(&'static str),
     AccentHex(String),
     SignalHex(String),
@@ -777,7 +775,6 @@ impl App {
                 "desk"
             }
             .into(),
-            masters_right: !self.masters_left,
             compact: self.compact,
             pinned: self.pinned,
             hide_after: Some(if hide_closed(self.hide_after) {
@@ -1062,7 +1059,6 @@ impl App {
             } else {
                 View::Desk
             },
-            masters_left: !prefs.masters_right,
             compact: prefs.compact,
             mini: std::env::var_os("FADERUST_MINI").is_some(),
             mini_prev: None,
@@ -2059,10 +2055,6 @@ impl App {
             }
             Edit::Lang(l) => self.set_look(|p| p.lang = l.into()),
             Edit::MeterOffset(ms) => self.set_look(|p| p.meter_offset = ms),
-            Edit::MastersLeft(l) => {
-                self.masters_left = l;
-                self.save_prefs();
-            }
             Edit::Autostart(on) => match shell::set_autostart(on) {
                 Ok(()) => self.autostart = on,
                 Err(e) => self.dialog_error = e,
@@ -2876,13 +2868,10 @@ impl App {
                 .collect(),
             true,
         );
-        if self.masters_left {
-            row![outputs, Self::divider(), devices, Self::divider(), programs].spacing(2)
-        } else {
-            row![devices, Self::divider(), programs, Self::divider(), outputs].spacing(2)
-        }
-        .height(Length::Fill)
-        .into()
+        row![outputs, Self::divider(), devices, Self::divider(), programs]
+            .spacing(2)
+            .height(Length::Fill)
+            .into()
     }
 
     fn matrix(&self) -> Element<'_, Message> {

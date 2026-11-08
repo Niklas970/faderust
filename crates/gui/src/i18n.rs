@@ -104,7 +104,6 @@ const TABLE: &[(&str, &str)] = &[
     ("Laden", "Load"),
     ("Laut", "Loud"),
     ("Leicht", "Light"),
-    ("Links", "Left"),
     ("Lädt …", "Loading …"),
     ("Löschen", "Delete"),
     ("Mit Windows starten (im Tray, ohne Fenster)", "Start with Windows (in the tray, no window)"),
@@ -142,7 +141,6 @@ const TABLE: &[(&str, &str)] = &[
     ("Rauschfilter", "Noise filter"),
     ("Stark", "Strong"),
     ("Stärke", "Strength"),
-    ("Rechts", "Right"),
     ("Richte ein …", "Setting up …"),
     ("Schließen", "Close"),
     (
