@@ -156,14 +156,9 @@ const TABLE: &[(&str, &str)] = &[
     ("Standardgerät", "Default device"),
     ("Starten", "Start"),
     ("Stille Programme ausblenden", "Hide silent programs"),
-    ("Pegel-Versatz", "Meter offset"),
     (
         "„Beendete“ blendet nur Programme aus, die geschlossen sind. Stille, aber geöffnete bleiben sichtbar.",
         "“Closed” hides only programs that are closed. Silent but open ones stay visible.",
-    ),
-    (
-        "Der Gleichlauf wird automatisch gemessen. Hier nur nachjustieren, falls es noch nicht passt.",
-        "The sync is measured automatically. Only fine-tune here if it still does not fit.",
     ),
     (
         "Stream Deck nicht verbunden. Plugin einrichten oder neu installieren:",

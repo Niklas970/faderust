@@ -787,24 +787,6 @@ fn design(app: &App) -> Element<'_, Message> {
         h3("Stille Programme ausblenden"),
         segmented(hide),
         hint("„Beendete“ blendet nur Programme aus, die geschlossen sind. Stille, aber geöffnete bleiben sichtbar."),
-        h3("Pegel-Versatz"),
-        segmented(
-            [-50, 0, 50, 100]
-                .into_iter()
-                .map(|ms| {
-                    (
-                        if ms > 0 {
-                            format!("+{ms} ms")
-                        } else {
-                            format!("{ms} ms")
-                        },
-                        app.prefs.meter_offset == ms,
-                        edit(Edit::MeterOffset(ms)),
-                    )
-                })
-                .collect(),
-        ),
-        hint("Der Gleichlauf wird automatisch gemessen. Hier nur nachjustieren, falls es noch nicht passt."),
         h3("Akzentfarbe"),
         accents,
         custom_color(
