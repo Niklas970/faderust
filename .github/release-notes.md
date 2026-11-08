@@ -1,10 +1,10 @@
-## What's new in 0.7.7
+## What's new in 0.7.8
 
-- **New logo:** larger symbol, more contrast and a new orange tone for the fader caps (app, installer and Stream Deck icons)
-- **Orange like the logo:** the default accent colour matches the new logo (your own saved colours stay)
-- **Finer level meter:** smoother steps from green over yellow to red
-- **Rounder strips:** a strip with signal gets a faint green edge
-- **Fix for a frozen window:** the window could stop reacting to clicks while the config was being saved or logged on a slow disk; the lock is now held much shorter
+- **Compact mode:** Mini mode and the compact view are now one mode: narrow strips without numbers and scale marks, a slim title bar, and the window sizes itself to the strips
+- **Bolder window buttons:** minimise, maximise and close are drawn thicker and clearer
+- **Meter sync per program:** the delay is now measured for every input separately, so programs line up with the outputs; the manual "Meter offset" setting is gone
+- **Hide silent programs:** "Closed" comes first and is the default
+- **Design:** the green edge on active outputs can be switched off; the "Outputs left/right" setting is removed (outputs always stand on the left); Brightness and Language swapped places
 
 ## Installation
 
@@ -16,13 +16,13 @@ All features and a guide are in the [README](https://github.com/Niklas970/faderu
 
 ---
 
-## Neu in 0.7.7
+## Neu in 0.7.8
 
-- **Neues Logo:** größeres Symbol, mehr Kontrast und ein neuer Orange-Ton für die Reglerkappen (App-, Installer- und Stream-Deck-Icons)
-- **Orange wie im Logo:** die Standard-Akzentfarbe passt zum neuen Logo (eigene gespeicherte Farben bleiben)
-- **Feinere Pegelanzeige:** weichere Abstufung von Grün über Gelb zu Rot
-- **Rundere Streifen:** ein Streifen mit Signal bekommt einen feinen grünen Rand
-- **Korrektur für ein hängendes Fenster:** das Fenster konnte nicht mehr auf Klicks reagieren, während die Konfiguration bei langsamer Platte gespeichert oder protokolliert wurde; die Sperre wird jetzt viel kürzer gehalten
+- **Kompaktmodus:** Mini-Modus und Kompaktansicht sind jetzt ein Modus: schmale Streifen ohne Zahlen und Skalenstriche, schlanke Titelleiste, das Fenster passt sich den Streifen an
+- **Kräftigere Fensterknöpfe:** Minimieren, Maximieren und Schließen sind dicker und klarer gezeichnet
+- **Pegel-Gleichlauf pro Programm:** die Verzögerung wird jetzt für jeden Eingang einzeln gemessen, damit Programme zu den Ausgängen passen; die manuelle Einstellung „Pegel-Versatz“ entfällt
+- **Stille Programme ausblenden:** „Beendete“ steht an erster Stelle und ist der Standard
+- **Design:** der grüne Rand an aktiven Ausgängen lässt sich ausschalten; die Einstellung „Ausgänge links/rechts“ entfällt (Ausgänge stehen immer links); Helligkeit und Sprache sind vertauscht
 
 ## Installation
 
