@@ -224,6 +224,7 @@ pub struct App {
     pub win: Option<WindowsAudio>,
     /// Programs dialog.
     pub apps_data: Option<Apps>,
+    polling_apps: bool,
     /// Devices dialog: devices on offer, the copy being edited, USB cable.
     pub devs: Devices,
     pub draft: Option<CoreConfig>,
@@ -985,9 +986,13 @@ impl App {
     fn loaded(&mut self, l: Loaded) {
         match l {
             Loaded::Windows(Ok(w)) => self.win = Some(w),
-            Loaded::Apps(Ok(a)) => self.apps_data = Some(a),
+            Loaded::Apps(Ok(a)) => {
+                self.polling_apps = false;
+                self.apps_data = Some(a)
+            }
             Loaded::Devices(Ok(d)) => self.devs = d,
             Loaded::Windows(Err(e)) | Loaded::Apps(Err(e)) | Loaded::Devices(Err(e)) => {
+                self.polling_apps = false;
                 self.dialog_error = e
             }
             Loaded::Usb(s) => self.usb = Some(s),
@@ -1097,6 +1102,7 @@ impl App {
             new_preset: String::new(),
             win: None,
             apps_data: None,
+            polling_apps: false,
             devs: Devices {
                 inputs: vec![],
                 outputs: vec![],
@@ -1553,7 +1559,14 @@ impl App {
                     self.send(Command::SetMasterMuted(o, muted));
                 }
             }
-            Message::PollApps => self.jobs.push(self.load_apps()),
+            Message::PollApps => {
+                // One lookup at a time: a stuck audio service must not pile
+                // up blocked threads every 3 s.
+                if !self.polling_apps {
+                    self.polling_apps = true;
+                    self.jobs.push(self.load_apps());
+                }
+            }
             Message::Frame(now) => {
                 #[cfg_attr(not(windows), allow(unused_mut))]
                 let mut show = INSTANCE

@@ -546,9 +546,16 @@ fn run(
                 }
             }
             if !events.is_empty() {
-                let c = config.lock().unwrap_or_else(|e| e.into_inner());
-                for event in &events {
-                    let notice = notices.notice(&c, event, quiet);
+                // Only compute under the lock; log and notify after it is
+                // released, so file writes never block the window.
+                let out: Vec<_> = {
+                    let c = config.lock().unwrap_or_else(|e| e.into_inner());
+                    events
+                        .iter()
+                        .map(|event| (event, notices.notice(&c, event, quiet)))
+                        .collect()
+                };
+                for (event, notice) in out {
                     // A failure repeats every second; log it once.
                     let repeat =
                         matches!(event, EngineEvent::ConnectFailed { .. }) && notice.is_none();
@@ -598,7 +605,10 @@ fn run(
         }
 
         if dirty_since.is_some_and(|t| t.elapsed() >= SAVE_EVERY) {
-            if let Err(e) = config.lock().unwrap_or_else(|e| e.into_inner()).save(&path) {
+            // Write outside the lock: a slow disk (virus scanner, sync
+            // client) must not freeze the window, which reads the config.
+            let copy = config.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            if let Err(e) = copy.save(&path) {
                 log::write(&format!("saving {}: {e}", path.display()));
             }
             dirty_since = None;
