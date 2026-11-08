@@ -2222,23 +2222,35 @@ impl App {
                 v
             })
         };
-        let win = |label: &'static str, close: bool, msg: Message| {
-            button(container(text(label).size(12).color(muted_color())).center(Length::Fill))
-                .width(46)
-                .height(Length::Fill)
-                .padding(0)
-                .on_press(msg)
-                .style(move |_, status| {
-                    let hot = matches!(status, button::Status::Hovered);
-                    button::Style {
-                        background: hot.then(|| {
-                            Background::Color(if close { rgb(196, 43, 28) } else { panel_2() })
-                        }),
-                        text_color: if hot { Color::WHITE } else { muted_color() },
-                        border: Border::default(),
-                        ..button::Style::default()
-                    }
+        let win = |glyph: icons::Glyph, close: bool, msg: Message| {
+            button(
+                Canvas::new(icons::Icon {
+                    glyph,
+                    color: text_color(),
+                    on: false,
                 })
+                .width(Length::Fill)
+                .height(Length::Fill),
+            )
+            .width(48)
+            .height(Length::Fill)
+            .padding(0)
+            .on_press(msg)
+            .style(move |_, status| {
+                let hot = matches!(status, button::Status::Hovered);
+                button::Style {
+                    background: hot.then(|| {
+                        Background::Color(if close {
+                            rgb(196, 43, 28)
+                        } else {
+                            mix(panel(), text_color(), 0.14)
+                        })
+                    }),
+                    text_color: text_color(),
+                    border: Border::default(),
+                    ..button::Style::default()
+                }
+            })
         };
         let toggle = |glyph: icons::Glyph, on: bool, tip: &'static str, msg: Message| {
             dialogs::tip(
@@ -2344,7 +2356,7 @@ impl App {
                         "Mini-Modus beenden",
                         Message::ToggleMini
                     ),
-                    win("✕", true, Message::CloseRequested),
+                    win(icons::Glyph::WinClose, true, Message::CloseRequested),
                 ]
                 .align_y(Vertical::Center),
             )
@@ -2396,9 +2408,9 @@ impl App {
                     },
                     Message::TogglePin
                 ),
-                win("–", false, Message::Minimize),
-                win("▢", false, Message::ToggleMax),
-                win("✕", true, Message::CloseRequested),
+                win(icons::Glyph::WinMin, false, Message::Minimize),
+                win(icons::Glyph::WinMax, false, Message::ToggleMax),
+                win(icons::Glyph::WinClose, true, Message::CloseRequested),
             ]
             .spacing(12)
             .align_y(Vertical::Center),
