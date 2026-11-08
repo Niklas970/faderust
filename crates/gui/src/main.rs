@@ -1444,7 +1444,7 @@ impl App {
                     let count = self.shown_count();
                     self.mini_count = count;
                     return Task::batch([
-                        window::resize(id, Size::new(Self::mini_width(count), 420.0)),
+                        window::resize(id, Size::new(Self::mini_width(count), 360.0)),
                         window::set_level(id, window::Level::AlwaysOnTop),
                     ]);
                 }
@@ -2629,7 +2629,11 @@ impl App {
             .spacing(4)
             .into()
         } else {
-            small("Effekte", Message::Open(Some(Dialog::Fx(i))), 72.0).into()
+            if self.mini {
+                space().height(0).into()
+            } else {
+                small("Effekte", Message::Open(Some(Dialog::Fx(i))), 72.0).into()
+            }
         };
         let top: Element<'_, Message> = if s.program {
             row![
@@ -2736,7 +2740,7 @@ impl App {
                     Self::readout(m.db, m.muted)
                 },
                 Self::mute_button(m.muted, Message::MasterMute(o), "MUTE"),
-                space().height(24),
+                space().height(if self.mini { 0 } else { 24 }),
             ]
             .spacing(8)
             .align_x(Horizontal::Center)

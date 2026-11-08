@@ -41,7 +41,7 @@ pub struct Fader<'a> {
     pub post_fader: bool,
     /// Without the scale, for the narrower program strips.
     pub narrow: bool,
-    /// Scale numbers beside the slot (off in compact mode).
+    /// Scale (numbers and marks) beside the slot; off in compact mode.
     pub labels: bool,
     pub kind: Kind,
 }
@@ -212,7 +212,11 @@ impl Fader<'_> {
         let bar_x = sx + (slot_w - bar_w) / 2.0;
         // Scale: numbers on the left, small marks beside the slot.
         // Fine marks every 3 dB between -24 and +12.
-        for d in (-24..=12).step_by(3).map(|d| d as f32) {
+        for d in (-24..=12)
+            .step_by(3)
+            .map(|d| d as f32)
+            .filter(|_| self.labels)
+        {
             let y = Self::y_of(scale::to_pos(d), total);
             f.fill_rectangle(
                 Point::new(marks[1] - 3.0, y - 0.5),
@@ -220,21 +224,19 @@ impl Fader<'_> {
                 mix(panel(), border(), 0.8),
             );
         }
-        for (d, label) in scale::TICKS.iter().copied() {
+        for (d, label) in scale::TICKS.iter().copied().filter(|_| self.labels) {
             let y = Self::y_of(scale::to_pos(d), total);
             let zero = d == 0.0;
-            if self.labels {
-                f.fill_text(Text {
-                    content: label.to_string(),
-                    position: Point::new(lx, y),
-                    color: if zero { text_color() } else { muted_color() },
-                    size: Pixels(if wide { 11.0 } else { 10.0 }),
-                    font: MONO,
-                    align_x: Horizontal::Right.into(),
-                    align_y: Vertical::Center,
-                    ..Text::default()
-                });
-            }
+            f.fill_text(Text {
+                content: label.to_string(),
+                position: Point::new(lx, y),
+                color: if zero { text_color() } else { muted_color() },
+                size: Pixels(if wide { 11.0 } else { 10.0 }),
+                font: MONO,
+                align_x: Horizontal::Right.into(),
+                align_y: Vertical::Center,
+                ..Text::default()
+            });
             let mark = if zero { muted_color() } else { border() };
             let long = match (wide, zero) {
                 (true, true) => 9.0,
