@@ -262,7 +262,6 @@ fn apply_look(p: &shell::Prefs) {
         &p.signal
     };
     style::set_theme(&p.mode, accent, signal);
-    faderust_core::audio::set_meter_offset_ms(p.meter_offset);
     let lang = if p.lang.is_empty() {
         shell::system_lang()
     } else {
@@ -340,7 +339,6 @@ pub enum Edit {
     Lang(&'static str),
     HideAfter(&'static str),
     /// Fine adjustment of the input meters against the outputs, in ms.
-    MeterOffset(i32),
     NewPreset(String),
     SavePreset,
     LoadPreset(String),
@@ -2058,7 +2056,6 @@ impl App {
                 self.set_look(|p| p.signal = c);
             }
             Edit::Lang(l) => self.set_look(|p| p.lang = l.into()),
-            Edit::MeterOffset(ms) => self.set_look(|p| p.meter_offset = ms),
             Edit::MastersLeft(l) => {
                 self.masters_left = l;
                 self.save_prefs();

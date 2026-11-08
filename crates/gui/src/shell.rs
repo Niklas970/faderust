@@ -123,8 +123,6 @@ pub struct Prefs {
     pub compact: bool,
     /// The window stays above all others.
     pub pinned: bool,
-    /// Fine adjustment of the input meters against the outputs, in ms.
-    pub meter_offset: i32,
 }
 
 /// "de" or "en", whichever the system uses.

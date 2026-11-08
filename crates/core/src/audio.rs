@@ -2,7 +2,7 @@
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicI32, AtomicU64, AtomicUsize, Ordering::Relaxed};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering::Relaxed};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -22,14 +22,6 @@ use crate::log;
 
 const EMIT_EVERY: Duration = Duration::from_millis(50);
 
-/// Fine adjustment of the input meters against the outputs, in ms (the
-/// user's setting; positive holds the input meters back longer).
-static METER_OFFSET_MS: AtomicI32 = AtomicI32::new(0);
-
-/// Sets the fine adjustment of the input meters, in ms.
-pub fn set_meter_offset_ms(ms: i32) {
-    METER_OFFSET_MS.store(ms.clamp(-200, 400), Relaxed);
-}
 /// How often released outputs are checked for returning signal.
 const WAKE_EVERY: Duration = Duration::from_millis(10);
 /// A pause this long between two rounds of the engine thread means the
@@ -726,8 +718,9 @@ struct LevelDelay {
     history: Vec<VecDeque<f32>>,
     /// Output levels in dB, newest last.
     out_history: Vec<VecDeque<f32>>,
-    /// Measured delay per output, in snapshots.
-    lag: Vec<Option<f32>>,
+    /// Measured delay per input and output, in snapshots. Every input has
+    /// its own: a program reaches the output by another path than a device.
+    lag: Vec<Vec<Option<f32>>>,
 }
 
 /// The longest delay held back, in snapshots (one second).
@@ -810,42 +803,41 @@ fn push_capped(hist: &mut VecDeque<f32>, value: f32) {
 }
 
 impl LevelDelay {
-    /// Updates the measured delay of every connected output.
+    /// Updates the measured delay of every input on every connected output
+    /// it plays on.
     fn measure(&mut self, state: &UiState) {
-        for (o, out) in state.outputs.iter().enumerate() {
-            if !out.connected {
-                self.lag[o] = None;
-                continue;
-            }
-            let y: Vec<f32> = self.out_history[o].iter().map(|&db| linear(db)).collect();
-            // What the inputs add up to on this output.
-            let mut x = vec![0.0_f32; y.len()];
-            for (i, hist) in self.history.iter().enumerate() {
-                let gain = state.gains.get(i).and_then(|r| r.get(o));
-                let g = gain.map_or(0.0, |g| if g.muted { 0.0 } else { linear(g.db) });
-                if g == 0.0 || hist.len() != x.len() {
+        for (i, hist) in self.history.iter().enumerate() {
+            for (o, out) in state.outputs.iter().enumerate() {
+                let plays = state
+                    .gains
+                    .get(i)
+                    .and_then(|r| r.get(o))
+                    .is_some_and(|g| !g.muted && g.db > -100.0);
+                let y: Vec<f32> = self.out_history[o].iter().map(|&db| linear(db)).collect();
+                if !out.connected || !plays || hist.len() != y.len() {
+                    self.lag[i][o] = None;
                     continue;
                 }
-                for (sum, &db) in x.iter_mut().zip(hist) {
-                    *sum += g * linear(db);
+                let x: Vec<f32> = hist.iter().map(|&db| linear(db)).collect();
+                if let Some(lag) = measure_lag(&x, &y) {
+                    self.lag[i][o] = Some(match self.lag[i][o] {
+                        Some(old) => old + (lag - old) * 0.15,
+                        None => lag,
+                    });
                 }
-            }
-            if let Some(lag) = measure_lag(&x, &y) {
-                self.lag[o] = Some(match self.lag[o] {
-                    Some(old) => old + (lag - old) * 0.15,
-                    None => lag,
-                });
             }
         }
     }
 
     fn apply(&mut self, state: &mut UiState) {
         let tick = EMIT_EVERY.as_millis() as f32;
-        let offset = METER_OFFSET_MS.load(Relaxed) as f32;
         self.history.resize_with(state.inputs.len(), VecDeque::new);
         self.out_history
             .resize_with(state.outputs.len(), VecDeque::new);
-        self.lag.resize(state.outputs.len(), None);
+        self.lag.resize_with(state.inputs.len(), Vec::new);
+        for row in &mut self.lag {
+            row.resize(state.outputs.len(), None);
+        }
         for (hist, input) in self.history.iter_mut().zip(&state.inputs) {
             push_capped(hist, input.level_db);
         }
@@ -853,9 +845,15 @@ impl LevelDelay {
             push_capped(hist, out.level_db);
         }
         self.measure(state);
-        let measured: Vec<f32> = self.lag.iter().flatten().copied().collect();
+        // What no input of its own can tell: the mean of all measurements.
+        let all: Vec<f32> = self.lag.iter().flatten().flatten().copied().collect();
         for (i, (input, hist)) in state.inputs.iter_mut().zip(&self.history).enumerate() {
-            let ms = if measured.is_empty() {
+            let own: Vec<f32> = self.lag[i].iter().flatten().copied().collect();
+            let ms = if !own.is_empty() {
+                own.iter().sum::<f32>() / own.len() as f32 * tick
+            } else if !all.is_empty() {
+                all.iter().sum::<f32>() / all.len() as f32 * tick
+            } else {
                 // Not measurable yet: the queue of the lanes plus the buffers.
                 let (mut sum, mut n) = (0.0_f32, 0.0_f32);
                 for (o, out) in state
@@ -877,10 +875,8 @@ impl LevelDelay {
                 } else {
                     0.0
                 }
-            } else {
-                measured.iter().sum::<f32>() / measured.len() as f32 * tick
             };
-            let delay = ((ms + offset).max(0.0) / tick).min(MAX_DELAY_TICKS);
+            let delay = (ms.max(0.0) / tick).min(MAX_DELAY_TICKS);
             // The newest entry is "now"; look `delay` snapshots back.
             let at = ((hist.len() - 1) as f32 - delay).max(0.0);
             let (lo, frac) = (at.floor() as usize, at.fract());
@@ -1141,6 +1137,47 @@ mod tests {
                 shown[t],
                 played[t]
             );
+        }
+    }
+
+    #[test]
+    fn every_input_gets_its_own_delay() {
+        use super::UiLane;
+        // A device reaches the output 2 snapshots later, a program 6: each
+        // meter must line up with the output on its own.
+        let raw = |t: usize, seed: usize| -> f32 {
+            let v = ((t * 37 + seed * 7 + 11) % 17) as f32 / 17.0;
+            -50.0 + 40.0 * v
+        };
+        let mut delay = LevelDelay::default();
+        let (mut dev, mut prog, mut out_dev, mut out_prog) = (vec![], vec![], vec![], vec![]);
+        for t in 0..200 {
+            // Two outputs: the device plays on the first, the program on the
+            // second.
+            let o0 = if t >= 2 { raw(t - 2, 0) } else { -120.0 };
+            let o1 = if t >= 6 { raw(t - 6, 1) } else { -120.0 };
+            let g = |on: bool| Gain {
+                db: if on { 0.0 } else { -120.0 },
+                muted: !on,
+            };
+            let mut state = UiState {
+                inputs: vec![
+                    ui_device(true, raw(t, 0), None),
+                    ui_device(true, raw(t, 1), None),
+                ],
+                outputs: vec![ui_device(true, o0, Some(0)), ui_device(true, o1, Some(0))],
+                gains: vec![vec![g(true), g(false)], vec![g(false), g(true)]],
+                lanes: vec![vec![UiLane::default(); 2]; 2],
+            };
+            delay.apply(&mut state);
+            dev.push(state.inputs[0].level_db);
+            prog.push(state.inputs[1].level_db);
+            out_dev.push(o0);
+            out_prog.push(o1);
+        }
+        for t in 180..200 {
+            assert!((dev[t] - out_dev[t]).abs() < 1.5, "device t={t}");
+            assert!((prog[t] - out_prog[t]).abs() < 1.5, "program t={t}");
         }
     }
 
