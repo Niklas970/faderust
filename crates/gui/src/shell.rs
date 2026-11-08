@@ -120,8 +120,6 @@ pub struct Prefs {
     pub output_edge_off: bool,
     /// "de", "en" or empty for the system language.
     pub lang: String,
-    /// Slim title bar and narrow strips.
-    pub compact: bool,
     /// The window stays above all others.
     pub pinned: bool,
 }
