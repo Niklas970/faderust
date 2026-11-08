@@ -1,9 +1,10 @@
-## What's new in 0.7.6
+## What's new in 0.7.7
 
-- **Level meters in sync, automatically:** Faderust now measures the delay between inputs and outputs and holds the input meters back accordingly, so no manual setting is needed ("Meter offset" stays as an optional fine adjustment)
-- **Wider fader track:** the orange bar of the fader is thicker
-- **Smaller, easier-to-copy log:** repeated messages are folded into one line, the file stays small, and the log dialog has "Copy all" next to "Copy"
-- Updated file dialog library (rfd) and Stream Deck plugin dependencies
+- **New logo:** larger symbol, more contrast and a new orange tone for the fader caps (app, installer and Stream Deck icons)
+- **Orange like the logo:** the default accent colour matches the new logo (your own saved colours stay)
+- **Finer level meter:** smoother steps from green over yellow to red
+- **Rounder strips:** a strip with signal gets a faint green edge
+- **Fix for a frozen window:** the window could stop reacting to clicks while the config was being saved or logged on a slow disk; the lock is now held much shorter
 
 ## Installation
 
@@ -15,12 +16,13 @@ All features and a guide are in the [README](https://github.com/Niklas970/faderu
 
 ---
 
-## Neu in 0.7.6
+## Neu in 0.7.7
 
-- **Pegel im Gleichlauf, automatisch:** Faderust misst jetzt die Verzögerung zwischen Ein- und Ausgängen und hält die Eingangsbalken entsprechend zurück, eine Handeinstellung ist nicht nötig („Pegel-Versatz“ bleibt als optionaler Feinabgleich)
-- **Breitere Fader-Bahn:** der orange Balken am Fader ist dicker
-- **Kleineres, leichter kopierbares Protokoll:** Wiederholte Meldungen werden zu einer Zeile zusammengefasst, die Datei bleibt klein, und im Protokoll-Dialog gibt es neben „Kopieren“ auch „Alles kopieren“
-- Dateidialog-Bibliothek (rfd) und Stream-Deck-Plugin-Abhängigkeiten aktualisiert
+- **Neues Logo:** größeres Symbol, mehr Kontrast und ein neuer Orange-Ton für die Reglerkappen (App-, Installer- und Stream-Deck-Icons)
+- **Orange wie im Logo:** die Standard-Akzentfarbe passt zum neuen Logo (eigene gespeicherte Farben bleiben)
+- **Feinere Pegelanzeige:** weichere Abstufung von Grün über Gelb zu Rot
+- **Rundere Streifen:** ein Streifen mit Signal bekommt einen feinen grünen Rand
+- **Korrektur für ein hängendes Fenster:** das Fenster konnte nicht mehr auf Klicks reagieren, während die Konfiguration bei langsamer Platte gespeichert oder protokolliert wurde; die Sperre wird jetzt viel kürzer gehalten
 
 ## Installation
 
