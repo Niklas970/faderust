@@ -56,7 +56,7 @@ pub const RELEASE: &[(u32, &str)] = &[
     (30, "Frei nach 30 s"),
     (120, "Frei nach 2 min"),
 ];
-pub const HIDE_AFTER: &[&str] = &["Nie", "Nach 5 s", "Nach 2 min", "Beendete"];
+pub const HIDE_AFTER: &[&str] = &["Beendete", "Nie", "Nach 5 s", "Nach 2 min"];
 
 /// Stored in `ui.json` for "Beendete": hide only programs that are closed.
 const CLOSED_ONLY: u64 = u64::MAX;
@@ -263,7 +263,6 @@ fn apply_look(p: &shell::Prefs) {
         &p.signal
     };
     style::set_theme(&p.mode, accent, signal);
-    faderust_core::audio::set_meter_offset_ms(p.meter_offset);
     let lang = if p.lang.is_empty() {
         shell::system_lang()
     } else {
@@ -334,6 +333,7 @@ pub enum Edit {
     InstallDeck,
     MastersLeft(bool),
     Mode(&'static str),
+    OutputEdge(bool),
     AccentHex(String),
     SignalHex(String),
     Accent(String),
@@ -341,7 +341,6 @@ pub enum Edit {
     Lang(&'static str),
     HideAfter(&'static str),
     /// Fine adjustment of the input meters against the outputs, in ms.
-    MeterOffset(i32),
     NewPreset(String),
     SavePreset,
     LoadPreset(String),
@@ -1078,10 +1077,11 @@ impl App {
             mini_count: 0,
             pinned: prefs.pinned,
             hide_after: match prefs.hide_after {
-                Some(0) => HIDE_AFTER[0],
-                Some(5) => HIDE_AFTER[1],
-                Some(CLOSED_ONLY) => HIDE_AFTER[3],
-                _ => HIDE_AFTER[2],
+                // Standard: only closed programs leave the desk.
+                None | Some(CLOSED_ONLY) => HIDE_AFTER[0],
+                Some(0) => HIDE_AFTER[1],
+                Some(5) => HIDE_AFTER[2],
+                _ => HIDE_AFTER[3],
             },
             visible,
             win_id: None,
@@ -2014,6 +2014,7 @@ impl App {
                 self.deck_error = r.err().unwrap_or_default();
             }
             Edit::Mode(m) => self.set_look(|p| p.mode = m.into()),
+            Edit::OutputEdge(on) => self.set_look(|p| p.output_edge_off = !on),
             Edit::Picker(t) => {
                 self.picker = if self.picker.is_some_and(|(x, _)| x == t) {
                     None
@@ -2068,7 +2069,6 @@ impl App {
                 self.set_look(|p| p.signal = c);
             }
             Edit::Lang(l) => self.set_look(|p| p.lang = l.into()),
-            Edit::MeterOffset(ms) => self.set_look(|p| p.meter_offset = ms),
             Edit::MastersLeft(l) => {
                 self.masters_left = l;
                 self.save_prefs();
@@ -2232,23 +2232,35 @@ impl App {
                 v
             })
         };
-        let win = |label: &'static str, close: bool, msg: Message| {
-            button(container(text(label).size(12).color(muted_color())).center(Length::Fill))
-                .width(46)
-                .height(Length::Fill)
-                .padding(0)
-                .on_press(msg)
-                .style(move |_, status| {
-                    let hot = matches!(status, button::Status::Hovered);
-                    button::Style {
-                        background: hot.then(|| {
-                            Background::Color(if close { rgb(196, 43, 28) } else { panel_2() })
-                        }),
-                        text_color: if hot { Color::WHITE } else { muted_color() },
-                        border: Border::default(),
-                        ..button::Style::default()
-                    }
+        let win = |glyph: icons::Glyph, close: bool, msg: Message| {
+            button(
+                Canvas::new(icons::Icon {
+                    glyph,
+                    color: text_color(),
+                    on: false,
                 })
+                .width(Length::Fill)
+                .height(Length::Fill),
+            )
+            .width(48)
+            .height(Length::Fill)
+            .padding(0)
+            .on_press(msg)
+            .style(move |_, status| {
+                let hot = matches!(status, button::Status::Hovered);
+                button::Style {
+                    background: hot.then(|| {
+                        Background::Color(if close {
+                            rgb(196, 43, 28)
+                        } else {
+                            mix(panel(), text_color(), 0.14)
+                        })
+                    }),
+                    text_color: text_color(),
+                    border: Border::default(),
+                    ..button::Style::default()
+                }
+            })
         };
         let toggle = |glyph: icons::Glyph, on: bool, tip: &'static str, msg: Message| {
             dialogs::tip(
@@ -2368,7 +2380,7 @@ impl App {
                         "Kompaktmodus beenden",
                         Message::ToggleMini
                     ),
-                    win("✕", true, Message::CloseRequested),
+                    win(icons::Glyph::WinClose, true, Message::CloseRequested),
                 ]
                 .align_y(Vertical::Center),
             )
@@ -2415,9 +2427,9 @@ impl App {
                     },
                     Message::TogglePin
                 ),
-                win("–", false, Message::Minimize),
-                win("▢", false, Message::ToggleMax),
-                win("✕", true, Message::CloseRequested),
+                win(icons::Glyph::WinMin, false, Message::Minimize),
+                win(icons::Glyph::WinMax, false, Message::ToggleMax),
+                win(icons::Glyph::WinClose, true, Message::CloseRequested),
             ]
             .spacing(12)
             .align_y(Vertical::Center),
@@ -2770,7 +2782,7 @@ impl App {
             } else {
                 164.0
             },
-            !m.muted && m.shown > -60.0,
+            !self.prefs.output_edge_off && !m.muted && m.shown > -60.0,
         )
     }
 

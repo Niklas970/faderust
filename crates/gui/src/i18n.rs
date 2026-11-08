@@ -30,6 +30,8 @@ const TABLE: &[(&str, &str)] = &[
         "Gets quieter while the chosen input is loud, e.g. music under the microphone.",
     ),
     ("Aus", "Off"),
+    ("An", "On"),
+    ("Grüner Rand an aktiven Ausgängen", "Green edge on active outputs"),
     (
         "Ausgabegeräte pro Programm gibt es nur unter Windows.",
         "Output devices per program exist only on Windows.",
@@ -156,14 +158,9 @@ const TABLE: &[(&str, &str)] = &[
     ("Standardgerät", "Default device"),
     ("Starten", "Start"),
     ("Stille Programme ausblenden", "Hide silent programs"),
-    ("Pegel-Versatz", "Meter offset"),
     (
         "„Beendete“ blendet nur Programme aus, die geschlossen sind. Stille, aber geöffnete bleiben sichtbar.",
         "“Closed” hides only programs that are closed. Silent but open ones stay visible.",
-    ),
-    (
-        "Der Gleichlauf wird automatisch gemessen. Hier nur nachjustieren, falls es noch nicht passt.",
-        "The sync is measured automatically. Only fine-tune here if it still does not fit.",
     ),
     (
         "Stream Deck nicht verbunden. Plugin einrichten oder neu installieren:",

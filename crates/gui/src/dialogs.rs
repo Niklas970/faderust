@@ -787,24 +787,6 @@ fn design(app: &App) -> Element<'_, Message> {
         h3("Stille Programme ausblenden"),
         segmented(hide),
         hint("„Beendete“ blendet nur Programme aus, die geschlossen sind. Stille, aber geöffnete bleiben sichtbar."),
-        h3("Pegel-Versatz"),
-        segmented(
-            [-50, 0, 50, 100]
-                .into_iter()
-                .map(|ms| {
-                    (
-                        if ms > 0 {
-                            format!("+{ms} ms")
-                        } else {
-                            format!("{ms} ms")
-                        },
-                        app.prefs.meter_offset == ms,
-                        edit(Edit::MeterOffset(ms)),
-                    )
-                })
-                .collect(),
-        ),
-        hint("Der Gleichlauf wird automatisch gemessen. Hier nur nachjustieren, falls es noch nicht passt."),
         h3("Akzentfarbe"),
         accents,
         custom_color(
@@ -825,12 +807,25 @@ fn design(app: &App) -> Element<'_, Message> {
             app.picker,
             |t| edit(Edit::SignalHex(t)),
         ),
+        h3("Grüner Rand an aktiven Ausgängen"),
+        segmented(vec![
+            (
+                "An".into(),
+                !app.prefs.output_edge_off,
+                edit(Edit::OutputEdge(true))
+            ),
+            (
+                "Aus".into(),
+                app.prefs.output_edge_off,
+                edit(Edit::OutputEdge(false))
+            ),
+        ]),
         h3("Helligkeit"),
         segmented(vec![
             (
-                "Dunkel".into(),
-                mode_now == "dark",
-                edit(Edit::Mode("dark"))
+                "Wie Windows".into(),
+                mode_now == "system",
+                edit(Edit::Mode("system"))
             ),
             (
                 "Hell".into(),
@@ -838,15 +833,15 @@ fn design(app: &App) -> Element<'_, Message> {
                 edit(Edit::Mode("light"))
             ),
             (
-                "Wie Windows".into(),
-                mode_now == "system",
-                edit(Edit::Mode("system"))
+                "Dunkel".into(),
+                mode_now == "dark",
+                edit(Edit::Mode("dark"))
             ),
         ]),
         h3("Sprache"),
         segmented(vec![
-            ("Deutsch".into(), lang_now == "de", edit(Edit::Lang("de"))),
             ("English".into(), lang_now == "en", edit(Edit::Lang("en"))),
+            ("Deutsch".into(), lang_now == "de", edit(Edit::Lang("de"))),
         ]),
     ]
     .spacing(10);
