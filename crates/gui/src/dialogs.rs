@@ -825,6 +825,19 @@ fn design(app: &App) -> Element<'_, Message> {
             app.picker,
             |t| edit(Edit::SignalHex(t)),
         ),
+        h3("Grüner Rand an aktiven Ausgängen"),
+        segmented(vec![
+            (
+                "An".into(),
+                !app.prefs.output_edge_off,
+                edit(Edit::OutputEdge(true))
+            ),
+            (
+                "Aus".into(),
+                app.prefs.output_edge_off,
+                edit(Edit::OutputEdge(false))
+            ),
+        ]),
         h3("Helligkeit"),
         segmented(vec![
             (
