@@ -812,7 +812,7 @@ impl App {
 
     /// Window width for `count` narrow strips.
     fn mini_width(count: usize) -> f32 {
-        (count as f32 * 110.0 + 24.0).clamp(220.0, 1400.0)
+        (count as f32 * 136.0 + 36.0).clamp(220.0, 1600.0)
     }
 
     /// Narrow strips: compact mode.
