@@ -119,8 +119,6 @@ pub struct Prefs {
     pub signal: String,
     /// "de", "en" or empty for the system language.
     pub lang: String,
-    /// Slim title bar and narrow strips.
-    pub compact: bool,
     /// The window stays above all others.
     pub pinned: bool,
     /// Fine adjustment of the input meters against the outputs, in ms.
