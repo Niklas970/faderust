@@ -30,6 +30,8 @@ const TABLE: &[(&str, &str)] = &[
         "Gets quieter while the chosen input is loud, e.g. music under the microphone.",
     ),
     ("Aus", "Off"),
+    ("An", "On"),
+    ("Grüner Rand an aktiven Ausgängen", "Green edge on active outputs"),
     (
         "Ausgabegeräte pro Programm gibt es nur unter Windows.",
         "Output devices per program exist only on Windows.",

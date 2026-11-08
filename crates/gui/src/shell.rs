@@ -116,6 +116,8 @@ pub struct Prefs {
     /// Accent and signal colour as "#rrggbb"; empty is the default.
     pub accent: String,
     pub signal: String,
+    /// No green edge around an output that carries signal.
+    pub output_edge_off: bool,
     /// "de", "en" or empty for the system language.
     pub lang: String,
     /// Slim title bar and narrow strips.
