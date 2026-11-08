@@ -2498,18 +2498,23 @@ impl App {
     }
 
     /// One strip in its card: A1-A3, name, note, fader, readout, mute, effects.
-    fn card<'a>(content: Element<'a, Message>, width: f32) -> Element<'a, Message> {
+    fn card<'a>(content: Element<'a, Message>, width: f32, active: bool) -> Element<'a, Message> {
         container(content)
             .padding([10, 6])
             .width(width)
             .height(Length::Fill)
             .align_x(Horizontal::Center)
-            .style(|_| container::Style {
+            .style(move |_| container::Style {
                 background: Some(Background::Color(panel())),
                 border: Border {
-                    color: hairline(),
+                    // A strip with signal gets a faint signal-coloured edge.
+                    color: if active {
+                        mix(hairline(), signal(), 0.55)
+                    } else {
+                        hairline()
+                    },
                     width: 1.0,
-                    radius: 4.0.into(),
+                    radius: 8.0.into(),
                 },
                 ..container::Style::default()
             })
@@ -2626,6 +2631,7 @@ impl App {
             .align_x(Horizontal::Center)
             .into(),
             if narrow { 126.0 } else { 164.0 },
+            !s.muted && s.shown > -60.0,
         )
     }
 
@@ -2694,6 +2700,7 @@ impl App {
             .align_x(Horizontal::Center)
             .into(),
             if self.tight() { 126.0 } else { 164.0 },
+            !m.muted && m.shown > -60.0,
         )
     }
 
