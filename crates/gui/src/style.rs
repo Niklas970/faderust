@@ -25,7 +25,7 @@ pub const SIGNALS: [(&str, &str, &str); 5] = [
     ("Weiß", "White", "#d8dde3"),
 ];
 
-pub const DEFAULT_ACCENT: &str = "#d9834f";
+pub const DEFAULT_ACCENT: &str = "#ff8a1f";
 pub const DEFAULT_SIGNAL: &str = "#5ccf6a";
 
 #[derive(Clone, Copy)]

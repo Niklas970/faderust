@@ -387,8 +387,10 @@ impl Fader<'_> {
         // One continuous bar; signal, amber and clip colours by height.
         // Solid bands, because gradients draw wrongly on some graphics drivers.
         for (from, to, color) in [
-            (0.0_f32, 0.80_f32, signal()),
-            (0.80, 0.95, amber()),
+            (0.0_f32, 0.72_f32, signal()),
+            (0.72, 0.80, mix(signal(), amber(), 0.5)),
+            (0.80, 0.90, amber()),
+            (0.90, 0.95, mix(amber(), danger(), 0.5)),
             (0.95, 1.0, danger()),
         ] {
             let (lo, hi) = (from.min(lit), to.min(lit));
