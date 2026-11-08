@@ -810,9 +810,9 @@ fn design(app: &App) -> Element<'_, Message> {
         h3("Helligkeit"),
         segmented(vec![
             (
-                "Dunkel".into(),
-                mode_now == "dark",
-                edit(Edit::Mode("dark"))
+                "Wie Windows".into(),
+                mode_now == "system",
+                edit(Edit::Mode("system"))
             ),
             (
                 "Hell".into(),
@@ -820,15 +820,15 @@ fn design(app: &App) -> Element<'_, Message> {
                 edit(Edit::Mode("light"))
             ),
             (
-                "Wie Windows".into(),
-                mode_now == "system",
-                edit(Edit::Mode("system"))
+                "Dunkel".into(),
+                mode_now == "dark",
+                edit(Edit::Mode("dark"))
             ),
         ]),
         h3("Sprache"),
         segmented(vec![
-            ("Deutsch".into(), lang_now == "de", edit(Edit::Lang("de"))),
             ("English".into(), lang_now == "en", edit(Edit::Lang("en"))),
+            ("Deutsch".into(), lang_now == "de", edit(Edit::Lang("de"))),
         ]),
     ]
     .spacing(10);
