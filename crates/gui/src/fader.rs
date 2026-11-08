@@ -41,6 +41,8 @@ pub struct Fader<'a> {
     pub post_fader: bool,
     /// Without the scale, for the narrower program strips.
     pub narrow: bool,
+    /// Scale numbers beside the slot (off in compact mode).
+    pub labels: bool,
     pub kind: Kind,
 }
 
@@ -221,16 +223,18 @@ impl Fader<'_> {
         for (d, label) in scale::TICKS.iter().copied() {
             let y = Self::y_of(scale::to_pos(d), total);
             let zero = d == 0.0;
-            f.fill_text(Text {
-                content: label.to_string(),
-                position: Point::new(lx, y),
-                color: if zero { text_color() } else { muted_color() },
-                size: Pixels(if wide { 11.0 } else { 10.0 }),
-                font: MONO,
-                align_x: Horizontal::Right.into(),
-                align_y: Vertical::Center,
-                ..Text::default()
-            });
+            if self.labels {
+                f.fill_text(Text {
+                    content: label.to_string(),
+                    position: Point::new(lx, y),
+                    color: if zero { text_color() } else { muted_color() },
+                    size: Pixels(if wide { 11.0 } else { 10.0 }),
+                    font: MONO,
+                    align_x: Horizontal::Right.into(),
+                    align_y: Vertical::Center,
+                    ..Text::default()
+                });
+            }
             let mark = if zero { muted_color() } else { border() };
             let long = match (wide, zero) {
                 (true, true) => 9.0,

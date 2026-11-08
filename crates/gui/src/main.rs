@@ -1444,7 +1444,7 @@ impl App {
                     let count = self.shown_count();
                     self.mini_count = count;
                     return Task::batch([
-                        window::resize(id, Size::new(Self::mini_width(count), 560.0)),
+                        window::resize(id, Size::new(Self::mini_width(count), 420.0)),
                         window::set_level(id, window::Level::AlwaysOnTop),
                     ]);
                 }
@@ -2590,6 +2590,7 @@ impl App {
             kind: Kind::Input(i),
             post_fader: false,
             narrow,
+            labels: !self.mini,
         })
         .width(if narrow { 104.0 } else { STRIP_W })
         .height(Length::Fill);
@@ -2655,7 +2656,11 @@ impl App {
                 Self::name_label(&s.label),
                 space().height(14),
                 fader,
-                Self::readout(s.db, s.muted),
+                if self.mini {
+                    Element::from(space().height(0))
+                } else {
+                    Self::readout(s.db, s.muted)
+                },
                 Self::mute_button(s.muted, Message::Mute(i), "MUTE"),
                 foot,
             ]
@@ -2679,6 +2684,7 @@ impl App {
             kind: Kind::Master(o),
             post_fader: true,
             narrow: self.tight(),
+            labels: !self.mini,
         })
         .width(if self.tight() { 104.0 } else { STRIP_W })
         .height(Length::Fill);
@@ -2724,7 +2730,11 @@ impl App {
                     Self::note(&m.note, m.note_on)
                 },
                 fader,
-                Self::readout(m.db, m.muted),
+                if self.mini {
+                    Element::from(space().height(0))
+                } else {
+                    Self::readout(m.db, m.muted)
+                },
                 Self::mute_button(m.muted, Message::MasterMute(o), "MUTE"),
                 space().height(24),
             ]
