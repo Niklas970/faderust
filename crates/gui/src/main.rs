@@ -332,6 +332,7 @@ pub enum Edit {
     InstallDeck,
     MastersLeft(bool),
     Mode(&'static str),
+    OutputEdge(bool),
     AccentHex(String),
     SignalHex(String),
     Accent(String),
@@ -2003,6 +2004,7 @@ impl App {
                 self.deck_error = r.err().unwrap_or_default();
             }
             Edit::Mode(m) => self.set_look(|p| p.mode = m.into()),
+            Edit::OutputEdge(on) => self.set_look(|p| p.output_edge_off = !on),
             Edit::Picker(t) => {
                 self.picker = if self.picker.is_some_and(|(x, _)| x == t) {
                     None
@@ -2711,7 +2713,7 @@ impl App {
             .align_x(Horizontal::Center)
             .into(),
             if self.tight() { 126.0 } else { 164.0 },
-            !m.muted && m.shown > -60.0,
+            !self.prefs.output_edge_off && !m.muted && m.shown > -60.0,
         )
     }
 
