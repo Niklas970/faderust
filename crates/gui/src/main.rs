@@ -182,11 +182,12 @@ pub enum Dialog {
 pub struct App {
     pub view: View,
     pub masters_left: bool,
-    pub compact: bool,
-    /// Mini mode: only the faders, no title bar, always on top.
+    /// Compact mode: narrow strips, slim title bar, window sized to fit, on top.
     pub mini: bool,
     /// Window size and pin state to restore when leaving mini mode.
     mini_prev: Option<(Size, bool)>,
+    /// Strips shown when the compact window was last sized.
+    mini_count: usize,
     pub pinned: bool,
     pub hide_after: &'static str,
     pub dialog: Option<Dialog>,
@@ -359,8 +360,7 @@ pub enum Edit {
 pub enum Message {
     SetView(View),
     WinId(Option<window::Id>),
-    ToggleCompact,
-    /// Enter or leave mini mode.
+    /// Enter or leave compact mode.
     ToggleMini,
     /// The window size is known: enter mini mode.
     MiniEnter(Size),
@@ -777,7 +777,6 @@ impl App {
             }
             .into(),
             masters_right: !self.masters_left,
-            compact: self.compact,
             pinned: self.pinned,
             hide_after: Some(if hide_closed(self.hide_after) {
                 CLOSED_ONLY
@@ -804,9 +803,20 @@ impl App {
         }
     }
 
-    /// Narrow strips: compact view or mini mode.
+    /// Strips on the desk (inputs and outputs that are not hidden).
+    fn shown_count(&self) -> usize {
+        self.strips.iter().filter(|s| !s.hidden).count()
+            + self.outs.iter().filter(|o| !o.hidden).count()
+    }
+
+    /// Window width for `count` narrow strips.
+    fn mini_width(count: usize) -> f32 {
+        (count as f32 * 134.0 + 36.0).clamp(220.0, 1600.0)
+    }
+
+    /// Narrow strips: compact mode.
     fn tight(&self) -> bool {
-        self.compact || self.mini
+        self.mini
     }
 
     /// Closing the window keeps the mixer running in the tray.
@@ -1062,9 +1072,9 @@ impl App {
                 View::Desk
             },
             masters_left: !prefs.masters_right,
-            compact: prefs.compact,
             mini: std::env::var_os("FADERUST_MINI").is_some(),
             mini_prev: None,
+            mini_count: 0,
             pinned: prefs.pinned,
             hide_after: match prefs.hide_after {
                 // Standard: only closed programs leave the desk.
@@ -1397,16 +1407,6 @@ impl App {
                 }
             }
             Message::DismissNotice => self.notice = None,
-            Message::ToggleCompact => {
-                self.compact = !self.compact;
-                self.save_prefs();
-                for s in &self.strips {
-                    s.cache.clear();
-                }
-                for o in &self.outs {
-                    o.cache.clear();
-                }
-            }
             Message::ToggleMini => {
                 if self.mini {
                     self.mini = false;
@@ -1441,11 +1441,10 @@ impl App {
                 self.clear_caches();
                 if let Some(id) = self.win_id {
                     // Room for every visible strip in the narrow layout.
-                    let count = self.strips.iter().filter(|s| !s.hidden).count()
-                        + self.outs.iter().filter(|o| !o.hidden).count();
-                    let width = (count as f32 * 110.0 + 24.0).clamp(220.0, 1400.0);
+                    let count = self.shown_count();
+                    self.mini_count = count;
                     return Task::batch([
-                        window::resize(id, Size::new(width, 560.0)),
+                        window::resize(id, Size::new(Self::mini_width(count), 360.0)),
                         window::set_level(id, window::Level::AlwaysOnTop),
                     ]);
                 }
@@ -1606,6 +1605,17 @@ impl App {
                 if let Some(snap) = snap {
                     self.apply(&snap, dt);
                     self.ready = true;
+                }
+                // A program came or went: the compact window follows, keeping its height.
+                if self.mini && self.mini_count != self.shown_count() {
+                    self.mini_count = self.shown_count();
+                    if let Some(id) = self.win_id {
+                        let width = Self::mini_width(self.mini_count);
+                        self.jobs.push(
+                            window::size(id)
+                                .then(move |s| window::resize(id, Size::new(width, s.height))),
+                        );
+                    }
                 }
                 let notices: Vec<Notice> =
                     std::mem::take(&mut *self.notices.lock().unwrap_or_else(|e| e.into_inner()));
@@ -2164,7 +2174,7 @@ impl App {
     // --- title bar -------------------------------------------------------
 
     fn titlebar(&self) -> Element<'_, Message> {
-        let compact = self.compact;
+        let compact = false;
         let nav = |glyph: icons::Glyph, label: &'static str, d: Dialog| {
             let on = self.dialog == Some(d);
             button(
@@ -2349,11 +2359,25 @@ impl App {
         if self.mini {
             let slim = container(
                 row![
+                    image(self.logo.clone())
+                        .width(16)
+                        .height(16)
+                        .border_radius(2),
                     space().width(Length::Fill),
+                    toggle(
+                        icons::Glyph::Pin,
+                        self.pinned,
+                        if self.pinned {
+                            "Nicht mehr im Vordergrund halten"
+                        } else {
+                            "Immer im Vordergrund"
+                        },
+                        Message::TogglePin
+                    ),
                     toggle(
                         icons::Glyph::Compact,
                         true,
-                        "Mini-Modus beenden",
+                        "Kompaktmodus beenden",
                         Message::ToggleMini
                     ),
                     win(icons::Glyph::WinClose, true, Message::CloseRequested),
@@ -2388,16 +2412,11 @@ impl App {
                 .spacing(6),
                 space().width(16),
                 toggle(
-                    icons::Glyph::Compact,
-                    self.compact,
-                    if self.compact {
-                        "Normale Ansicht"
-                    } else {
-                        "Kompakte Ansicht"
-                    },
-                    Message::ToggleCompact
+                    icons::Glyph::Mini,
+                    false,
+                    "Kompaktmodus",
+                    Message::ToggleMini
                 ),
-                toggle(icons::Glyph::Mini, false, "Mini-Modus", Message::ToggleMini),
                 toggle(
                     icons::Glyph::Pin,
                     self.pinned,
@@ -2583,8 +2602,15 @@ impl App {
             kind: Kind::Input(i),
             post_fader: false,
             narrow,
+            labels: !self.mini,
         })
-        .width(if narrow { 104.0 } else { STRIP_W })
+        .width(if self.mini {
+            78.0
+        } else if narrow {
+            104.0
+        } else {
+            STRIP_W
+        })
         .height(Length::Fill);
         let small = |label: &'static str, msg: Message, w: f32| {
             button(text(label).size(12).color(text_color()).center())
@@ -2621,7 +2647,11 @@ impl App {
             .spacing(4)
             .into()
         } else {
-            small("Effekte", Message::Open(Some(Dialog::Fx(i))), 72.0).into()
+            if self.mini {
+                space().height(0).into()
+            } else {
+                small("Effekte", Message::Open(Some(Dialog::Fx(i))), 72.0).into()
+            }
         };
         let top: Element<'_, Message> = if s.program {
             row![
@@ -2646,16 +2676,26 @@ impl App {
             column![
                 top,
                 Self::name_label(&s.label),
-                space().height(14),
+                space().height(if self.mini { 0 } else { 14 }),
                 fader,
-                Self::readout(s.db, s.muted),
+                if self.mini {
+                    Element::from(space().height(0))
+                } else {
+                    Self::readout(s.db, s.muted)
+                },
                 Self::mute_button(s.muted, Message::Mute(i), "MUTE"),
                 foot,
             ]
             .spacing(8)
             .align_x(Horizontal::Center)
             .into(),
-            if narrow { 126.0 } else { 164.0 },
+            if self.mini {
+                124.0
+            } else if narrow {
+                126.0
+            } else {
+                164.0
+            },
             !s.muted && s.shown > -60.0,
         )
     }
@@ -2672,8 +2712,15 @@ impl App {
             kind: Kind::Master(o),
             post_fader: true,
             narrow: self.tight(),
+            labels: !self.mini,
         })
-        .width(if self.tight() { 104.0 } else { STRIP_W })
+        .width(if self.mini {
+            78.0
+        } else if self.tight() {
+            104.0
+        } else {
+            STRIP_W
+        })
         .height(Length::Fill);
         let tag = row![
             space().width(22),
@@ -2717,14 +2764,24 @@ impl App {
                     Self::note(&m.note, m.note_on)
                 },
                 fader,
-                Self::readout(m.db, m.muted),
+                if self.mini {
+                    Element::from(space().height(0))
+                } else {
+                    Self::readout(m.db, m.muted)
+                },
                 Self::mute_button(m.muted, Message::MasterMute(o), "MUTE"),
-                space().height(24),
+                space().height(if self.mini { 0 } else { 24 }),
             ]
             .spacing(8)
             .align_x(Horizontal::Center)
             .into(),
-            if self.tight() { 126.0 } else { 164.0 },
+            if self.mini {
+                124.0
+            } else if self.tight() {
+                126.0
+            } else {
+                164.0
+            },
             !self.prefs.output_edge_off && !m.muted && m.shown > -60.0,
         )
     }

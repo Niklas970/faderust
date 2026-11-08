@@ -41,6 +41,8 @@ pub struct Fader<'a> {
     pub post_fader: bool,
     /// Without the scale, for the narrower program strips.
     pub narrow: bool,
+    /// Scale (numbers and marks) beside the slot; off in compact mode.
+    pub labels: bool,
     pub kind: Kind,
 }
 
@@ -55,9 +57,17 @@ impl Fader<'_> {
     /// Width of the track; the meter lies to the right of it.
     fn hit_width(&self) -> f32 {
         if self.narrow {
-            80.0
+            80.0 - self.shift()
         } else {
             100.0
+        }
+    }
+    /// Without the scale the whole drawing moves left by this much.
+    fn shift(&self) -> f32 {
+        if self.narrow && !self.labels {
+            26.0
+        } else {
+            0.0
         }
     }
     fn top() -> f32 {
@@ -199,6 +209,7 @@ impl Fader<'_> {
         // Narrow: no scale, the cap and slot move left (58 px track).
         let wide = !self.narrow;
         let (sx, cx) = if wide { (49.0, 24.0) } else { (44.0, 30.0) };
+        let (sx, cx) = (sx - self.shift(), cx - self.shift());
         // The scale sits left of the slot: labels end at `lx`, marks follow.
         let (lx, marks) = if wide {
             (22.0, [29.0, 47.0])
@@ -210,7 +221,11 @@ impl Fader<'_> {
         let bar_x = sx + (slot_w - bar_w) / 2.0;
         // Scale: numbers on the left, small marks beside the slot.
         // Fine marks every 3 dB between -24 and +12.
-        for d in (-24..=12).step_by(3).map(|d| d as f32) {
+        for d in (-24..=12)
+            .step_by(3)
+            .map(|d| d as f32)
+            .filter(|_| self.labels)
+        {
             let y = Self::y_of(scale::to_pos(d), total);
             f.fill_rectangle(
                 Point::new(marks[1] - 3.0, y - 0.5),
@@ -218,7 +233,7 @@ impl Fader<'_> {
                 mix(panel(), border(), 0.8),
             );
         }
-        for (d, label) in scale::TICKS.iter().copied() {
+        for (d, label) in scale::TICKS.iter().copied().filter(|_| self.labels) {
             let y = Self::y_of(scale::to_pos(d), total);
             let zero = d == 0.0;
             f.fill_text(Text {
@@ -369,6 +384,7 @@ impl Fader<'_> {
         } else {
             (106.0, 16.0)
         };
+        let mx = mx - self.shift();
         let frame = Path::rounded_rectangle(Point::new(mx, top), Size::new(mw, h), 2.0.into());
         f.fill(&frame, Fill::from(well()));
         f.stroke(
