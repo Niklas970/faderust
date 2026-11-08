@@ -21,6 +21,10 @@ pub enum Glyph {
     Sliders,
     /// A half-filled disc (design).
     Disc,
+    /// Window buttons: minimise, maximise, close.
+    WinMin,
+    WinMax,
+    WinClose,
 }
 
 pub struct Icon {
@@ -39,17 +43,29 @@ impl<M> canvas::Program<M> for Icon {
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
-        _cursor: mouse::Cursor,
+        cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
         let mut f = Frame::new(renderer, bounds.size());
         // Designed on 16 x 16, centred in whatever the canvas offers.
-        let k = (bounds.width.min(bounds.height) / 16.0).max(0.1);
+        let window_button = matches!(self.glyph, Glyph::WinMin | Glyph::WinMax | Glyph::WinClose);
+        // Window buttons span the whole (wide) button: fixed size, white on hover.
+        let k = if window_button {
+            1.2
+        } else {
+            (bounds.width.min(bounds.height) / 16.0).max(0.1)
+        };
+        let hot = window_button && cursor.is_over(bounds);
+        let color = if hot && matches!(self.glyph, Glyph::WinClose) {
+            Color::WHITE
+        } else {
+            self.color
+        };
         let ox = (bounds.width - 16.0 * k) / 2.0;
         let oy = (bounds.height - 16.0 * k) / 2.0;
         let p = |x: f32, y: f32| Point::new(ox + x * k, oy + y * k);
         let line = Stroke::default()
-            .with_color(self.color)
-            .with_width(1.5 * k)
+            .with_color(color)
+            .with_width(if window_button { 1.7 } else { 1.5 } * k)
             .with_line_cap(canvas::LineCap::Round)
             .with_line_join(canvas::LineJoin::Round);
         match self.glyph {
@@ -155,6 +171,21 @@ impl<M> canvas::Program<M> for Icon {
                     );
                     f.fill(&knob, Fill::from(self.color));
                 }
+            }
+            Glyph::WinMin => {
+                f.stroke(&Path::line(p(3.0, 8.0), p(13.0, 8.0)), line);
+            }
+            Glyph::WinMax => {
+                let frame = Path::rounded_rectangle(
+                    p(3.2, 3.2),
+                    Size::new(9.6 * k, 9.6 * k),
+                    (1.6 * k).into(),
+                );
+                f.stroke(&frame, line);
+            }
+            Glyph::WinClose => {
+                f.stroke(&Path::line(p(3.5, 3.5), p(12.5, 12.5)), line);
+                f.stroke(&Path::line(p(12.5, 3.5), p(3.5, 12.5)), line);
             }
             Glyph::Disc => {
                 let ring = Path::circle(p(8.0, 8.0), 6.3 * k);
