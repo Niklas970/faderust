@@ -56,7 +56,7 @@ pub const RELEASE: &[(u32, &str)] = &[
     (30, "Frei nach 30 s"),
     (120, "Frei nach 2 min"),
 ];
-pub const HIDE_AFTER: &[&str] = &["Nie", "Nach 5 s", "Nach 2 min", "Beendete"];
+pub const HIDE_AFTER: &[&str] = &["Beendete", "Nie", "Nach 5 s", "Nach 2 min"];
 
 /// Stored in `ui.json` for "Beendete": hide only programs that are closed.
 const CLOSED_ONLY: u64 = u64::MAX;
@@ -1068,10 +1068,11 @@ impl App {
             mini_prev: None,
             pinned: prefs.pinned,
             hide_after: match prefs.hide_after {
-                Some(0) => HIDE_AFTER[0],
-                Some(5) => HIDE_AFTER[1],
-                Some(CLOSED_ONLY) => HIDE_AFTER[3],
-                _ => HIDE_AFTER[2],
+                // Standard: only closed programs leave the desk.
+                None | Some(CLOSED_ONLY) => HIDE_AFTER[0],
+                Some(0) => HIDE_AFTER[1],
+                Some(5) => HIDE_AFTER[2],
+                _ => HIDE_AFTER[3],
             },
             visible,
             win_id: None,
