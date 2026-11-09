@@ -969,25 +969,34 @@ fn error_text(e: &str) -> Element<'static, Message> {
 }
 
 fn log(app: &App) -> Element<'_, Message> {
-    let text_ = match &app.log_text {
-        None => "Lade …".to_string(),
-        Some(t) if t.trim().is_empty() => "Noch nichts protokolliert.".to_string(),
-        Some(t) => t.clone(),
+    let empty = match &app.log_text {
+        None => Some("Lade …"),
+        Some(t) if t.trim().is_empty() => Some("Noch nichts protokolliert."),
+        Some(_) => None,
     };
-    let body = column![
-        hint("Was Faderust zuletzt gemeldet hat. Gezeigt sind die letzten 150 Zeilen. „Kopieren“ legt sie in die Zwischenablage, „Alles kopieren“ die ganze Datei. Bei einem Fehler bitte in ein Issue einfügen."),
-        container(text(text_).font(MONO).size(12).color(text_color()))
+    let view: Element<'_, Message> = match empty {
+        Some(t) => text(t).size(12).color(muted_color()).into(),
+        None => iced::widget::text_editor(&app.log_view)
+            .on_action(Message::LogAction)
+            .size(12)
+            .height(480)
             .padding(10)
-            .width(Length::Fill)
-            .style(|_| container::Style {
-                background: Some(Background::Color(bg())),
+            .style(|_, _| iced::widget::text_editor::Style {
+                background: Background::Color(bg()),
                 border: Border {
                     color: border(),
                     width: 1.0,
                     radius: 3.0.into(),
                 },
-                ..container::Style::default()
-            }),
+                placeholder: muted_color(),
+                value: text_color(),
+                selection: Color { a: 0.4, ..accent() },
+            })
+            .into(),
+    };
+    let body = column![
+        hint("Was Faderust zuletzt gemeldet hat. Gezeigt sind die letzten 150 Zeilen; Text lässt sich markieren und mit Strg+C kopieren. „Kopieren“ legt die gezeigten Zeilen in die Zwischenablage, „Alles kopieren“ die ganze Datei. Bei einem Fehler bitte in ein Issue einfügen."),
+        view,
     ]
     .spacing(10);
     frame(
