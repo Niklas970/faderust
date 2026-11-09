@@ -82,10 +82,12 @@ impl Ring {
         if written != self.last_written.swap(written, Ordering::Relaxed) {
             self.active.store(ACTIVE_READS, Ordering::Relaxed);
         }
-        let counts = self
-            .active
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |a| a.checked_sub(1))
-            .is_ok();
+        // Only the host's one read thread gets here, so load and store are enough.
+        let left = self.active.load(Ordering::Relaxed);
+        let counts = left > 0;
+        if counts {
+            self.active.store(left - 1, Ordering::Relaxed);
+        }
         let mut q = self.bytes.lock().unwrap_or_else(|e| e.into_inner());
         let n = out.len().min(q.len());
         for (slot, byte) in out.iter_mut().zip(q.drain(..n)) {
