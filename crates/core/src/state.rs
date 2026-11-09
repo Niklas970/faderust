@@ -502,6 +502,7 @@ pub fn initial_config() -> Config {
         presets: vec![],
         usb_cable: false,
         usb_cables: 1,
+        sounds: Vec::new(),
     }
     .normalized()
 }
@@ -727,6 +728,7 @@ mod tests {
             presets: vec![],
             usb_cable: false,
             usb_cables: 1,
+            sounds: Vec::new(),
         }
         .normalized()
     }

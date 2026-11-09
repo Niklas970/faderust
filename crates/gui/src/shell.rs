@@ -122,6 +122,8 @@ pub struct Prefs {
     pub lang: String,
     /// The window stays above all others.
     pub pinned: bool,
+    /// The soundboard is switched on.
+    pub soundboard: bool,
 }
 
 /// "de" or "en", whichever the system uses.

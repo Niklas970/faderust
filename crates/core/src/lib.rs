@@ -14,6 +14,7 @@ pub mod state;
 pub mod update;
 
 pub use faderust_engine::lang;
+pub use faderust_engine::soundboard;
 pub use state::*;
 
 /// What the audio thread needs from the window around it.

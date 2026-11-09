@@ -176,6 +176,7 @@ pub enum Dialog {
     Apps,
     Log,
     Selftest,
+    Soundboard,
     Fx(usize),
 }
 
@@ -219,6 +220,9 @@ pub struct App {
     /// Ducking per input, like `fx`.
     pub duck: Vec<Duck>,
     pub presets: Vec<String>,
+    /// Buttons of the soundboard and the sounds decoded so far.
+    pub sounds: Vec<faderust_core::config::Sound>,
+    sound_cache: std::collections::HashMap<String, Arc<faderust_core::soundboard::Sample>>,
     pub new_preset: String,
     /// Windows sound dialog.
     pub win: Option<WindowsAudio>,
@@ -345,6 +349,11 @@ pub enum Edit {
     ExportPreset(String),
     ImportPreset,
     DeletePreset(String),
+    Soundboard(bool),
+    SoundPlay(usize),
+    SoundStop,
+    SoundAdd,
+    SoundRemove(usize),
     Keep(usize),
     HideOut(usize, bool),
     ShowSilent,
@@ -405,6 +414,11 @@ pub enum Loaded {
     LogAll(String),
     Selftest(Result<Vec<Check>, String>),
     Deck(StreamDeckStatus),
+    /// A sound decoded for the soundboard: plays at once.
+    Sound(
+        String,
+        Result<Arc<faderust_core::soundboard::Sample>, String>,
+    ),
     Done(Then, Result<(), String>),
 }
 
@@ -416,6 +430,7 @@ pub enum Then {
     Apps,
     Usb,
     Presets,
+    Sounds,
 }
 
 /// The audio thread tells the window through the shared snapshot, so only
@@ -1010,6 +1025,13 @@ impl App {
             Loaded::Selftest(Ok(c)) => self.checks = Some(c),
             Loaded::Selftest(Err(e)) => self.dialog_error = e,
             Loaded::Deck(d) => self.deck = Some(d),
+            Loaded::Sound(path, Ok(sample)) => {
+                faderust_core::soundboard::play(Arc::clone(&sample), 1.0);
+                self.sound_cache.insert(path, sample);
+            }
+            Loaded::Sound(path, Err(e)) => {
+                self.dialog_error = format!("{path}: {e}");
+            }
             Loaded::Done(then, r) => {
                 self.usb_busy = false;
                 match r {
@@ -1023,6 +1045,10 @@ impl App {
                     Then::Usb => self.load_usb(),
                     Then::Presets => {
                         self.refresh_presets();
+                        Task::none()
+                    }
+                    Then::Sounds => {
+                        self.refresh_sounds();
                         Task::none()
                     }
                 };
@@ -1058,6 +1084,7 @@ impl App {
                 "fx" => Some(Dialog::Fx(0)),
                 "log" => Some(Dialog::Log),
                 "selftest" => Some(Dialog::Selftest),
+                "soundboard" => Some(Dialog::Soundboard),
                 _ => None,
             });
         let mut app = App {
@@ -1105,6 +1132,8 @@ impl App {
             fx: vec![],
             duck: vec![],
             presets: vec![],
+            sounds: vec![],
+            sound_cache: Default::default(),
             new_preset: String::new(),
             win: None,
             apps_data: None,
@@ -1132,6 +1161,7 @@ impl App {
             shot: std::env::var("FADERUST_SHOT").ok(),
         };
         app.refresh_presets();
+        app.refresh_sounds();
         let mut tasks = vec![app.open(dialog), window::latest().map(Message::WinId)];
         if hide_closed(app.hide_after) {
             tasks.push(app.load_apps());
@@ -1148,6 +1178,45 @@ impl App {
 
     fn say(&mut self, level: &'static str, text: String) {
         self.notice = Some((Instant::now(), text, level));
+    }
+
+    fn refresh_sounds(&mut self) {
+        self.sounds = self.config().sounds;
+        // Forget sounds that are no longer on the board.
+        let paths: Vec<&String> = self.sounds.iter().map(|s| &s.path).collect();
+        self.sound_cache.retain(|p, _| paths.contains(&p));
+    }
+
+    /// The soundboard strip on the desk, wanted while the board is on.
+    fn set_soundboard(&mut self, on: bool) {
+        let id = faderust_core::soundboard::ID;
+        let mut next = self.config();
+        let has = next.inputs.iter().any(|i| i.device == id);
+        if on && !has {
+            if let Err(e) = self.add_input(id.into(), "Soundboard".into()) {
+                self.dialog_error = e;
+                return;
+            }
+        } else if !on && has {
+            while let Some(i) = next.inputs.iter().position(|i| i.device == id) {
+                next.inputs.remove(i);
+                next.duck_after_remove(i);
+                if i < next.gains.len() {
+                    next.gains.remove(i);
+                }
+                for p in &mut next.presets {
+                    if i < p.gains.len() {
+                        p.gains.remove(i);
+                    }
+                }
+            }
+            faderust_core::soundboard::stop_all();
+            if let Err(e) = faderust_core::save_config(next, &self.core) {
+                self.dialog_error = e;
+                return;
+            }
+        }
+        self.set_look(|p| p.soundboard = on);
     }
 
     fn refresh_presets(&mut self) {
@@ -2122,6 +2191,61 @@ impl App {
                 }
                 self.refresh_presets();
             }
+            Edit::Soundboard(on) => self.set_soundboard(on),
+            Edit::SoundPlay(i) => {
+                if let Some(sound) = self.sounds.get(i) {
+                    let path = sound.path.clone();
+                    if let Some(sample) = self.sound_cache.get(&path) {
+                        faderust_core::soundboard::play(Arc::clone(sample), 1.0);
+                    } else {
+                        self.jobs.push(blocking(
+                            move || {
+                                let r =
+                                    faderust_core::soundboard::load(std::path::Path::new(&path))
+                                        .map(Arc::new);
+                                (path, r)
+                            },
+                            |(p, r)| Message::Loaded(Loaded::Sound(p, r)),
+                        ));
+                    }
+                }
+            }
+            Edit::SoundStop => faderust_core::soundboard::stop_all(),
+            Edit::SoundAdd => {
+                let core = self.core.clone();
+                self.jobs.push(blocking(
+                    move || -> Result<(), String> {
+                        let paths = files::sound_paths()?;
+                        faderust_core::edit_presets(&core, |c| {
+                            for p in &paths {
+                                let name = p
+                                    .file_stem()
+                                    .map(|n| n.to_string_lossy().into_owned())
+                                    .unwrap_or_default();
+                                c.sounds.push(faderust_core::config::Sound {
+                                    name,
+                                    path: p.to_string_lossy().into_owned(),
+                                });
+                            }
+                            !paths.is_empty()
+                        })
+                        .map(drop)
+                    },
+                    |r| Message::Loaded(Loaded::Done(Then::Sounds, r)),
+                ));
+            }
+            Edit::SoundRemove(i) => {
+                let r = faderust_core::edit_presets(&self.core, |c| {
+                    if i < c.sounds.len() {
+                        c.sounds.remove(i);
+                    }
+                    true
+                });
+                if let Err(e) = r {
+                    self.say("error", e);
+                }
+                self.refresh_sounds();
+            }
             Edit::Keep(i) => {
                 if let Some(s) = self.strips.get_mut(i) {
                     s.keep = !s.keep;
@@ -2395,13 +2519,19 @@ impl App {
             row![
                 brand,
                 space().width(Length::Fill),
-                row![
-                    nav(icons::Glyph::Bookmark, "Presets", Dialog::Presets),
-                    nav(icons::Glyph::Speaker, "Windows", Dialog::Windows),
-                    nav(icons::Glyph::Sliders, "Geräte", Dialog::Settings),
-                    nav(icons::Glyph::Disc, "Design", Dialog::Design),
-                ]
-                .spacing(6),
+                {
+                    let mut navs = row![
+                        nav(icons::Glyph::Bookmark, "Presets", Dialog::Presets),
+                        nav(icons::Glyph::Speaker, "Windows", Dialog::Windows),
+                        nav(icons::Glyph::Sliders, "Geräte", Dialog::Settings),
+                        nav(icons::Glyph::Disc, "Design", Dialog::Design),
+                    ]
+                    .spacing(6);
+                    if self.prefs.soundboard {
+                        navs = navs.push(nav(icons::Glyph::Note, "Soundboard", Dialog::Soundboard));
+                    }
+                    navs
+                },
                 space().width(16),
                 toggle(
                     icons::Glyph::Mini,

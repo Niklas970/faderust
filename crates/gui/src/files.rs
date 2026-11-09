@@ -31,3 +31,18 @@ pub fn save_path(_: &str) -> Result<Option<PathBuf>, String> {
 pub fn open_path() -> Result<Option<PathBuf>, String> {
     Err("Dateiauswahl gibt es nur unter Windows".into())
 }
+
+/// WAV files for the soundboard; empty if the user cancelled.
+#[cfg(windows)]
+pub fn sound_paths() -> Result<Vec<PathBuf>, String> {
+    Ok(rfd::FileDialog::new()
+        .set_title("Sounds hinzufügen")
+        .add_filter("WAV", &["wav"])
+        .pick_files()
+        .unwrap_or_default())
+}
+
+#[cfg(not(windows))]
+pub fn sound_paths() -> Result<Vec<PathBuf>, String> {
+    Err("Dateiauswahl gibt es nur unter Windows".into())
+}
