@@ -1,6 +1,7 @@
 ## What's new in 0.7.9
 
 - **USB cable diagnostics:** while sound runs through a Faderust cable, the log now shows every 30 seconds the loudest peak going in and coming out, plus gaps and dropped audio. This helps to track down crackling, harsh or too loud sound on the cable microphone (for calls); nothing changes in the sound itself
+- **Window size on mixed-DPI setups:** when you drag the window between monitors with different scaling, it keeps the size you chose instead of drifting and jumping
 
 ## Installation
 
@@ -15,6 +16,7 @@ All features and a guide are in the [README](https://github.com/Niklas970/faderu
 ## Neu in 0.7.9
 
 - **USB-Kabel-Diagnose:** solange Ton durch ein Faderust Kabel läuft, steht im Protokoll alle 30 Sekunden die lauteste Spitze am Eingang und Ausgang des Kabels sowie Lücken und verworfenes Audio. Das hilft, Knacken, schrilles oder zu lautes Kabel-Mikro (für Anrufe) einzugrenzen; am Klang selbst ändert sich nichts
+- **Fenstergröße bei verschiedenen Skalierungen:** beim Verschieben des Fensters zwischen Monitoren mit unterschiedlicher Skalierung behält es die gewählte Größe, statt zu driften und zu springen
 
 ## Installation
 
