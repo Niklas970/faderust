@@ -122,6 +122,8 @@ pub struct Prefs {
     pub lang: String,
     /// The window stays above all others.
     pub pinned: bool,
+    /// No on-screen note when the Stream Deck changes a level.
+    pub osd_off: bool,
 }
 
 /// "de" or "en", whichever the system uses.

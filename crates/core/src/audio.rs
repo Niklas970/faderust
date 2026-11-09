@@ -428,6 +428,7 @@ fn run(
                                 if let Some(e) = &engine {
                                     e.matrix.set_gain_db(i, o, g.db);
                                 }
+                                host.osd(&names(&config, Some(i), Some(o)), &osd_level(g.db));
                                 dirty_since.get_or_insert_with(Instant::now);
                             }
                         }
@@ -448,6 +449,7 @@ fn run(
                                 if let Some(e) = &engine {
                                     e.matrix.set_master_db(o, out.master.db);
                                 }
+                                host.osd(&out.label, &osd_level(out.master.db));
                                 dirty_since.get_or_insert_with(Instant::now);
                             }
                         }
@@ -460,6 +462,13 @@ fn run(
                                         e.matrix.set_gain_db(i, o, g.db);
                                     }
                                 }
+                                let loudest = row
+                                    .iter()
+                                    .filter(|g| !g.muted)
+                                    .map(|g| g.db)
+                                    .fold(-120.0, f32::max);
+                                let label = c.inputs.get(i).map(|x| x.label.clone());
+                                host.osd(&label.unwrap_or_default(), &osd_level(loudest));
                                 dirty_since.get_or_insert_with(Instant::now);
                             }
                         }
@@ -488,6 +497,7 @@ fn run(
                                 if let Some(e) = &engine {
                                     e.matrix.set_muted(i, o, g.muted);
                                 }
+                                host.osd(&names(&config, Some(i), Some(o)), &osd_mute(g.muted));
                                 dirty_since.get_or_insert_with(Instant::now);
                             }
                         }
@@ -938,6 +948,46 @@ fn gain_mut(
     Some(*g)
 }
 
+/// "Input → Output" for the on-screen note.
+fn names(config: &Mutex<Config>, input: Option<usize>, output: Option<usize>) -> String {
+    let c = config.lock().unwrap_or_else(|e| e.into_inner());
+    let i = input
+        .and_then(|i| c.inputs.get(i))
+        .map(|x| x.label.as_str());
+    let o = output
+        .and_then(|o| c.outputs.get(o))
+        .map(|x| x.label.as_str());
+    match (i, o) {
+        (Some(i), Some(o)) => format!("{i} → {o}"),
+        (Some(n), None) | (None, Some(n)) => n.to_string(),
+        (None, None) => String::new(),
+    }
+}
+
+/// The level as the on-screen note shows it.
+fn osd_level(db: f32) -> String {
+    if db <= -100.0 {
+        if crate::lang::is_english() {
+            "Off"
+        } else {
+            "Aus"
+        }
+        .to_string()
+    } else {
+        format!("{db:+.1} dB")
+    }
+}
+
+fn osd_mute(muted: bool) -> String {
+    match (muted, crate::lang::is_english()) {
+        (true, true) => "Muted",
+        (true, false) => "Stumm",
+        (false, true) => "Unmuted",
+        (false, false) => "Stumm aus",
+    }
+    .to_string()
+}
+
 fn clamp_db(db: f32) -> f32 {
     if db.is_finite() {
         db.clamp(-120.0, 12.0)
@@ -1043,7 +1093,7 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
 
 #[cfg(test)]
 mod tests {
-    use super::{explain, skipped, step_db, strip_step, LevelDelay, UiDevice, UiState};
+    use super::{explain, osd_level, skipped, step_db, strip_step, LevelDelay, UiDevice, UiState};
     use crate::config::Gain;
 
     fn ui_device(connected: bool, level_db: f32, buffer_ms: Option<u32>) -> UiDevice {
@@ -1179,6 +1229,13 @@ mod tests {
             assert!((dev[t] - out_dev[t]).abs() < 1.5, "device t={t}");
             assert!((prog[t] - out_prog[t]).abs() < 1.5, "program t={t}");
         }
+    }
+
+    #[test]
+    fn osd_level_text() {
+        assert!(osd_level(-6.0).ends_with("-6.0 dB"));
+        assert!(osd_level(3.0).starts_with('+'));
+        assert!(osd_level(-120.0).len() <= 4);
     }
 
     #[test]

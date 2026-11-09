@@ -108,6 +108,8 @@ const TABLE: &[(&str, &str)] = &[
     ("Leicht", "Light"),
     ("Lädt …", "Loading …"),
     ("Löschen", "Delete"),
+    ("Lautstärke-Anzeige", "Volume display"),
+    ("Kurze Einblendung am Bildschirmrand bei Stream Deck", "Short note at the screen edge for Stream Deck changes"),
     ("Mit Windows starten (im Tray, ohne Fenster)", "Start with Windows (in the tray, no window)"),
     ("Mittel", "Medium"),
     ("Nach 2 min", "After 2 min"),
