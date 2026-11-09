@@ -93,9 +93,19 @@ fn bind(count: usize) -> Result<Server, String> {
 /// How often the cables' gaps are looked at.
 const GAP_REPORT_EVERY: Duration = Duration::from_secs(30);
 
-/// Writes a line for every cable whose wire ran dry (a gap in the sound) or
-/// overflowed (audio dropped) since the last look, until the server is
-/// replaced. Gaps and drops are what a call hears as crackling.
+/// A 24-bit peak in dBFS, "-" when silent.
+fn peak_db(peak: u32) -> String {
+    if peak == 0 {
+        return "-".to_string();
+    }
+    format!("{:.1} dB", 20.0 * (peak as f32 / (1 << 23) as f32).log10())
+}
+
+/// Writes a line for every cable that carried sound (or gaps) since the last
+/// look: the loudest sample going in and coming out, gaps in the sound (the
+/// wire ran dry) and dropped audio (it overflowed), until the server is
+/// replaced. Gaps and drops are what a call hears as crackling, a peak near
+/// 0 dB as distortion.
 fn report_gaps(generation: u64, rings: &[std::sync::Arc<faderust_usbcable::ring::Ring>]) {
     let mut seen = vec![(0u64, 0u64, 0u64); rings.len()];
     while GENERATION.load(Ordering::SeqCst) == generation {
@@ -106,11 +116,17 @@ fn report_gaps(generation: u64, rings: &[std::sync::Arc<faderust_usbcable::ring:
                 ring.underruns.load(Ordering::Relaxed),
                 ring.dropped.load(Ordering::Relaxed),
             );
+            let (peak_in, peak_out) = ring.take_peaks();
             // Without sound written there is nothing to run dry.
-            if now.0 != last.0 && (now.1 != last.1 || now.2 != last.2) {
+            let flowing = now.0 != last.0;
+            let broken = now.1 != last.1 || now.2 != last.2;
+            // Silence on both sides is not worth a line.
+            if flowing && (broken || peak_in > 0 || peak_out > 0) {
                 log::write(&format!(
-                    "USB-Kabel {}: {} Lücken, {} Bytes verworfen (letzte {} s)",
+                    "USB-Kabel {}: Spitze ein {}, aus {}, {} Lücken, {} Bytes verworfen (letzte {} s)",
                     cable + 1,
+                    peak_db(peak_in),
+                    peak_db(peak_out),
                     now.1 - last.1,
                     now.2 - last.2,
                     GAP_REPORT_EVERY.as_secs()

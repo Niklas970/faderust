@@ -23,6 +23,18 @@ pub struct Ring {
     pub written: AtomicU64,
     pub underruns: AtomicU64,
     pub dropped: AtomicU64,
+    /// Loudest sample written and read since [`Ring::take_peaks`], 24 bit
+    /// magnitude: what goes into the cable and what the host receives.
+    peak_in: AtomicU32,
+    peak_out: AtomicU32,
+}
+
+/// The largest magnitude among the 24-bit little-endian samples of `data`.
+fn peak_of(data: &[u8]) -> u32 {
+    data.chunks_exact(3)
+        .map(|s| (i32::from_le_bytes([0, s[0], s[1], s[2]]) >> 8).unsigned_abs())
+        .max()
+        .unwrap_or(0)
 }
 
 impl Ring {
@@ -30,7 +42,16 @@ impl Ring {
         Self::default()
     }
 
+    /// The loudest samples (in, out) since the last call, 0…2^23.
+    pub fn take_peaks(&self) -> (u32, u32) {
+        (
+            self.peak_in.swap(0, Ordering::Relaxed),
+            self.peak_out.swap(0, Ordering::Relaxed),
+        )
+    }
+
     pub fn write(&self, data: &[u8]) {
+        self.peak_in.fetch_max(peak_of(data), Ordering::Relaxed);
         let mut q = self.bytes.lock().unwrap_or_else(|e| e.into_inner());
         q.extend(data);
         self.written.fetch_add(data.len() as u64, Ordering::Relaxed);
@@ -43,6 +64,11 @@ impl Ring {
 
     /// Fills `out`; whatever is missing becomes silence.
     pub fn read(&self, out: &mut [u8]) {
+        self.read_inner(out);
+        self.peak_out.fetch_max(peak_of(out), Ordering::Relaxed);
+    }
+
+    fn read_inner(&self, out: &mut [u8]) {
         let mut q = self.bytes.lock().unwrap_or_else(|e| e.into_inner());
         let n = out.len().min(q.len());
         for (slot, byte) in out.iter_mut().zip(q.drain(..n)) {
@@ -80,6 +106,19 @@ mod tests {
         let mut out = [0u8; 4];
         r.read(&mut out);
         assert_eq!(out, [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn peaks_are_the_loudest_24_bit_samples_in_and_out() {
+        let r = Ring::new();
+        // +1000 and -3000 (two's complement, little endian), then -1.
+        r.write(&[
+            0xE8, 0x03, 0x00, 0x48, 0xF4, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0,
+        ]);
+        let mut out = [0u8; 6];
+        r.read(&mut out);
+        assert_eq!(r.take_peaks(), (3000, 3000));
+        assert_eq!(r.take_peaks(), (0, 0));
     }
 
     #[test]
