@@ -1,10 +1,7 @@
-## What's new in 0.7.8
+## What's new in 0.7.9
 
-- **Compact mode:** Mini mode and the compact view are now one mode: narrow strips without numbers and scale marks, a slim title bar, and the window sizes itself to the strips
-- **Bolder window buttons:** minimise, maximise and close are drawn thicker and clearer
-- **Meter sync per program:** the delay is now measured for every input separately, so programs line up with the outputs; the manual "Meter offset" setting is gone
-- **Hide silent programs:** "Closed" comes first and is the default
-- **Design:** the green edge on active outputs can be switched off; the "Outputs left/right" setting is removed (outputs always stand on the left); Brightness and Language swapped places
+- **USB cable diagnostics:** while sound runs through a Faderust cable, the log now shows every 30 seconds the loudest peak going in and coming out, plus gaps and dropped audio. This helps to track down crackling, harsh or too loud sound on the cable microphone (for calls); nothing changes in the sound itself
+- **Window size on mixed-DPI setups:** when you drag the window between monitors with different scaling, it keeps the size you chose instead of drifting and jumping
 
 ## Installation
 
@@ -16,13 +13,10 @@ All features and a guide are in the [README](https://github.com/Niklas970/faderu
 
 ---
 
-## Neu in 0.7.8
+## Neu in 0.7.9
 
-- **Kompaktmodus:** Mini-Modus und Kompaktansicht sind jetzt ein Modus: schmale Streifen ohne Zahlen und Skalenstriche, schlanke Titelleiste, das Fenster passt sich den Streifen an
-- **Kräftigere Fensterknöpfe:** Minimieren, Maximieren und Schließen sind dicker und klarer gezeichnet
-- **Pegel-Gleichlauf pro Programm:** die Verzögerung wird jetzt für jeden Eingang einzeln gemessen, damit Programme zu den Ausgängen passen; die manuelle Einstellung „Pegel-Versatz“ entfällt
-- **Stille Programme ausblenden:** „Beendete“ steht an erster Stelle und ist der Standard
-- **Design:** der grüne Rand an aktiven Ausgängen lässt sich ausschalten; die Einstellung „Ausgänge links/rechts“ entfällt (Ausgänge stehen immer links); Helligkeit und Sprache sind vertauscht
+- **USB-Kabel-Diagnose:** solange Ton durch ein Faderust Kabel läuft, steht im Protokoll alle 30 Sekunden die lauteste Spitze am Eingang und Ausgang des Kabels sowie Lücken und verworfenes Audio. Das hilft, Knacken, schrilles oder zu lautes Kabel-Mikro (für Anrufe) einzugrenzen; am Klang selbst ändert sich nichts
+- **Fenstergröße bei verschiedenen Skalierungen:** beim Verschieben des Fensters zwischen Monitoren mit unterschiedlicher Skalierung behält es die gewählte Größe, statt zu driften und zu springen
 
 ## Installation
 
