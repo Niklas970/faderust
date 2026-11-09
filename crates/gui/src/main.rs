@@ -190,8 +190,13 @@ pub struct App {
     /// Logical window size the user chose, restored after a monitor with a
     /// different scaling changed it (Windows rounds a little on every move).
     size_keep: Option<Size>,
-    /// When the window last changed its scaling; the size settles after that.
+    /// When the window last changed its scaling or size during a move across
+    /// monitors; the size settles after that.
     rescaled_at: Option<Instant>,
+    /// When that move across monitors began.
+    burst_from: Option<Instant>,
+    /// Recent window sizes, to find the one from before a monitor change.
+    size_log: Vec<(Instant, Size)>,
     pub pinned: bool,
     pub hide_after: &'static str,
     pub dialog: Option<Dialog>,
@@ -1082,6 +1087,8 @@ impl App {
             mini_count: 0,
             size_keep: Some(Size::new(1400.0, 860.0)),
             rescaled_at: None,
+            burst_from: None,
+            size_log: Vec::new(),
             pinned: prefs.pinned,
             hide_after: match prefs.hide_after {
                 // Standard: only closed programs leave the desk.
@@ -1489,15 +1496,26 @@ impl App {
             Message::Resized(size) => {
                 // Sizes during a scaling change are Windows' rounding, not a wish.
                 // (A minimised window reports no size at all.)
-                if self.rescaled_at.is_none()
-                    && !self.mini
-                    && size.width >= 200.0
-                    && size.height >= 200.0
-                {
-                    self.size_keep = Some(size);
+                if !self.mini && size.width >= 200.0 && size.height >= 200.0 {
+                    if self.rescaled_at.is_none() {
+                        self.size_keep = Some(size);
+                        self.size_log.push((Instant::now(), size));
+                        if self.size_log.len() > 256 {
+                            self.size_log.remove(0);
+                        }
+                    } else {
+                        // Still moving across monitors: wait on.
+                        self.rescaled_at = Some(Instant::now());
+                    }
                 }
             }
-            Message::Rescaled => self.rescaled_at = Some(Instant::now()),
+            Message::Rescaled => {
+                let now = Instant::now();
+                if self.rescaled_at.is_none() {
+                    self.burst_from = Some(now);
+                }
+                self.rescaled_at = Some(now);
+            }
             Message::Drag => {
                 if let Some(id) = self.win_id {
                     return window::drag(id);
@@ -1629,11 +1647,20 @@ impl App {
                 // back the size it had, down to the pixel.
                 if self
                     .rescaled_at
-                    .is_some_and(|t| t.elapsed() > Duration::from_millis(500))
+                    .is_some_and(|t| t.elapsed() > Duration::from_millis(700))
                 {
                     self.rescaled_at = None;
-                    if let (Some(id), Some(want), false) = (self.win_id, self.size_keep, self.mini)
-                    {
+                    // The size from before the move began; a size reported just
+                    // ahead of the first scaling change may already be Windows'.
+                    let before = self.burst_from.take().and_then(|from| {
+                        self.size_log
+                            .iter()
+                            .rev()
+                            .find(|(t, _)| *t + Duration::from_millis(150) < from)
+                            .map(|(_, s)| *s)
+                    });
+                    let want = before.or(self.size_keep);
+                    if let (Some(id), Some(want), false) = (self.win_id, want, self.mini) {
                         self.jobs.push(window::is_maximized(id).then(move |max| {
                             if max {
                                 Task::none()
@@ -1642,6 +1669,10 @@ impl App {
                                     if (now.width - want.width).abs() > 0.5
                                         || (now.height - want.height).abs() > 0.5
                                     {
+                                        faderust_core::log::write(&format!(
+                                            "Fenster nach Monitorwechsel {}x{} statt {}x{}, zurückgesetzt",
+                                            now.width, now.height, want.width, want.height
+                                        ));
                                         window::resize(id, want)
                                     } else {
                                         Task::none()
