@@ -40,8 +40,8 @@ use iced::gradient;
 use iced::widget::canvas::{self, Canvas};
 use iced::widget::{button, column, container, image, row, space, stack};
 use iced::{
-    window, Background, Border, Color, Element, Font, Length, Shadow, Size, Subscription, Task,
-    Theme,
+    window, Background, Border, Color, Element, Font, Length, Point, Shadow, Size, Subscription,
+    Task, Theme,
 };
 
 use fader::{Fader, Kind};
@@ -185,6 +185,11 @@ pub struct App {
     pub mini: bool,
     /// Window size and pin state to restore when leaving mini mode.
     mini_prev: Option<(Size, bool)>,
+    /// The compact window was opened from the tray icon and closes when it loses focus.
+    popup: bool,
+    /// The popup switched compact mode on, so it switches it off again.
+    popup_mini: bool,
+    popup_at: Option<Instant>,
     /// Strips shown when the compact window was last sized.
     mini_count: usize,
     /// Logical window size the user chose, restored after a monitor with a
@@ -337,6 +342,7 @@ pub enum Edit {
     InstallDeck,
     Mode(&'static str),
     OutputEdge(bool),
+    TrayPopup(bool),
     AccentHex(String),
     SignalHex(String),
     Accent(String),
@@ -375,6 +381,10 @@ pub enum Message {
     Drag,
     /// The window got another size (logical).
     Resized(Size),
+    /// The window lost focus (closes the tray popup).
+    Unfocused,
+    /// Tray popup: the screen size, to place the window at its corner.
+    PopupAt(Option<Size>),
     /// The window moved to a monitor with another scaling.
     Rescaled,
     /// Start resizing the window from an edge or corner.
@@ -834,6 +844,37 @@ impl App {
         }
     }
 
+    /// Opens the compact mixer at the tray icon, or closes it again.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    fn toggle_popup(&mut self) -> Task<Message> {
+        if self.popup {
+            return self.close_popup();
+        }
+        self.popup = true;
+        self.popup_at = Some(Instant::now());
+        self.popup_mini = !self.mini;
+        let enter = if self.mini {
+            Task::none()
+        } else {
+            self.handle(Message::ToggleMini)
+        };
+        let place = match self.win_id {
+            Some(id) => window::monitor_size(id).map(Message::PopupAt),
+            None => Task::none(),
+        };
+        Task::batch([self.show(), enter, place])
+    }
+
+    fn close_popup(&mut self) -> Task<Message> {
+        self.popup = false;
+        let leave = if self.mini && self.popup_mini {
+            self.handle(Message::ToggleMini)
+        } else {
+            Task::none()
+        };
+        Task::batch([leave, self.hide()])
+    }
+
     fn show(&mut self) -> Task<Message> {
         self.visible.store(true, Ordering::Relaxed);
         match self.win_id {
@@ -1079,6 +1120,9 @@ impl App {
             },
             mini: std::env::var_os("FADERUST_MINI").is_some(),
             mini_prev: None,
+            popup: false,
+            popup_mini: false,
+            popup_at: None,
             mini_count: 0,
             size_keep: Some(Size::new(1400.0, 860.0)),
             rescaled_at: None,
@@ -1414,6 +1458,24 @@ impl App {
                 }
             }
             Message::DismissNotice => self.notice = None,
+            Message::Unfocused => {
+                // Not right after opening: the window is still taking focus.
+                let fresh = self
+                    .popup_at
+                    .is_some_and(|t| t.elapsed() < Duration::from_millis(400));
+                if self.popup && !fresh {
+                    return self.close_popup();
+                }
+            }
+            Message::PopupAt(screen) => {
+                if let (Some(id), Some(screen)) = (self.win_id, screen) {
+                    // Bottom right, above the taskbar.
+                    let width = Self::mini_width(self.shown_count());
+                    let x = (screen.width - width - 12.0).max(0.0);
+                    let y = (screen.height - 360.0 - 56.0).max(0.0);
+                    return window::move_to(id, Point::new(x, y));
+                }
+            }
             Message::ToggleMini => {
                 if self.mini {
                     self.mini = false;
@@ -1597,6 +1659,14 @@ impl App {
                     for a in tray.poll() {
                         match a {
                             shell::tray::Action::Show => show = true,
+                            shell::tray::Action::Click => {
+                                if self.prefs.tray_popup {
+                                    let t = self.toggle_popup();
+                                    self.jobs.push(t);
+                                } else {
+                                    show = true;
+                                }
+                            }
                             shell::tray::Action::Quit => return self.handle(Message::Quit),
                         }
                     }
@@ -1655,7 +1725,7 @@ impl App {
                 if self.mini && self.mini_count != self.shown_count() {
                     self.mini_count = self.shown_count();
                     if let Some(id) = self.win_id {
-                        let width = Self::mini_width(self.mini_count);
+                        let width = Self::mini_width(self.shown_count());
                         self.jobs.push(
                             window::size(id)
                                 .then(move |s| window::resize(id, Size::new(width, s.height))),
@@ -2060,6 +2130,7 @@ impl App {
             }
             Edit::Mode(m) => self.set_look(|p| p.mode = m.into()),
             Edit::OutputEdge(on) => self.set_look(|p| p.output_edge_off = !on),
+            Edit::TrayPopup(on) => self.set_look(|p| p.tray_popup = on),
             Edit::Picker(t) => {
                 self.picker = if self.picker.is_some_and(|(x, _)| x == t) {
                     None
@@ -3395,6 +3466,7 @@ impl App {
             iced::event::listen_with(|event, _, _| match event {
                 iced::Event::Window(window::Event::Resized(size)) => Some(Message::Resized(size)),
                 iced::Event::Window(window::Event::Rescaled(_)) => Some(Message::Rescaled),
+                iced::Event::Window(window::Event::Unfocused) => Some(Message::Unfocused),
                 _ => None,
             }),
         ])
