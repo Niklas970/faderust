@@ -187,6 +187,11 @@ pub struct App {
     mini_prev: Option<(Size, bool)>,
     /// Strips shown when the compact window was last sized.
     mini_count: usize,
+    /// Logical window size the user chose, restored after a monitor with a
+    /// different scaling changed it (Windows rounds a little on every move).
+    size_keep: Option<Size>,
+    /// When the window last changed its scaling; the size settles after that.
+    rescaled_at: Option<Instant>,
     pub pinned: bool,
     pub hide_after: &'static str,
     pub dialog: Option<Dialog>,
@@ -368,6 +373,10 @@ pub enum Message {
     Minimize,
     ToggleMax,
     Drag,
+    /// The window got another size (logical).
+    Resized(Size),
+    /// The window moved to a monitor with another scaling.
+    Rescaled,
     /// Start resizing the window from an edge or corner.
     Resize(window::Direction),
     Quit,
@@ -1071,6 +1080,8 @@ impl App {
             mini: std::env::var_os("FADERUST_MINI").is_some(),
             mini_prev: None,
             mini_count: 0,
+            size_keep: Some(Size::new(1400.0, 860.0)),
+            rescaled_at: None,
             pinned: prefs.pinned,
             hide_after: match prefs.hide_after {
                 // Standard: only closed programs leave the desk.
@@ -1475,6 +1486,18 @@ impl App {
                     return window::drag_resize(id, direction);
                 }
             }
+            Message::Resized(size) => {
+                // Sizes during a scaling change are Windows' rounding, not a wish.
+                // (A minimised window reports no size at all.)
+                if self.rescaled_at.is_none()
+                    && !self.mini
+                    && size.width >= 200.0
+                    && size.height >= 200.0
+                {
+                    self.size_keep = Some(size);
+                }
+            }
+            Message::Rescaled => self.rescaled_at = Some(Instant::now()),
             Message::Drag => {
                 if let Some(id) = self.win_id {
                     return window::drag(id);
@@ -1601,6 +1624,32 @@ impl App {
                 if let Some(snap) = snap {
                     self.apply(&snap, dt);
                     self.ready = true;
+                }
+                // The window settled on a monitor with another scaling: give it
+                // back the size it had, down to the pixel.
+                if self
+                    .rescaled_at
+                    .is_some_and(|t| t.elapsed() > Duration::from_millis(500))
+                {
+                    self.rescaled_at = None;
+                    if let (Some(id), Some(want), false) = (self.win_id, self.size_keep, self.mini)
+                    {
+                        self.jobs.push(window::is_maximized(id).then(move |max| {
+                            if max {
+                                Task::none()
+                            } else {
+                                window::size(id).then(move |now| {
+                                    if (now.width - want.width).abs() > 0.5
+                                        || (now.height - want.height).abs() > 0.5
+                                    {
+                                        window::resize(id, want)
+                                    } else {
+                                        Task::none()
+                                    }
+                                })
+                            }
+                        }));
+                    }
                 }
                 // A program came or went: the compact window follows, keeping its height.
                 if self.mini && self.mini_count != self.shown_count() {
@@ -3343,6 +3392,11 @@ impl App {
             iced::time::every(Duration::from_millis(every)).map(Message::Frame),
             poll,
             window::close_requests().map(|_| Message::CloseRequested),
+            iced::event::listen_with(|event, _, _| match event {
+                iced::Event::Window(window::Event::Resized(size)) => Some(Message::Resized(size)),
+                iced::Event::Window(window::Event::Rescaled(_)) => Some(Message::Rescaled),
+                _ => None,
+            }),
         ])
     }
 }
