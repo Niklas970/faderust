@@ -90,6 +90,37 @@ fn bind(count: usize) -> Result<Server, String> {
     ))
 }
 
+/// How often the cables' gaps are looked at.
+const GAP_REPORT_EVERY: Duration = Duration::from_secs(30);
+
+/// Writes a line for every cable whose wire ran dry (a gap in the sound) or
+/// overflowed (audio dropped) since the last look, until the server is
+/// replaced. Gaps and drops are what a call hears as crackling.
+fn report_gaps(generation: u64, rings: &[std::sync::Arc<faderust_usbcable::ring::Ring>]) {
+    let mut seen = vec![(0u64, 0u64, 0u64); rings.len()];
+    while GENERATION.load(Ordering::SeqCst) == generation {
+        std::thread::sleep(GAP_REPORT_EVERY);
+        for (cable, (ring, last)) in rings.iter().zip(&mut seen).enumerate() {
+            let now = (
+                ring.written.load(Ordering::Relaxed),
+                ring.underruns.load(Ordering::Relaxed),
+                ring.dropped.load(Ordering::Relaxed),
+            );
+            // Without sound written there is nothing to run dry.
+            if now.0 != last.0 && (now.1 != last.1 || now.2 != last.2) {
+                log::write(&format!(
+                    "USB-Kabel {}: {} Lücken, {} Bytes verworfen (letzte {} s)",
+                    cable + 1,
+                    now.1 - last.1,
+                    now.2 - last.2,
+                    GAP_REPORT_EVERY.as_secs()
+                ));
+            }
+            *last = now;
+        }
+    }
+}
+
 /// Starts the server for `count` cables (and its attach watcher) unless it
 /// runs.
 pub fn start(count: usize) -> Result<(), String> {
@@ -100,6 +131,7 @@ pub fn start(count: usize) -> Result<(), String> {
     }
     let server = bind(count)?;
     let stopper = server.stopper();
+    let rings: Vec<_> = (0..count).map(|cable| server.ring(cable)).collect();
     *running = Some((stopper.clone(), count));
     log::write(&format!("USB-Kabel gestartet ({count})"));
     std::thread::Builder::new()
@@ -111,6 +143,10 @@ pub fn start(count: usize) -> Result<(), String> {
         })
         .map_err(|e| e.to_string())?;
     let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+    std::thread::Builder::new()
+        .name("faderust-usbcable-stats".into())
+        .spawn(move || report_gaps(generation, &rings))
+        .map_err(|e| e.to_string())?;
     std::thread::Builder::new()
         .name("faderust-usbcable-attach".into())
         .spawn(move || {
