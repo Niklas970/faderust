@@ -140,7 +140,7 @@ pub struct OutputEntry {
     pub master: Gain,
     /// Seconds of silence before a Bluetooth output is released for
     /// multipoint; 0 keeps it open.
-    #[serde(default = "default_release_secs")]
+    #[serde(default = "default_release_secs", alias = "releaseAfterS")]
     pub release_secs: u32,
 }
 
@@ -494,9 +494,10 @@ mod tests {
         assert!(!c.inputs[0].fx.denoise);
         // 0.3.8 had a per-output setting; old files still load.
         let c: Config =
-            toml::from_str("[[outputs]]\nlabel = \"A\"\ndevice = \"x\"\nreleaseAfterS = 30\n")
+            toml::from_str("[[outputs]]\nlabel = \"A\"\ndevice = \"x\"\nreleaseAfterS = 45\n")
                 .unwrap();
         assert_eq!(c.outputs[0].device, "x");
+        assert_eq!(c.outputs[0].release_secs, 45);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 /**
  * Connection to the Faderust app: a WebSocket on 127.0.0.1 (see
- * crates/app/src/remote.rs). Reconnects on its own while Faderust is closed.
+ * crates/core/src/remote.rs). Reconnects on its own while Faderust is closed.
  */
 import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
@@ -172,7 +172,7 @@ export function formatDb(gain: Gain | undefined): string {
   return `${db > 0 ? "+" : db < 0 ? "−" : ""}${Math.abs(db).toFixed(1)} dB`;
 }
 
-/** Fader travel 0…100 with the app's taper (crates/app/ui/src/lib/Fader.svelte). */
+/** Fader travel 0…100 with the app's taper (crates/gui/src/scale.rs). */
 export function faderPercent(db: number): number {
   let p: number;
   if (db <= -60) p = 0;

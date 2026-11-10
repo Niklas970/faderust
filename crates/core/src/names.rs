@@ -1,5 +1,5 @@
 //! Names of Faderust's own virtual cables ("Speakers (Faderust Cable 2)") and
-//! how to pair the two ends of a cable. Mirrors `ui/src/lib/api.js`.
+//! how to pair the two ends of a cable. Mirrors the matching in the GUI.
 
 /// Which Faderust USB cable a device name belongs to ("faderust cable 2"), if any.
 pub fn own_cable(name: &str) -> Option<String> {
@@ -24,8 +24,14 @@ pub fn cable_counterpart(output: &str, recordings: &[String]) -> String {
             .cloned()
             .unwrap_or_default();
     }
-    match output.to_lowercase().find("input") {
-        Some(i) => {
+    // Search the original text: an index into a lowercased copy may not fit it.
+    let found = output.char_indices().find(|&(i, _)| {
+        output
+            .get(i..i + 5)
+            .is_some_and(|w| w.eq_ignore_ascii_case("input"))
+    });
+    match found {
+        Some((i, _)) => {
             let word = if output[i..].starts_with('I') {
                 "Output"
             } else {
@@ -56,9 +62,11 @@ pub fn device_label(name: &str) -> String {
     } else {
         format!(" {digits}")
     };
-    let head = name[..name.to_lowercase().rfind("(faderust cable").unwrap_or(0)]
+    // Lowercasing can change the byte length: index the lowercased copy.
+    let lower = name.to_lowercase();
+    let head = lower[..lower.rfind("(faderust cable").unwrap_or(0)]
         .trim()
-        .to_lowercase();
+        .to_string();
     let starts = |words: &[&str]| words.iter().any(|w| head.starts_with(w));
     if starts(&[
         "speakers",
@@ -80,6 +88,16 @@ pub fn device_label(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn odd_unicode_names_do_not_panic() {
+        // "İ" grows by a byte when lowercased.
+        assert!(!device_label("İİ Speakers (Faderust Cable 2)").is_empty());
+        assert_eq!(
+            cable_counterpart("İ Cable Input", &[]),
+            "İ Cable Output".to_string()
+        );
+    }
 
     #[test]
     fn cable_names_pair_up() {

@@ -329,10 +329,9 @@ fn run(
 ) {
     let watch = Watch::new();
     watch.spawn_watchdog();
-    let mut engine = build(
-        &config.lock().unwrap_or_else(|e| e.into_inner()),
-        skip.as_deref(),
-    );
+    // Opening devices is slow: build from a copy, not under the lock.
+    let snapshot_config = || config.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let mut engine = build(&snapshot_config(), skip.as_deref());
     // Told once the window had time to listen.
     let mut skip_notice = skip
         .as_ref()
@@ -366,10 +365,7 @@ fn run(
                             watch.enter(DROPPING);
                             drop(engine.take());
                             watch.enter(BUILDING);
-                            engine = build(
-                                &config.lock().unwrap_or_else(|e| e.into_inner()),
-                                skip.as_deref(),
-                            );
+                            engine = build(&snapshot_config(), skip.as_deref());
                             last_maintain = None;
                             notices = Notices::default();
                             quiet = true;
@@ -923,7 +919,7 @@ fn step_db(db: f32, delta: f32) -> f32 {
 }
 
 /// Moves a desk strip like its fader in the UI (`stripChanges` in
-/// ui/src/lib/scale.js): the loudest output it plays on moves by `delta`,
+/// crates/gui/src/scale.rs): the loudest output it plays on moves by `delta`,
 /// the others follow by the same amount.
 fn strip_step(row: &mut [crate::config::Gain], delta: f32) {
     let on = row.iter().filter(|g| !g.muted);
