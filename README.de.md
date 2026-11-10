@@ -44,6 +44,8 @@
 - **Windows-Sound aus einer Hand:** Standardgeräte für Wiedergabe, Aufnahme und Anrufe sowie die Lautstärke pro Gerät.
 - **Presets, Autostart im Tray, Updates in der App** (mit Signaturprüfung) und ein **Stream-Deck-Plugin**.
 - **Kompakt und im Vordergrund.** Zwei Knöpfe in der Titelleiste: schmale Ansicht ohne Beschriftungen und „Immer im Vordergrund“, z. B. neben einem Spiel. Beides bleibt gespeichert.
+- **Mini-Mixer im Tray (optional).** Unter „Design“ lässt sich einstellen, dass ein Klick aufs Tray-Symbol einen kleinen Mixer unten rechts über der Taskbar öffnet. Er schließt sich beim Klick daneben.
+- **Lautstärke-Anzeige (optional).** Ändert das Stream Deck einen Pegel oder schaltet stumm, erscheint kurz unten am Bildschirm Name und neuer Wert. Die Anzeige nimmt keinen Fokus, lässt Klicks durch und ist unter „Design“ abschaltbar.
 - **Eigene Farben:** Akzent- und Signalfarbe frei wählbar, dunkel (OLED-Schwarz) oder hell.
 
 ## Ansichten
