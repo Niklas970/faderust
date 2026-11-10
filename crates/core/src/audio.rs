@@ -109,7 +109,6 @@ pub struct UiDevice {
 #[serde(rename_all = "camelCase")]
 pub struct UiLane {
     pub fill_ms: f32,
-    pub correction_ppm: i32,
     pub underruns: u64,
     /// Input frames lost because the output did not take them in time.
     pub dropped_frames: u64,
@@ -813,20 +812,27 @@ impl LevelDelay {
     /// Updates the measured delay of every input on every connected output
     /// it plays on.
     fn measure(&mut self, state: &UiState) {
+        // Linearised once per output / per input, not once per pair.
+        let ys: Vec<Vec<f32>> = self
+            .out_history
+            .iter()
+            .map(|h| h.iter().map(|&db| linear(db)).collect())
+            .collect();
         for (i, hist) in self.history.iter().enumerate() {
+            let mut x: Option<Vec<f32>> = None;
             for (o, out) in state.outputs.iter().enumerate() {
                 let plays = state
                     .gains
                     .get(i)
                     .and_then(|r| r.get(o))
                     .is_some_and(|g| !g.muted && g.db > -100.0);
-                let y: Vec<f32> = self.out_history[o].iter().map(|&db| linear(db)).collect();
+                let y = &ys[o];
                 if !out.connected || !plays || hist.len() != y.len() {
                     self.lag[i][o] = None;
                     continue;
                 }
-                let x: Vec<f32> = hist.iter().map(|&db| linear(db)).collect();
-                if let Some((lag, fit)) = measure_lag(&x, &y) {
+                let x = x.get_or_insert_with(|| hist.iter().map(|&db| linear(db)).collect());
+                if let Some((lag, fit)) = measure_lag(x, y) {
                     self.lag[i][o] = Some(match self.lag[i][o] {
                         Some((old, _)) => (old + (lag - old) * 0.15, fit),
                         None => (lag, fit),
@@ -1084,7 +1090,6 @@ fn snapshot(config: &Config, engine: Option<&Engine<CpalBackend>>) -> UiState {
                     let s = e.lane_stats(i, o);
                     UiLane {
                         fill_ms: s.fill_frames.load(Relaxed) as f32 * 1000.0 / rate as f32,
-                        correction_ppm: s.correction_ppm.load(Relaxed),
                         underruns: s.underruns.load(Relaxed),
                         dropped_frames: s.dropped_frames.load(Relaxed),
                         looped: e.is_loop(i, o),
