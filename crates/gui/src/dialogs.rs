@@ -811,6 +811,10 @@ fn design(app: &App) -> Element<'_, Message> {
         check(!app.prefs.osd_off)
             .label(tr("Kurze Einblendung am Bildschirmrand bei Stream Deck"))
             .on_toggle(|v| edit(Edit::Osd(v))),
+        h3("Tray-Symbol"),
+        check(app.prefs.tray_popup)
+            .label(tr("Klick öffnet einen kleinen Mixer neben der Taskbar"))
+            .on_toggle(|v| edit(Edit::TrayPopup(v))),
         h3("Helligkeit"),
         segmented(vec![
             (

@@ -730,7 +730,8 @@ struct LevelDelay {
     out_history: Vec<VecDeque<f32>>,
     /// Measured delay per input and output, in snapshots. Every input has
     /// its own: a program reaches the output by another path than a device.
-    lag: Vec<Vec<Option<f32>>>,
+    /// The second value is how well the output followed the input (0 to 1).
+    lag: Vec<Vec<Option<(f32, f32)>>>,
 }
 
 /// The longest delay held back, in snapshots (one second).
@@ -750,7 +751,7 @@ fn linear(db: f32) -> f32 {
 /// The delay in snapshots by which `y` follows `x`: the shift with the best
 /// match over the last `WINDOW` snapshots, or `None` while the signal is too
 /// flat or too unlike to tell.
-fn measure_lag(x: &[f32], y: &[f32]) -> Option<f32> {
+fn measure_lag(x: &[f32], y: &[f32]) -> Option<(f32, f32)> {
     let max = MAX_DELAY_TICKS as usize;
     if x.len() != y.len() || x.len() < WINDOW + max {
         return None;
@@ -802,7 +803,7 @@ fn measure_lag(x: &[f32], y: &[f32]) -> Option<f32> {
     } else {
         0.0
     };
-    Some((best as f32 + shift).max(0.0))
+    Some(((best as f32 + shift).max(0.0), top))
 }
 
 fn push_capped(hist: &mut VecDeque<f32>, value: f32) {
@@ -829,10 +830,10 @@ impl LevelDelay {
                     continue;
                 }
                 let x: Vec<f32> = hist.iter().map(|&db| linear(db)).collect();
-                if let Some(lag) = measure_lag(&x, &y) {
+                if let Some((lag, fit)) = measure_lag(&x, &y) {
                     self.lag[i][o] = Some(match self.lag[i][o] {
-                        Some(old) => old + (lag - old) * 0.15,
-                        None => lag,
+                        Some((old, _)) => (old + (lag - old) * 0.15, fit),
+                        None => (lag, fit),
                     });
                 }
             }
@@ -856,11 +857,24 @@ impl LevelDelay {
         }
         self.measure(state);
         // What no input of its own can tell: the mean of all measurements.
-        let all: Vec<f32> = self.lag.iter().flatten().flatten().copied().collect();
+        let all: Vec<f32> = self
+            .lag
+            .iter()
+            .flatten()
+            .flatten()
+            .map(|&(lag, _)| lag)
+            .collect();
         for (i, (input, hist)) in state.inputs.iter_mut().zip(&self.history).enumerate() {
-            let own: Vec<f32> = self.lag[i].iter().flatten().copied().collect();
-            let ms = if !own.is_empty() {
-                own.iter().sum::<f32>() / own.len() as f32 * tick
+            // The output that follows this input best is the one whose delay
+            // counts: another output mixes in other sources, and an average
+            // over outputs with different delays would fit none of them.
+            let own = self.lag[i]
+                .iter()
+                .flatten()
+                .max_by(|a, b| a.1.total_cmp(&b.1))
+                .map(|&(lag, _)| lag);
+            let ms = if let Some(lag) = own {
+                lag * tick
             } else if !all.is_empty() {
                 all.iter().sum::<f32>() / all.len() as f32 * tick
             } else {
@@ -1236,6 +1250,43 @@ mod tests {
         assert!(osd_level(-6.0).ends_with("-6.0 dB"));
         assert!(osd_level(3.0).starts_with('+'));
         assert!(osd_level(-120.0).len() <= 4);
+    }
+
+    #[test]
+    fn the_best_following_output_decides_the_delay() {
+        use super::UiLane;
+        // One input plays on two outputs: the first repeats it 4 snapshots
+        // later, the second 9 snapshots later but mixed with other sound.
+        let raw = |t: usize, seed: usize| -> f32 {
+            let v = ((t * 37 + seed * 7 + 11) % 17) as f32 / 17.0;
+            -50.0 + 40.0 * v
+        };
+        let mut delay = LevelDelay::default();
+        let (mut shown, mut clean) = (vec![], vec![]);
+        for t in 0..220 {
+            let o0 = if t >= 4 { raw(t - 4, 0) } else { -120.0 };
+            let o1 = if t >= 9 {
+                0.5 * raw(t - 9, 0) + 0.5 * raw(t, 5)
+            } else {
+                -120.0
+            };
+            let g = Gain {
+                db: 0.0,
+                muted: false,
+            };
+            let mut state = UiState {
+                inputs: vec![ui_device(true, raw(t, 0), None)],
+                outputs: vec![ui_device(true, o0, Some(0)), ui_device(true, o1, Some(0))],
+                gains: vec![vec![g, g]],
+                lanes: vec![vec![UiLane::default(); 2]],
+            };
+            delay.apply(&mut state);
+            shown.push(state.inputs[0].level_db);
+            clean.push(o0);
+        }
+        for t in 200..220 {
+            assert!((shown[t] - clean[t]).abs() < 1.5, "t={t}");
+        }
     }
 
     #[test]

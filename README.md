@@ -123,7 +123,7 @@ Note: the cable is still an experiment and has been tested on little hardware.
 - After a release, Bluetooth needs about a second until sound returns. If you do not want that, set the output to "Never release".
 - The "program → device" assignment uses the same undocumented Windows interface as the volume mixer in the settings.
 
-Settings: `%APPDATA%\io.github.niklas970.faderust\config.toml`, next to it the log `faderust.log`, which helps with errors.
+Settings: `%APPDATA%\Faderust\config.toml`, next to it the log `faderust.log`, which helps with errors.
 
 ## Development
 
