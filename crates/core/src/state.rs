@@ -287,25 +287,42 @@ pub fn get_usb_cable(state: &AppState) -> cable::Status {
 
 /// Turns Faderust's USB cable on or off and remembers the choice.
 pub fn set_usb_cable(enabled: bool, state: &AppState) -> Result<(), String> {
-    let mut config = state.config.lock().unwrap_or_else(|e| e.into_inner());
+    // Starting the server can wait for a busy port: not under the lock.
+    let cables = state
+        .config
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .usb_cables;
     if enabled {
-        cable::start(cable::clamp_count(config.usb_cables))?;
+        cable::start(cable::clamp_count(cables))?;
     } else {
         cable::stop();
     }
-    config.usb_cable = enabled;
+    let config = {
+        let mut config = state.config.lock().unwrap_or_else(|e| e.into_inner());
+        config.usb_cable = enabled;
+        config.clone()
+    };
     config.save(&state.path).map_err(|e| e.to_string())
 }
 
 /// How many USB cables to offer; a running server restarts with the new number.
 pub fn set_usb_cable_count(count: u8, state: &AppState) -> Result<(), String> {
     let count = cable::clamp_count(count);
-    let mut config = state.config.lock().unwrap_or_else(|e| e.into_inner());
-    config.usb_cables = count as u8;
-    if config.usb_cable {
+    let enabled = {
+        let mut config = state.config.lock().unwrap_or_else(|e| e.into_inner());
+        config.usb_cables = count as u8;
+        config.usb_cable
+    };
+    if enabled {
         cable::stop();
         cable::start(count)?;
     }
+    let config = state
+        .config
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     config.save(&state.path).map_err(|e| e.to_string())
 }
 
@@ -377,8 +394,13 @@ pub fn save_config(config: Config, state: &AppState) -> Result<(), String> {
 
 /// Edits the presets and writes the file right away.
 pub fn edit_presets(state: &AppState, f: impl FnOnce(&mut Config) -> bool) -> Result<bool, String> {
-    let mut config = state.config.lock().unwrap_or_else(|e| e.into_inner());
-    let changed = f(&mut config);
+    // Edit under the lock, write the copy outside it: a slow disk must not
+    // freeze the window.
+    let (changed, config) = {
+        let mut config = state.config.lock().unwrap_or_else(|e| e.into_inner());
+        let changed = f(&mut config);
+        (changed, config.clone())
+    };
     config.save(&state.path).map_err(|e| {
         format!(
             "{}: {e}",

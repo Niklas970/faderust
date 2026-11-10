@@ -220,20 +220,23 @@ impl Lane {
         }
 
         let samples = needed * BUS_CHANNELS;
-        let chunk = self
-            .consumer
-            .read_chunk(samples)
-            .expect("checked available slots");
+        // Never panic in the audio callback: silence is the fallback.
+        let Ok(chunk) = self.consumer.read_chunk(samples) else {
+            return self.silence();
+        };
         let (a, b) = chunk.as_slices();
         self.in_buf[..a.len()].copy_from_slice(a);
         self.in_buf[a.len()..samples].copy_from_slice(b);
         chunk.commit_all();
 
-        let input = InterleavedSlice::new(&self.in_buf[..samples], BUS_CHANNELS, needed)
-            .expect("buffer sized for frames");
+        let Ok(input) = InterleavedSlice::new(&self.in_buf[..samples], BUS_CHANNELS, needed) else {
+            return self.silence();
+        };
         let out_frames = self.out_buf.len() / BUS_CHANNELS;
-        let mut output = InterleavedSlice::new_mut(&mut self.out_buf, BUS_CHANNELS, out_frames)
-            .expect("buffer sized for frames");
+        let Ok(mut output) = InterleavedSlice::new_mut(&mut self.out_buf, BUS_CHANNELS, out_frames)
+        else {
+            return self.silence();
+        };
         match self
             .resampler
             .process_into_buffer(&input, &mut output, None)

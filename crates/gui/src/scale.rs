@@ -1,4 +1,4 @@
-//! Gain scale of the faders, same taper as `ui/src/lib/scale.js`.
+//! Gain scale of the faders, same taper as the Stream Deck plugin.
 
 pub const OFF: f32 = -120.0;
 

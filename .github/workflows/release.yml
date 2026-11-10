@@ -55,6 +55,10 @@ jobs:
           cp streamdeck/dist/*.streamDeckPlugin stage/resources/
           jq -r .Version streamdeck/com.niklas970.faderust.sdPlugin/manifest.json \
             > stage/resources/streamdeck-plugin.version
+      # A tag may sit on a commit CI never ran on: test before shipping.
+      - run: cargo test --workspace
+      - run: npm test
+        working-directory: streamdeck
       - run: cargo build --release -p faderust
       - name: Build setup
         run: |
