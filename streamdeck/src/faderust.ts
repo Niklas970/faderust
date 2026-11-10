@@ -15,14 +15,23 @@ const RETRY_MS = 2000;
  * this Windows user can read. `FADERUST_TOKEN_FILE` is for tests.
  */
 export function readToken(): string {
-  const file =
-    process.env.FADERUST_TOKEN_FILE ||
-    join(process.env.APPDATA ?? "", "io.github.niklas970.faderust", "remote.token");
-  try {
-    return readFileSync(file, "utf8").trim();
-  } catch {
-    return "";
+  const appdata = process.env.APPDATA ?? "";
+  // Faderust moved its folder from the old app id to "Faderust" (0.8).
+  const files = process.env.FADERUST_TOKEN_FILE
+    ? [process.env.FADERUST_TOKEN_FILE]
+    : [
+        join(appdata, "Faderust", "remote.token"),
+        join(appdata, "io.github.niklas970.faderust", "remote.token"),
+      ];
+  for (const file of files) {
+    try {
+      const token = readFileSync(file, "utf8").trim();
+      if (token) return token;
+    } catch {
+      // try the next place
+    }
   }
+  return "";
 }
 
 export type Gain = { db: number; muted: boolean };

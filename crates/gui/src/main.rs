@@ -21,7 +21,7 @@ mod scale;
 mod shell;
 mod style;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
@@ -447,7 +447,11 @@ impl Host for GuiHost {
     }
 }
 
-/// The folder the Tauri app uses too, so the settings carry over.
+/// Name of Faderust's data folder (settings, log, remote token).
+const DATA_DIR: &str = "Faderust";
+/// The name before 0.8, after the app id; its files move to [`DATA_DIR`].
+const OLD_DATA_DIR: &str = "io.github.niklas970.faderust";
+
 fn config_dir() -> PathBuf {
     let base = if cfg!(windows) {
         std::env::var_os("APPDATA").map(PathBuf::from)
@@ -456,8 +460,27 @@ fn config_dir() -> PathBuf {
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
     };
-    base.unwrap_or_else(std::env::temp_dir)
-        .join("io.github.niklas970.faderust")
+    data_dir_in(&base.unwrap_or_else(std::env::temp_dir))
+}
+
+/// The data folder below `base`. An existing folder under the old name moves
+/// along, so nothing is lost; if it cannot be renamed (a file in use), its
+/// files are copied.
+fn data_dir_in(base: &Path) -> PathBuf {
+    let new = base.join(DATA_DIR);
+    let old = base.join(OLD_DATA_DIR);
+    if new.exists() || !old.is_dir() || std::fs::rename(&old, &new).is_ok() {
+        return new;
+    }
+    // Could not rename (a file in use): copy what is there.
+    if std::fs::create_dir_all(&new).is_ok() {
+        if let Ok(entries) = std::fs::read_dir(&old) {
+            for e in entries.flatten().filter(|e| e.path().is_file()) {
+                let _ = std::fs::copy(e.path(), new.join(e.file_name()));
+            }
+        }
+    }
+    new
 }
 
 /// A file shipped next to the program (`resources/`), when there is one.
@@ -3520,5 +3543,55 @@ mod glide_tests {
         }
         assert_eq!(pos, want);
         assert!(!glide(&mut pos, &mut vel, 0.0, 1.0 / 90.0));
+    }
+}
+
+#[cfg(test)]
+mod data_dir_tests {
+    use super::*;
+
+    fn temp(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("faderust-dd-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn old_folder_moves_to_the_new_name() {
+        let base = temp("move");
+        std::fs::create_dir_all(base.join(OLD_DATA_DIR)).unwrap();
+        std::fs::write(base.join(OLD_DATA_DIR).join("config.toml"), "x").unwrap();
+        let dir = data_dir_in(&base);
+        assert_eq!(dir, base.join("Faderust"));
+        assert_eq!(
+            std::fs::read_to_string(dir.join("config.toml")).unwrap(),
+            "x"
+        );
+        assert!(!base.join(OLD_DATA_DIR).exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn an_existing_new_folder_is_left_alone() {
+        let base = temp("keep");
+        std::fs::create_dir_all(base.join(OLD_DATA_DIR)).unwrap();
+        std::fs::create_dir_all(base.join("Faderust")).unwrap();
+        std::fs::write(base.join("Faderust").join("config.toml"), "new").unwrap();
+        std::fs::write(base.join(OLD_DATA_DIR).join("config.toml"), "old").unwrap();
+        let dir = data_dir_in(&base);
+        assert_eq!(
+            std::fs::read_to_string(dir.join("config.toml")).unwrap(),
+            "new"
+        );
+        assert!(base.join(OLD_DATA_DIR).exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_fresh_start_just_names_the_folder() {
+        let base = temp("fresh");
+        assert_eq!(data_dir_in(&base), base.join("Faderust"));
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
