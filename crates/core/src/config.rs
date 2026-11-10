@@ -186,7 +186,7 @@ pub struct Config {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Sound {
     pub name: String,
-    /// Path of the WAV file.
+    /// Path of the WAV or MP3 file.
     pub path: String,
 }
 

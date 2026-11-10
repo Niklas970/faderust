@@ -635,7 +635,7 @@ fn soundboard(app: &App) -> Element<'_, Message> {
         ]
         .spacing(8),
         if app.sounds.is_empty() {
-            hint("Noch keine Sounds. Füge WAV-Dateien hinzu.")
+            hint("Noch keine Sounds. Füge WAV- oder MP3-Dateien hinzu.")
         } else {
             list.into()
         },

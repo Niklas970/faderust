@@ -33,7 +33,7 @@ const TABLE: &[(&str, &str)] = &[
     ("Soundboard", "Soundboard"),
     ("Sounds hinzufügen …", "Add sounds …"),
     ("Alle stoppen", "Stop all"),
-    ("Noch keine Sounds. Füge WAV-Dateien hinzu.", "No sounds yet. Add WAV files."),
+    ("Noch keine Sounds. Füge WAV- oder MP3-Dateien hinzu.", "No sounds yet. Add WAV or MP3 files."),
     (
         "Ein Klick spielt den Sound auf dem Streifen „Soundboard“. Dort stellst du Lautstärke und Ausgänge ein.",
         "A click plays the sound on the “Soundboard” strip. Set volume and outputs there.",

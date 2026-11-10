@@ -153,11 +153,20 @@ pub fn open(mut data: InputCallback) -> SoundStream {
     }
 }
 
-/// Reads a WAV file (8 to 32 bit integer or float, any rate, mono or more
-/// channels) and converts it to stereo at [`RATE`].
+/// Reads a WAV or MP3 file (by its extension) and converts it to stereo at
+/// [`RATE`]. WAV: 8 to 32 bit integer or float, any rate, mono or more
+/// channels. MP3: MPEG Layer III.
 pub fn load(path: &Path) -> Result<Sample, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-    decode(std::io::BufReader::new(file))
+    let reader = std::io::BufReader::new(file);
+    let mp3 = path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("mp3"));
+    if mp3 {
+        decode_mp3(reader)
+    } else {
+        decode(reader)
+    }
 }
 
 fn decode<R: Read + Seek>(reader: R) -> Result<Sample, String> {
@@ -181,18 +190,33 @@ fn decode<R: Read + Seek>(reader: R) -> Result<Sample, String> {
         }
     };
     // To stereo frames.
-    let mut stereo: Vec<[f32; 2]> = samples
+    let stereo: Vec<[f32; 2]> = samples
         .chunks_exact(channels)
         .map(|f| match channels {
             1 => [f[0], f[0]],
             _ => [f[0], f[1]],
         })
         .collect();
+    finish(stereo, spec.sample_rate)
+}
+
+/// Decodes an MP3 (MPEG Layer III) with a pure Rust decoder.
+fn decode_mp3<R: Read>(reader: R) -> Result<Sample, String> {
+    let (header, samples) = puremp3::read_mp3(reader).map_err(|e| e.to_string())?;
+    let rate = header.sample_rate.hz();
+    // Stop early on a file far beyond the limit instead of decoding it all.
+    let cap = MAX_SECONDS * rate as usize + 1;
+    let stereo: Vec<[f32; 2]> = samples.take(cap).map(|(l, r)| [l, r]).collect();
+    finish(stereo, rate)
+}
+
+/// Resamples to [`RATE`] and checks the length.
+fn finish(mut stereo: Vec<[f32; 2]>, rate: u32) -> Result<Sample, String> {
     if stereo.is_empty() {
         return Err("empty file".into());
     }
-    if spec.sample_rate != RATE {
-        stereo = resample(&stereo, spec.sample_rate);
+    if rate != RATE {
+        stereo = resample(&stereo, rate);
     }
     if stereo.len() > MAX_SECONDS * RATE as usize {
         return Err(format!("longer than {MAX_SECONDS} s"));
@@ -256,6 +280,23 @@ mod tests {
     #[test]
     fn garbage_is_an_error() {
         assert!(decode(Cursor::new(b"not a wav".to_vec())).is_err());
+    }
+
+    #[test]
+    fn decodes_an_mp3_to_stereo_at_the_engine_rate() {
+        let bytes = include_bytes!("../testdata/tone.mp3");
+        let s = decode_mp3(Cursor::new(&bytes[..])).unwrap();
+        // About half a second of a 440 Hz tone, left equals right.
+        let frames = s.data.len() / 2;
+        assert!(frames > RATE as usize * 4 / 10 && frames < RATE as usize * 7 / 10);
+        assert!(s.data.chunks_exact(2).all(|f| f[0] == f[1]));
+        let peak = s.data.iter().fold(0.0_f32, |m, v| m.max(v.abs()));
+        assert!(peak > 0.1 && peak <= 1.01, "peak {peak}");
+    }
+
+    #[test]
+    fn rejects_a_broken_mp3() {
+        assert!(decode_mp3(Cursor::new(b"not an mp3 at all".to_vec())).is_err());
     }
 
     #[test]
