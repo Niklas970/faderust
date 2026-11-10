@@ -1196,7 +1196,7 @@ dependencies = [
 
 [[package]]
 name = "faderust"
-version = "0.7.9"
+version = "0.8.0"
 dependencies = [
  "embed-resource",
  "faderust-core",
@@ -1212,7 +1212,7 @@ dependencies = [
 
 [[package]]
 name = "faderust-core"
-version = "0.7.9"
+version = "0.8.0"
 dependencies = [
  "base64",
  "faderust-engine",
@@ -1227,7 +1227,7 @@ dependencies = [
 
 [[package]]
 name = "faderust-engine"
-version = "0.7.9"
+version = "0.8.0"
 dependencies = [
  "audioadapter-buffers",
  "cpal",
@@ -1242,7 +1242,7 @@ dependencies = [
 
 [[package]]
 name = "faderust-usbcable"
-version = "0.7.9"
+version = "0.8.0"
 
 [[package]]
 name = "fastrand"
