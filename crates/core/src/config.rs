@@ -177,6 +177,17 @@ pub struct Config {
     /// How many USB cables it offers (1 to 4; 0 counts as 1).
     #[serde(default)]
     pub usb_cables: u8,
+    /// Sounds of the soundboard, see [`faderust_engine::soundboard`].
+    #[serde(default)]
+    pub sounds: Vec<Sound>,
+}
+
+/// One button of the soundboard.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Sound {
+    pub name: String,
+    /// Path of the WAV or MP3 file.
+    pub path: String,
 }
 
 /// Resizes `gains` to `inputs` × `outputs` (new pairs at 0 dB) and clamps.
@@ -347,6 +358,7 @@ mod tests {
             presets: vec![],
             usb_cable: false,
             usb_cables: 1,
+            sounds: Vec::new(),
         }
         .normalized()
     }

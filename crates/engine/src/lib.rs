@@ -18,6 +18,7 @@ pub mod lang;
 pub mod matrix;
 pub mod meter;
 pub mod node;
+pub mod soundboard;
 
 pub use duck::{DuckSettings, InputDuck, Levels};
 pub use engine::{

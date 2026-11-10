@@ -137,6 +137,7 @@ pub fn view(app: &App, d: Dialog) -> Element<'_, Message> {
         Dialog::Settings => settings(app),
         Dialog::Log => log(app),
         Dialog::Selftest => selftest(app),
+        Dialog::Soundboard => soundboard(app),
     }
 }
 
@@ -606,6 +607,46 @@ fn presets(app: &App) -> Element<'_, Message> {
     frame("Presets".into(), 520.0, false, body.into(), no_footer())
 }
 
+fn soundboard(app: &App) -> Element<'_, Message> {
+    let mut list = column![].spacing(8);
+    for (i, s) in app.sounds.iter().enumerate() {
+        list = list.push(
+            row![
+                button(
+                    text(s.name.clone())
+                        .size(14)
+                        .color(look_text(Look::Primary))
+                )
+                .width(Length::Fill)
+                .padding([8, 14])
+                .on_press(edit(Edit::SoundPlay(i)))
+                .style(flat(Look::Primary)),
+                btn("Entfernen", edit(Edit::SoundRemove(i)), false),
+            ]
+            .spacing(8)
+            .align_y(Vertical::Center),
+        );
+    }
+    let body = column![
+        error_line(app),
+        row![
+            btn("Sounds hinzufügen …", edit(Edit::SoundAdd), false),
+            btn("Alle stoppen", edit(Edit::SoundStop), false),
+        ]
+        .spacing(8),
+        if app.sounds.is_empty() {
+            hint("Noch keine Sounds. Füge WAV- oder MP3-Dateien hinzu.")
+        } else {
+            list.into()
+        },
+        hint(
+            "Ein Klick spielt den Sound auf dem Streifen „Soundboard“. Dort stellst du Lautstärke und Ausgänge ein."
+        ),
+    ]
+    .spacing(10);
+    frame("Soundboard".into(), 520.0, false, body.into(), no_footer())
+}
+
 fn windows(app: &App) -> Element<'_, Message> {
     let mut body = column![error_line(app)].spacing(10);
     match &app.win {
@@ -805,6 +846,19 @@ fn design(app: &App) -> Element<'_, Message> {
                 "Aus".into(),
                 app.prefs.output_edge_off,
                 edit(Edit::OutputEdge(false))
+            ),
+        ]),
+        h3("Soundboard"),
+        segmented(vec![
+            (
+                "An".into(),
+                app.prefs.soundboard,
+                edit(Edit::Soundboard(true))
+            ),
+            (
+                "Aus".into(),
+                !app.prefs.soundboard,
+                edit(Edit::Soundboard(false))
             ),
         ]),
         h3("Lautstärke-Anzeige"),

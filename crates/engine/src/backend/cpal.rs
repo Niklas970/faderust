@@ -21,6 +21,8 @@ pub const PROGRAM_PREFIX: &str = "app:";
 /// A device stream, or on Windows a program recording.
 pub enum CpalStream {
     Device(Stream),
+    /// The soundboard input, see [`crate::soundboard`].
+    Sound(crate::soundboard::SoundStream),
     #[cfg(windows)]
     Program(crate::apps::capture::ProgramCapture),
 }
@@ -99,6 +101,10 @@ impl AudioBackend for CpalBackend {
             .collect();
         #[cfg(windows)]
         list.extend(program_inputs());
+        list.push(DeviceInfo {
+            id: crate::soundboard::ID.into(),
+            name: "Soundboard".into(),
+        });
         Ok(list)
     }
 
@@ -120,6 +126,12 @@ impl AudioBackend for CpalBackend {
     }
 
     fn input_format(&self, id: &str) -> Result<StreamFormat, BackendError> {
+        if id == crate::soundboard::ID {
+            return Ok(StreamFormat {
+                sample_rate: crate::soundboard::RATE,
+                channels: crate::soundboard::CHANNELS,
+            });
+        }
         #[cfg(windows)]
         if id.starts_with(PROGRAM_PREFIX) {
             return Ok(StreamFormat {
@@ -149,6 +161,10 @@ impl AudioBackend for CpalBackend {
         data: InputCallback,
         error: ErrorCallback,
     ) -> Result<CpalStream, BackendError> {
+        if id == crate::soundboard::ID {
+            let _ = error;
+            return Ok(CpalStream::Sound(crate::soundboard::open(data)));
+        }
         #[cfg(windows)]
         if let Some(exe) = id.strip_prefix(PROGRAM_PREFIX) {
             return crate::apps::capture::open(exe, data, error)
@@ -201,7 +217,7 @@ impl AudioBackend for CpalBackend {
 
     fn reports_own_end(&self, id: &str) -> bool {
         // A recording signals an error once its program quits.
-        id.starts_with(PROGRAM_PREFIX)
+        id.starts_with(PROGRAM_PREFIX) || id == crate::soundboard::ID
     }
 }
 

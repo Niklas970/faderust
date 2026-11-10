@@ -21,6 +21,8 @@ pub enum Glyph {
     Sliders,
     /// A half-filled disc (design).
     Disc,
+    /// A music note (soundboard).
+    Note,
     /// Window buttons: minimise, maximise, close.
     WinMin,
     WinMax,
@@ -171,6 +173,16 @@ impl<M> canvas::Program<M> for Icon {
                     );
                     f.fill(&knob, Fill::from(self.color));
                 }
+            }
+            Glyph::Note => {
+                let head = Path::circle(p(5.2, 12.0), 2.6 * k);
+                f.fill(&head, Fill::from(self.color));
+                f.stroke(&Path::line(p(7.8, 12.0), p(7.8, 2.8)), line);
+                let flag = Path::new(|b| {
+                    b.move_to(p(7.8, 2.8));
+                    b.bezier_curve_to(p(10.5, 3.5), p(12.5, 5.0), p(12.0, 8.0));
+                });
+                f.stroke(&flag, line);
             }
             Glyph::WinMin => {
                 f.stroke(&Path::line(p(3.0, 8.0), p(13.0, 8.0)), line);

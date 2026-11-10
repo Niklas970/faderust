@@ -574,6 +574,7 @@ mod tests {
             presets: vec![],
             usb_cable: false,
             usb_cables: 1,
+            sounds: Vec::new(),
         }
         .normalized();
         let json = serde_json::to_value(Push::State(&State::of(&config))).unwrap();
