@@ -807,6 +807,10 @@ fn design(app: &App) -> Element<'_, Message> {
                 edit(Edit::OutputEdge(false))
             ),
         ]),
+        h3("Tray-Symbol"),
+        check(app.prefs.tray_popup)
+            .label(tr("Klick öffnet einen kleinen Mixer neben der Taskbar"))
+            .on_toggle(|v| edit(Edit::TrayPopup(v))),
         h3("Helligkeit"),
         segmented(vec![
             (

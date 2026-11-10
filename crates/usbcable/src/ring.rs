@@ -15,10 +15,19 @@ const KEEP_QUEUED: usize = RATE as usize / 100 * FRAME_BYTES; // 10 ms
 /// Reads (1 ms each) over which a gap holds the last frame.
 const HOLD_READS: u32 = 5;
 
+/// Reads (1 ms each) after the last write that still count as one stream:
+/// a read that finds the wire dry within this time is a gap in the sound.
+/// Later it is only that nobody is playing.
+const ACTIVE_READS: u32 = 50;
+
 #[derive(Default)]
 pub struct Ring {
     /// Consecutive reads that found too little data.
     gap: AtomicU32,
+    /// `written` at the last read, to see whether anything arrived since.
+    last_written: AtomicU64,
+    /// Reads left that count a dry wire as a gap, see [`ACTIVE_READS`].
+    active: AtomicU32,
     bytes: Mutex<VecDeque<u8>>,
     pub written: AtomicU64,
     pub underruns: AtomicU64,
@@ -69,6 +78,16 @@ impl Ring {
     }
 
     fn read_inner(&self, out: &mut [u8]) {
+        let written = self.written.load(Ordering::Relaxed);
+        if written != self.last_written.swap(written, Ordering::Relaxed) {
+            self.active.store(ACTIVE_READS, Ordering::Relaxed);
+        }
+        // Only the host's one read thread gets here, so load and store are enough.
+        let left = self.active.load(Ordering::Relaxed);
+        let counts = left > 0;
+        if counts {
+            self.active.store(left - 1, Ordering::Relaxed);
+        }
         let mut q = self.bytes.lock().unwrap_or_else(|e| e.into_inner());
         let n = out.len().min(q.len());
         for (slot, byte) in out.iter_mut().zip(q.drain(..n)) {
@@ -88,7 +107,9 @@ impl Ring {
             for (i, slot) in out[n..].iter_mut().enumerate() {
                 *slot = last[i % FRAME_BYTES];
             }
-            self.underruns.fetch_add(1, Ordering::Relaxed);
+            if counts {
+                self.underruns.fetch_add(1, Ordering::Relaxed);
+            }
         } else {
             self.gap.store(0, Ordering::Relaxed);
         }
@@ -119,6 +140,27 @@ mod tests {
         r.read(&mut out);
         assert_eq!(r.take_peaks(), (3000, 3000));
         assert_eq!(r.take_peaks(), (0, 0));
+    }
+
+    #[test]
+    fn an_idle_wire_is_no_gap_but_a_dry_stream_is() {
+        let r = Ring::new();
+        let mut out = [0u8; 6];
+        // Nobody plays: reading silence is not a gap.
+        for _ in 0..200 {
+            r.read(&mut out);
+        }
+        assert_eq!(r.underruns.load(Ordering::Relaxed), 0);
+        // Sound arrives, then stops short: the next reads are gaps for a while …
+        r.write(&[1u8; 6]);
+        for _ in 0..200 {
+            r.read(&mut out);
+        }
+        let gaps = r.underruns.load(Ordering::Relaxed);
+        assert_eq!(gaps, u64::from(ACTIVE_READS - 1));
+        // … and idle again afterwards.
+        r.read(&mut out);
+        assert_eq!(r.underruns.load(Ordering::Relaxed), gaps);
     }
 
     #[test]

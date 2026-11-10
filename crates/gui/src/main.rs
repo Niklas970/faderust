@@ -21,7 +21,7 @@ mod scale;
 mod shell;
 mod style;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
@@ -40,8 +40,8 @@ use iced::gradient;
 use iced::widget::canvas::{self, Canvas};
 use iced::widget::{button, column, container, image, row, space, stack};
 use iced::{
-    window, Background, Border, Color, Element, Font, Length, Shadow, Size, Subscription, Task,
-    Theme,
+    window, Background, Border, Color, Element, Font, Length, Point, Shadow, Size, Subscription,
+    Task, Theme,
 };
 
 use fader::{Fader, Kind};
@@ -185,13 +185,23 @@ pub struct App {
     pub mini: bool,
     /// Window size and pin state to restore when leaving mini mode.
     mini_prev: Option<(Size, bool)>,
+    /// The compact window was opened from the tray icon and closes when it loses focus.
+    popup: bool,
+    /// The popup switched compact mode on, so it switches it off again.
+    popup_mini: bool,
+    popup_at: Option<Instant>,
     /// Strips shown when the compact window was last sized.
     mini_count: usize,
     /// Logical window size the user chose, restored after a monitor with a
     /// different scaling changed it (Windows rounds a little on every move).
     size_keep: Option<Size>,
-    /// When the window last changed its scaling; the size settles after that.
+    /// When the window last changed its scaling or size during a move across
+    /// monitors; the size settles after that.
     rescaled_at: Option<Instant>,
+    /// When that move across monitors began.
+    burst_from: Option<Instant>,
+    /// Recent window sizes, to find the one from before a monitor change.
+    size_log: Vec<(Instant, Size)>,
     pub pinned: bool,
     pub hide_after: &'static str,
     pub dialog: Option<Dialog>,
@@ -339,6 +349,7 @@ pub enum Edit {
     InstallDeck,
     Mode(&'static str),
     OutputEdge(bool),
+    TrayPopup(bool),
     AccentHex(String),
     SignalHex(String),
     Accent(String),
@@ -379,6 +390,10 @@ pub enum Message {
     LogAction(iced::widget::text_editor::Action),
     /// The window got another size (logical).
     Resized(Size),
+    /// The window lost focus (closes the tray popup).
+    Unfocused,
+    /// Tray popup: the screen size, to place the window at its corner.
+    PopupAt(Option<Size>),
     /// The window moved to a monitor with another scaling.
     Rescaled,
     /// Start resizing the window from an edge or corner.
@@ -451,7 +466,11 @@ impl Host for GuiHost {
     }
 }
 
-/// The folder the Tauri app uses too, so the settings carry over.
+/// Name of Faderust's data folder (settings, log, remote token).
+const DATA_DIR: &str = "Faderust";
+/// The name before 0.8, after the app id; its files move to [`DATA_DIR`].
+const OLD_DATA_DIR: &str = "io.github.niklas970.faderust";
+
 fn config_dir() -> PathBuf {
     let base = if cfg!(windows) {
         std::env::var_os("APPDATA").map(PathBuf::from)
@@ -460,8 +479,27 @@ fn config_dir() -> PathBuf {
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
     };
-    base.unwrap_or_else(std::env::temp_dir)
-        .join("io.github.niklas970.faderust")
+    data_dir_in(&base.unwrap_or_else(std::env::temp_dir))
+}
+
+/// The data folder below `base`. An existing folder under the old name moves
+/// along, so nothing is lost; if it cannot be renamed (a file in use), its
+/// files are copied.
+fn data_dir_in(base: &Path) -> PathBuf {
+    let new = base.join(DATA_DIR);
+    let old = base.join(OLD_DATA_DIR);
+    if new.exists() || !old.is_dir() || std::fs::rename(&old, &new).is_ok() {
+        return new;
+    }
+    // Could not rename (a file in use): copy what is there.
+    if std::fs::create_dir_all(&new).is_ok() {
+        if let Ok(entries) = std::fs::read_dir(&old) {
+            for e in entries.flatten().filter(|e| e.path().is_file()) {
+                let _ = std::fs::copy(e.path(), new.join(e.file_name()));
+            }
+        }
+    }
+    new
 }
 
 /// A file shipped next to the program (`resources/`), when there is one.
@@ -838,6 +876,37 @@ impl App {
         }
     }
 
+    /// Opens the compact mixer at the tray icon, or closes it again.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    fn toggle_popup(&mut self) -> Task<Message> {
+        if self.popup {
+            return self.close_popup();
+        }
+        self.popup = true;
+        self.popup_at = Some(Instant::now());
+        self.popup_mini = !self.mini;
+        let enter = if self.mini {
+            Task::none()
+        } else {
+            self.handle(Message::ToggleMini)
+        };
+        let place = match self.win_id {
+            Some(id) => window::monitor_size(id).map(Message::PopupAt),
+            None => Task::none(),
+        };
+        Task::batch([self.show(), enter, place])
+    }
+
+    fn close_popup(&mut self) -> Task<Message> {
+        self.popup = false;
+        let leave = if self.mini && self.popup_mini {
+            self.handle(Message::ToggleMini)
+        } else {
+            Task::none()
+        };
+        Task::batch([leave, self.hide()])
+    }
+
     fn show(&mut self) -> Task<Message> {
         self.visible.store(true, Ordering::Relaxed);
         match self.win_id {
@@ -1086,9 +1155,14 @@ impl App {
             },
             mini: std::env::var_os("FADERUST_MINI").is_some(),
             mini_prev: None,
+            popup: false,
+            popup_mini: false,
+            popup_at: None,
             mini_count: 0,
             size_keep: Some(Size::new(1400.0, 860.0)),
             rescaled_at: None,
+            burst_from: None,
+            size_log: Vec::new(),
             pinned: prefs.pinned,
             hide_after: match prefs.hide_after {
                 // Standard: only closed programs leave the desk.
@@ -1422,6 +1496,24 @@ impl App {
                 }
             }
             Message::DismissNotice => self.notice = None,
+            Message::Unfocused => {
+                // Not right after opening: the window is still taking focus.
+                let fresh = self
+                    .popup_at
+                    .is_some_and(|t| t.elapsed() < Duration::from_millis(400));
+                if self.popup && !fresh {
+                    return self.close_popup();
+                }
+            }
+            Message::PopupAt(screen) => {
+                if let (Some(id), Some(screen)) = (self.win_id, screen) {
+                    // Bottom right, above the taskbar.
+                    let width = Self::mini_width(self.shown_count());
+                    let x = (screen.width - width - 12.0).max(0.0);
+                    let y = (screen.height - 360.0 - 56.0).max(0.0);
+                    return window::move_to(id, Point::new(x, y));
+                }
+            }
             Message::ToggleMini => {
                 if self.mini {
                     self.mini = false;
@@ -1497,15 +1589,26 @@ impl App {
             Message::Resized(size) => {
                 // Sizes during a scaling change are Windows' rounding, not a wish.
                 // (A minimised window reports no size at all.)
-                if self.rescaled_at.is_none()
-                    && !self.mini
-                    && size.width >= 200.0
-                    && size.height >= 200.0
-                {
-                    self.size_keep = Some(size);
+                if !self.mini && size.width >= 200.0 && size.height >= 200.0 {
+                    if self.rescaled_at.is_none() {
+                        self.size_keep = Some(size);
+                        self.size_log.push((Instant::now(), size));
+                        if self.size_log.len() > 256 {
+                            self.size_log.remove(0);
+                        }
+                    } else {
+                        // Still moving across monitors: wait on.
+                        self.rescaled_at = Some(Instant::now());
+                    }
                 }
             }
-            Message::Rescaled => self.rescaled_at = Some(Instant::now()),
+            Message::Rescaled => {
+                let now = Instant::now();
+                if self.rescaled_at.is_none() {
+                    self.burst_from = Some(now);
+                }
+                self.rescaled_at = Some(now);
+            }
             Message::LogAction(action) => {
                 // Read-only: selecting and copying only.
                 if !action.is_edit() {
@@ -1611,6 +1714,14 @@ impl App {
                     for a in tray.poll() {
                         match a {
                             shell::tray::Action::Show => show = true,
+                            shell::tray::Action::Click => {
+                                if self.prefs.tray_popup {
+                                    let t = self.toggle_popup();
+                                    self.jobs.push(t);
+                                } else {
+                                    show = true;
+                                }
+                            }
                             shell::tray::Action::Quit => return self.handle(Message::Quit),
                         }
                     }
@@ -1643,11 +1754,20 @@ impl App {
                 // back the size it had, down to the pixel.
                 if self
                     .rescaled_at
-                    .is_some_and(|t| t.elapsed() > Duration::from_millis(500))
+                    .is_some_and(|t| t.elapsed() > Duration::from_millis(700))
                 {
                     self.rescaled_at = None;
-                    if let (Some(id), Some(want), false) = (self.win_id, self.size_keep, self.mini)
-                    {
+                    // The size from before the move began; a size reported just
+                    // ahead of the first scaling change may already be Windows'.
+                    let before = self.burst_from.take().and_then(|from| {
+                        self.size_log
+                            .iter()
+                            .rev()
+                            .find(|(t, _)| *t + Duration::from_millis(150) < from)
+                            .map(|(_, s)| *s)
+                    });
+                    let want = before.or(self.size_keep);
+                    if let (Some(id), Some(want), false) = (self.win_id, want, self.mini) {
                         self.jobs.push(window::is_maximized(id).then(move |max| {
                             if max {
                                 Task::none()
@@ -1656,6 +1776,10 @@ impl App {
                                     if (now.width - want.width).abs() > 0.5
                                         || (now.height - want.height).abs() > 0.5
                                     {
+                                        faderust_core::log::write(&format!(
+                                            "Fenster nach Monitorwechsel {}x{} statt {}x{}, zurückgesetzt",
+                                            now.width, now.height, want.width, want.height
+                                        ));
                                         window::resize(id, want)
                                     } else {
                                         Task::none()
@@ -1669,7 +1793,7 @@ impl App {
                 if self.mini && self.mini_count != self.shown_count() {
                     self.mini_count = self.shown_count();
                     if let Some(id) = self.win_id {
-                        let width = Self::mini_width(self.mini_count);
+                        let width = Self::mini_width(self.shown_count());
                         self.jobs.push(
                             window::size(id)
                                 .then(move |s| window::resize(id, Size::new(width, s.height))),
@@ -2074,6 +2198,7 @@ impl App {
             }
             Edit::Mode(m) => self.set_look(|p| p.mode = m.into()),
             Edit::OutputEdge(on) => self.set_look(|p| p.output_edge_off = !on),
+            Edit::TrayPopup(on) => self.set_look(|p| p.tray_popup = on),
             Edit::Picker(t) => {
                 self.picker = if self.picker.is_some_and(|(x, _)| x == t) {
                     None
@@ -3409,6 +3534,7 @@ impl App {
             iced::event::listen_with(|event, _, _| match event {
                 iced::Event::Window(window::Event::Resized(size)) => Some(Message::Resized(size)),
                 iced::Event::Window(window::Event::Rescaled(_)) => Some(Message::Rescaled),
+                iced::Event::Window(window::Event::Unfocused) => Some(Message::Unfocused),
                 _ => None,
             }),
         ])
@@ -3534,5 +3660,55 @@ mod glide_tests {
         }
         assert_eq!(pos, want);
         assert!(!glide(&mut pos, &mut vel, 0.0, 1.0 / 90.0));
+    }
+}
+
+#[cfg(test)]
+mod data_dir_tests {
+    use super::*;
+
+    fn temp(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("faderust-dd-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn old_folder_moves_to_the_new_name() {
+        let base = temp("move");
+        std::fs::create_dir_all(base.join(OLD_DATA_DIR)).unwrap();
+        std::fs::write(base.join(OLD_DATA_DIR).join("config.toml"), "x").unwrap();
+        let dir = data_dir_in(&base);
+        assert_eq!(dir, base.join("Faderust"));
+        assert_eq!(
+            std::fs::read_to_string(dir.join("config.toml")).unwrap(),
+            "x"
+        );
+        assert!(!base.join(OLD_DATA_DIR).exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn an_existing_new_folder_is_left_alone() {
+        let base = temp("keep");
+        std::fs::create_dir_all(base.join(OLD_DATA_DIR)).unwrap();
+        std::fs::create_dir_all(base.join("Faderust")).unwrap();
+        std::fs::write(base.join("Faderust").join("config.toml"), "new").unwrap();
+        std::fs::write(base.join(OLD_DATA_DIR).join("config.toml"), "old").unwrap();
+        let dir = data_dir_in(&base);
+        assert_eq!(
+            std::fs::read_to_string(dir.join("config.toml")).unwrap(),
+            "new"
+        );
+        assert!(base.join(OLD_DATA_DIR).exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_fresh_start_just_names_the_folder() {
+        let base = temp("fresh");
+        assert_eq!(data_dir_in(&base), base.join("Faderust"));
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
