@@ -123,7 +123,7 @@ Hinweis: Das Kabel ist noch ein Test und auf wenig Hardware erprobt.
 - Bluetooth braucht nach einer Freigabe etwa eine Sekunde, bis wieder Ton kommt. Wer das nicht will, stellt den Ausgang auf „Nie frei“.
 - Die Zuordnung „Programm → Gerät“ nutzt dieselbe nicht dokumentierte Windows-Schnittstelle wie der Lautstärkemixer in den Einstellungen.
 
-Einstellungen: `%APPDATA%\io.github.niklas970.faderust\config.toml`, daneben das Protokoll `faderust.log`, das bei Fehlern hilft.
+Einstellungen: `%APPDATA%\Faderust\config.toml`, daneben das Protokoll `faderust.log`, das bei Fehlern hilft.
 
 ## Entwicklung
 

@@ -116,6 +116,8 @@ const TABLE: &[(&str, &str)] = &[
     ("Leicht", "Light"),
     ("Lädt …", "Loading …"),
     ("Löschen", "Delete"),
+    ("Tray-Symbol", "Tray icon"),
+    ("Klick öffnet einen kleinen Mixer neben der Taskbar", "Click opens a small mixer next to the taskbar"),
     ("Mit Windows starten (im Tray, ohne Fenster)", "Start with Windows (in the tray, no window)"),
     ("Mittel", "Medium"),
     ("Nach 2 min", "After 2 min"),

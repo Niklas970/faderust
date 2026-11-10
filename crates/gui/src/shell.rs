@@ -124,6 +124,8 @@ pub struct Prefs {
     pub pinned: bool,
     /// The soundboard is switched on.
     pub soundboard: bool,
+    /// A click on the tray icon opens the compact mixer next to it.
+    pub tray_popup: bool,
 }
 
 /// "de" or "en", whichever the system uses.
@@ -195,6 +197,8 @@ pub mod tray {
 
     pub enum Action {
         Show,
+        /// Left click on the icon.
+        Click,
         Quit,
     }
 
@@ -236,7 +240,7 @@ pub mod tray {
                     ..
                 } = e
                 {
-                    out.push(Action::Show);
+                    out.push(Action::Click);
                 }
             }
             out
