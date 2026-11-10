@@ -1,7 +1,13 @@
-## What's new in 0.7.9
+## What's new in 0.8.0
 
-- **USB cable diagnostics:** while sound runs through a Faderust cable, the log now shows every 30 seconds the loudest peak going in and coming out, plus gaps and dropped audio. This helps to track down crackling, harsh or too loud sound on the cable microphone (for calls); nothing changes in the sound itself
-- **Window size on mixed-DPI setups:** when you drag the window between monitors with different scaling, it keeps the size you chose instead of drifting and jumping
+- **Soundboard (optional):** switch it on under "Design", add WAV or MP3 files and play them with a click into any output, with its own strip (volume, outputs, mute) like every input
+- **Mini mixer in the tray (optional):** under "Design" you can make a click on the tray icon open the compact mixer at the bottom right, above the taskbar
+- **Volume display (optional, on by default):** when the Stream Deck changes a level or mutes something, a short note with the name and the new value appears at the bottom of the screen. It takes no focus and can be switched off under "Design"
+- **Rounder fader caps** and a more accurate **level sync**: the meter of an input now follows the output that carries it best
+- **Selectable log:** text in the log can be marked and copied with Ctrl+C
+- **Simpler data folder:** settings, log and token now live in `%APPDATA%\Faderust` (the old folder is moved automatically; the Stream Deck plugin 0.3.3 finds both)
+- **Cable log:** idle cables no longer count as gaps
+- **More robust:** no crash on unusual characters in device names, no silent hangs in the audio lanes, and the settings lock is no longer held during slow work
 
 ## Installation
 
@@ -13,10 +19,16 @@ All features and a guide are in the [README](https://github.com/Niklas970/faderu
 
 ---
 
-## Neu in 0.7.9
+## Neu in 0.8.0
 
-- **USB-Kabel-Diagnose:** solange Ton durch ein Faderust Kabel läuft, steht im Protokoll alle 30 Sekunden die lauteste Spitze am Eingang und Ausgang des Kabels sowie Lücken und verworfenes Audio. Das hilft, Knacken, schrilles oder zu lautes Kabel-Mikro (für Anrufe) einzugrenzen; am Klang selbst ändert sich nichts
-- **Fenstergröße bei verschiedenen Skalierungen:** beim Verschieben des Fensters zwischen Monitoren mit unterschiedlicher Skalierung behält es die gewählte Größe, statt zu driften und zu springen
+- **Soundboard (optional):** unter „Design“ einschalten, WAV- oder MP3-Dateien hinzufügen und per Klick in einen Ausgang spielen, mit eigenem Streifen (Lautstärke, Ausgänge, Stumm) wie jeder Eingang
+- **Mini-Mixer im Tray (optional):** unter „Design“ lässt sich einstellen, dass ein Klick aufs Tray-Symbol den Kompaktmixer unten rechts über der Taskbar öffnet
+- **Lautstärke-Anzeige (optional, standardmäßig an):** ändert das Stream Deck einen Pegel oder schaltet stumm, erscheint kurz unten am Bildschirm Name und neuer Wert. Sie nimmt keinen Fokus und ist unter „Design“ abschaltbar
+- **Rundere Fader-Kappen** und genauerer **Pegel-Gleichlauf**: der Pegel eines Eingangs folgt jetzt dem Ausgang, der ihn am besten abbildet
+- **Markierbares Protokoll:** Text im Protokoll lässt sich markieren und mit Strg+C kopieren
+- **Einfacherer Datenordner:** Einstellungen, Protokoll und Token liegen jetzt in `%APPDATA%\Faderust` (der alte Ordner wird automatisch verschoben; das Stream-Deck-Plugin 0.3.3 findet beide)
+- **Kabel-Protokoll:** ruhende Kabel zählen nicht mehr als Lücken
+- **Robuster:** kein Absturz bei ungewöhnlichen Zeichen in Gerätenamen, keine stillen Hänger in den Audio-Lanes, und die Einstellungssperre wird bei langsamer Arbeit nicht mehr gehalten
 
 ## Installation
 
