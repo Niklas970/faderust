@@ -209,6 +209,37 @@ struct State {
 }
 
 impl State {
+    /// Whether `of(config)` would equal `self`, compared in place: no copy of
+    /// the labels, presets or gain matrix on the 50 ms poll.
+    fn matches(&self, config: &Config) -> bool {
+        self.inputs
+            .iter()
+            .eq(config.inputs.iter().map(|i| &i.label))
+            && self
+                .outputs
+                .iter()
+                .eq(config.outputs.iter().map(|o| &o.label))
+            && self.gains == config.gains
+            && self
+                .input_muted
+                .iter()
+                .eq(config.inputs.iter().map(|i| &i.muted))
+            && self
+                .masters
+                .iter()
+                .eq(config.outputs.iter().map(|o| &o.master))
+            && self
+                .presets
+                .iter()
+                .eq(config.presets.iter().map(|p| &p.name))
+            && self.active_preset.as_deref()
+                == config
+                    .presets
+                    .iter()
+                    .find(|p| p.gains == config.gains)
+                    .map(|p| p.name.as_str())
+    }
+
     fn of(config: &Config) -> Self {
         Self {
             protocol: PROTOCOL,
@@ -283,7 +314,7 @@ fn serve(state: &AppState, stream: TcpStream) -> Result<(), Box<dyn std::error::
     // sent to or taken from it before.
     let mut connected: Option<Connected> = None;
 
-    let mut sent_state = None;
+    let mut sent_state: Option<State> = None;
     let mut sent_devices = None;
     let mut devices_at: Option<Instant> = None;
     loop {
@@ -327,8 +358,15 @@ fn serve(state: &AppState, stream: TcpStream) -> Result<(), Box<dyn std::error::
             continue;
         }
 
-        let now = State::of(&state.config.lock().unwrap_or_else(|e| e.into_inner()));
-        if sent_state.as_ref() != Some(&now) {
+        let changed = {
+            let config = state.config.lock().unwrap_or_else(|e| e.into_inner());
+            if sent_state.as_ref().is_some_and(|s| s.matches(&config)) {
+                None
+            } else {
+                Some(State::of(&config))
+            }
+        };
+        if let Some(now) = changed {
             send(&mut ws, &Push::State(&now))?;
             sent_state = Some(now);
         }
@@ -415,6 +453,21 @@ fn send(ws: &mut WebSocket<TcpStream>, push: &Push) -> Result<(), Box<dyn std::e
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn state_matches_tracks_the_config() {
+        let mut config = Config::default();
+        let state = State::of(&config);
+        assert!(state.matches(&config));
+        config.presets.push(crate::config::Preset {
+            name: "A".into(),
+            gains: config.gains.clone(),
+        });
+        assert!(!state.matches(&config));
+        let state = State::of(&config);
+        assert!(state.matches(&config));
+        assert_eq!(state.active_preset.as_deref(), Some("A"));
+    }
 
     #[test]
     fn parses_requests() {

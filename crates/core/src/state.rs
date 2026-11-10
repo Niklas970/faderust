@@ -142,47 +142,6 @@ pub fn set_app_output(pids: Vec<u32>, device: Option<String>) -> Result<(), Stri
         .map_err(|e| e.to_string())
 }
 
-/// Sets a program's Windows volume (0…1) and/or mute.
-pub fn set_app_volume(
-    pids: Vec<u32>,
-    volume: Option<f32>,
-    muted: Option<bool>,
-) -> Result<(), String> {
-    let router = router().ok_or_else(|| {
-        faderust_engine::lang::tr("Nur unter Windows verfügbar", "Only available on Windows")
-    })?;
-    router
-        .set_app_volume(&pids, volume.map(|v| v.clamp(0.0, 1.0)), muted)
-        .map_err(|e| e.to_string())
-}
-
-#[derive(Serialize, Clone, Debug)]
-pub struct AppLevel {
-    pub pid: u32,
-    /// Peak in dBFS.
-    pub db: f32,
-}
-
-/// Peak level of every process playing audio, polled for the program meters.
-pub fn get_app_levels() -> Result<Vec<AppLevel>, String> {
-    let Some(router) = router() else {
-        return Ok(vec![]);
-    };
-    Ok(router
-        .levels()
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .map(|(pid, peak)| AppLevel {
-            pid,
-            db: if peak > 1e-6 {
-                20.0 * peak.log10()
-            } else {
-                -120.0
-            },
-        })
-        .collect())
-}
-
 #[derive(Serialize, PartialEq, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Endpoint {

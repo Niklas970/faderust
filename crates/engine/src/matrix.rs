@@ -38,14 +38,6 @@ impl MixMatrix {
         }
     }
 
-    pub fn inputs(&self) -> usize {
-        self.inputs
-    }
-
-    pub fn outputs(&self) -> usize {
-        self.outputs
-    }
-
     fn index(&self, input: usize, output: usize) -> usize {
         assert!(
             input < self.inputs && output < self.outputs,

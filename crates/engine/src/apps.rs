@@ -144,6 +144,18 @@ pub fn own_cable(name: &str) -> Option<String> {
     Some(n[start + 1..end].to_string())
 }
 
+/// [`own_cable`] without allocating: the tag with its original case.
+pub fn own_cable_tag(name: &str) -> Option<&str> {
+    // ASCII-only search, so the byte index fits the original text.
+    let bytes = name.as_bytes();
+    let pat = b"(faderust cable";
+    let start = (0..bytes.len().checked_sub(pat.len())? + 1)
+        .rev()
+        .find(|&i| bytes[i..i + pat.len()].eq_ignore_ascii_case(pat))?;
+    let end = name[start..].find(')')? + start;
+    name.get(start + 1..end)
+}
+
 /// True for Faderust's own virtual cables (both sides), by device name.
 pub fn is_virtual_cable(name: &str) -> bool {
     own_cable(name).is_some()
@@ -214,6 +226,24 @@ pub fn capture_roots(pids: &[u32], processes: &[(u32, u32, String)]) -> Vec<u32>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cable_tag_agrees_with_own_cable() {
+        for name in [
+            "Speakers (Faderust Cable 2)",
+            "Mikrofon (FADERUST CABLE)",
+            "İ Lautsprecher (Faderust Cable 3)",
+            "Realtek Audio",
+            "(Faderust Cable",
+            "",
+        ] {
+            assert_eq!(
+                own_cable_tag(name).map(str::to_lowercase),
+                own_cable(name),
+                "{name}"
+            );
+        }
+    }
 
     #[test]
     fn recognises_vb_cables() {

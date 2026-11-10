@@ -120,10 +120,6 @@ pub struct Lane {
 }
 
 impl Lane {
-    pub fn stats(&self) -> &Arc<LaneStats> {
-        &self.stats
-    }
-
     /// Mixes the next `out.len() / 2` frames into `out` (interleaved stereo),
     /// moving the applied gain smoothly towards `target_gain`.
     pub fn render_add(&mut self, out: &mut [f32], target_gain: f32) {

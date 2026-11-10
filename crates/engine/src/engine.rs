@@ -293,10 +293,6 @@ impl<B: AudioBackend> Engine<B> {
         })
     }
 
-    pub fn backend(&self) -> &B {
-        &self.backend
-    }
-
     pub fn inputs(&self) -> &[SlotState] {
         &self.inputs
     }
@@ -759,11 +755,11 @@ impl<B: AudioBackend> Engine<B> {
 /// two ends of one virtual cable: Faderust's own (named alike) and, as a
 /// safety net, other cables named alike except for "Input"/"Output".
 pub fn feeds_back(output: &str, input: &str) -> bool {
-    let output = output.to_lowercase();
     // Faderust's USB cables: "Speakers (Faderust Cable 2)" / "Microphone (Faderust Cable 2)".
-    if let Some(cable) = crate::apps::own_cable(&output) {
-        return crate::apps::own_cable(input) == Some(cable);
+    if let Some(cable) = crate::apps::own_cable_tag(output) {
+        return crate::apps::own_cable_tag(input).is_some_and(|c| c.eq_ignore_ascii_case(cable));
     }
+    let output = output.to_lowercase();
     output.contains("input") && output.replace("input", "output") == input.to_lowercase()
 }
 
