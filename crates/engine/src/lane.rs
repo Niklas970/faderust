@@ -253,3 +253,88 @@ impl Lane {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const RATE: u32 = 48_000;
+
+    fn test_lane() -> (Producer<f32>, Lane, Arc<LaneStats>) {
+        let stats = Arc::new(LaneStats::default());
+        let spec = LaneSpec {
+            input_rate: RATE,
+            output_rate: RATE,
+            target_ms: 20,
+        };
+        let (producer, lane) = lane(spec, Arc::clone(&stats));
+        (producer, lane, stats)
+    }
+
+    fn push_frames(producer: &mut Producer<f32>, frames: usize, value: f32) {
+        for _ in 0..frames * BUS_CHANNELS {
+            producer.push(value).unwrap();
+        }
+    }
+
+    #[test]
+    fn capacity_holds_at_least_half_a_second() {
+        let (producer, _, _) = test_lane();
+        assert!(producer.slots() >= RATE as usize / 2 * BUS_CHANNELS);
+    }
+
+    #[test]
+    fn plays_silence_until_the_target_fill_is_reached() {
+        let (mut producer, mut lane, stats) = test_lane();
+        push_frames(&mut producer, 100, 0.5);
+        let mut out = vec![0.0; 256 * BUS_CHANNELS];
+        lane.render_add(&mut out, 1.0);
+        assert!(out.iter().all(|&s| s == 0.0));
+        // Waiting to fill up is not an underrun.
+        assert_eq!(stats.underruns.load(Relaxed), 0);
+    }
+
+    #[test]
+    fn passes_the_signal_once_primed() {
+        let (mut producer, mut lane, _) = test_lane();
+        // Below the backlog limit; the gain smoothing needs a few ms to settle.
+        push_frames(&mut producer, 2_500, 0.5);
+        let mut out = vec![0.0; 2_048 * BUS_CHANNELS];
+        lane.render_add(&mut out, 1.0);
+        let last = out[out.len() - 1];
+        assert!((last - 0.5).abs() < 0.05, "last sample {last}");
+    }
+
+    #[test]
+    fn counts_an_underrun_when_the_buffer_runs_dry() {
+        let (mut producer, mut lane, stats) = test_lane();
+        push_frames(&mut producer, 2_000, 0.5);
+        let mut out = vec![0.0; 128 * BUS_CHANNELS];
+        for _ in 0..40 {
+            lane.render_add(&mut out, 1.0);
+        }
+        assert!(stats.underruns.load(Relaxed) > 0);
+    }
+
+    #[test]
+    fn cuts_a_backlog_instead_of_playing_it_late() {
+        let (mut producer, mut lane, stats) = test_lane();
+        // Far beyond BACKLOG_TARGETS times the 960-frame target.
+        push_frames(&mut producer, 8_000, 0.5);
+        let mut out = vec![0.0; 128 * BUS_CHANNELS];
+        lane.render_add(&mut out, 1.0);
+        assert!(stats.dropped_frames.load(Relaxed) > 0);
+        assert!(stats.fill_frames.load(Relaxed) <= 960);
+    }
+
+    #[test]
+    fn a_muted_lane_adds_nothing_and_stays_trimmed() {
+        let (mut producer, mut lane, stats) = test_lane();
+        push_frames(&mut producer, 5_000, 0.5);
+        let mut out = vec![0.0; 256 * BUS_CHANNELS];
+        lane.render_add(&mut out, 0.0);
+        assert!(out.iter().all(|&s| s == 0.0));
+        assert!(stats.fill_frames.load(Relaxed) >= 960);
+        assert!(lane.consumer.slots() / BUS_CHANNELS <= 960);
+    }
+}
