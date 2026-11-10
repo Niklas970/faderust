@@ -16,6 +16,7 @@ mod fader;
 mod files;
 mod i18n;
 mod icons;
+mod osd;
 mod picker;
 mod scale;
 mod shell;
@@ -257,6 +258,8 @@ pub struct App {
     /// Error shown inside the open dialog.
     pub dialog_error: String,
     pub log_text: Option<String>,
+    /// The log as a read-only editor, so parts of it can be selected and copied.
+    pub log_view: iced::widget::text_editor::Content,
     pub checks: Option<Vec<Check>>,
     pub deck: Option<StreamDeckStatus>,
     pub deck_error: String,
@@ -270,6 +273,7 @@ pub struct App {
 
 /// Applies the saved colours and language.
 fn apply_look(p: &shell::Prefs) {
+    osd::set_enabled(!p.osd_off);
     let accent = if p.accent.is_empty() {
         style::DEFAULT_ACCENT
     } else {
@@ -351,6 +355,7 @@ pub enum Edit {
     InstallDeck,
     Mode(&'static str),
     OutputEdge(bool),
+    Osd(bool),
     TrayPopup(bool),
     AccentHex(String),
     SignalHex(String),
@@ -393,6 +398,8 @@ pub enum Message {
     Minimize,
     ToggleMax,
     Drag,
+    /// Selecting in the log.
+    LogAction(iced::widget::text_editor::Action),
     /// The window got another size (logical).
     Resized(Size),
     /// The window lost focus (closes the tray popup).
@@ -474,6 +481,9 @@ impl Host for GuiHost {
     }
     fn visible(&self) -> bool {
         shell::is_visible(&self.visible)
+    }
+    fn osd(&self, label: &str, text: &str) {
+        osd::show(label, text);
     }
 }
 
@@ -1095,7 +1105,10 @@ impl App {
                 self.dialog_error = e
             }
             Loaded::Usb(s) => self.usb = Some(s),
-            Loaded::Log(t) => self.log_text = Some(t),
+            Loaded::Log(t) => {
+                self.log_view = iced::widget::text_editor::Content::with_text(&t);
+                self.log_text = Some(t);
+            }
             Loaded::LogAll(t) => {
                 self.jobs.push(iced::clipboard::write(t));
                 self.say("info", "Ganzes Protokoll kopiert".into());
@@ -1236,6 +1249,7 @@ impl App {
             input_devices: vec![],
             dialog_error: String::new(),
             log_text: None,
+            log_view: Default::default(),
             checks: None,
             deck: None,
             deck_error: String::new(),
@@ -1669,6 +1683,12 @@ impl App {
                     self.burst_from = Some(now);
                 }
                 self.rescaled_at = Some(now);
+            }
+            Message::LogAction(action) => {
+                // Read-only: selecting and copying only.
+                if !action.is_edit() {
+                    self.log_view.perform(action);
+                }
             }
             Message::Drag => {
                 if let Some(id) = self.win_id {
@@ -2253,6 +2273,7 @@ impl App {
             }
             Edit::Mode(m) => self.set_look(|p| p.mode = m.into()),
             Edit::OutputEdge(on) => self.set_look(|p| p.output_edge_off = !on),
+            Edit::Osd(on) => self.set_look(|p| p.osd_off = !on),
             Edit::TrayPopup(on) => self.set_look(|p| p.tray_popup = on),
             Edit::Picker(t) => {
                 self.picker = if self.picker.is_some_and(|(x, _)| x == t) {

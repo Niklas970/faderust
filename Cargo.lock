@@ -1207,6 +1207,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tray-icon",
+ "windows 0.62.2",
 ]
 
 [[package]]

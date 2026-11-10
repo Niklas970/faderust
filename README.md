@@ -44,6 +44,8 @@
 - **Windows sound in one place:** default devices for playback, recording and calls, plus the volume per device.
 - **Presets, autostart in the tray, in-app updates** (with signature check) and a **Stream Deck plugin**.
 - **Compact and on top.** Two buttons in the title bar: a narrow view without labels and "Always on top", e.g. next to a game. Both are remembered.
+- **Mini mixer in the tray (optional).** Under "Design" you can make a click on the tray icon open a small mixer at the bottom right, above the taskbar. It closes when you click elsewhere.
+- **Volume display (optional).** When the Stream Deck changes a level or mutes something, a short note with the name and the new value appears at the bottom of the screen. It takes no focus, lets clicks through and can be switched off under "Design".
 - **Your own colors:** accent and signal color freely selectable, dark (OLED black) or light.
 
 ## Views

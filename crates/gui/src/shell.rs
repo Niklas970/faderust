@@ -124,6 +124,8 @@ pub struct Prefs {
     pub pinned: bool,
     /// The soundboard is switched on.
     pub soundboard: bool,
+    /// No on-screen note when the Stream Deck changes a level.
+    pub osd_off: bool,
     /// A click on the tray icon opens the compact mixer next to it.
     pub tray_popup: bool,
 }
