@@ -16,6 +16,7 @@ mod fader;
 mod files;
 mod i18n;
 mod icons;
+mod osd;
 mod picker;
 mod scale;
 mod shell;
@@ -266,6 +267,7 @@ pub struct App {
 
 /// Applies the saved colours and language.
 fn apply_look(p: &shell::Prefs) {
+    osd::set_enabled(!p.osd_off);
     let accent = if p.accent.is_empty() {
         style::DEFAULT_ACCENT
     } else {
@@ -347,6 +349,7 @@ pub enum Edit {
     InstallDeck,
     Mode(&'static str),
     OutputEdge(bool),
+    Osd(bool),
     TrayPopup(bool),
     AccentHex(String),
     SignalHex(String),
@@ -459,6 +462,9 @@ impl Host for GuiHost {
     }
     fn visible(&self) -> bool {
         shell::is_visible(&self.visible)
+    }
+    fn osd(&self, label: &str, text: &str) {
+        osd::show(label, text);
     }
 }
 
@@ -2184,6 +2190,7 @@ impl App {
             }
             Edit::Mode(m) => self.set_look(|p| p.mode = m.into()),
             Edit::OutputEdge(on) => self.set_look(|p| p.output_edge_off = !on),
+            Edit::Osd(on) => self.set_look(|p| p.osd_off = !on),
             Edit::TrayPopup(on) => self.set_look(|p| p.tray_popup = on),
             Edit::Picker(t) => {
                 self.picker = if self.picker.is_some_and(|(x, _)| x == t) {

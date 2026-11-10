@@ -807,6 +807,10 @@ fn design(app: &App) -> Element<'_, Message> {
                 edit(Edit::OutputEdge(false))
             ),
         ]),
+        h3("Lautstärke-Anzeige"),
+        check(!app.prefs.osd_off)
+            .label(tr("Kurze Einblendung am Bildschirmrand bei Stream Deck"))
+            .on_toggle(|v| edit(Edit::Osd(v))),
         h3("Tray-Symbol"),
         check(app.prefs.tray_popup)
             .label(tr("Klick öffnet einen kleinen Mixer neben der Taskbar"))
