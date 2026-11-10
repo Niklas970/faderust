@@ -18,6 +18,9 @@ pub enum Kind {
     Master(usize),
 }
 
+/// Corner radius of the fader cap in px.
+const CAP_RADIUS: f32 = 16.0;
+
 impl Kind {
     fn message(self, db: f32) -> Message {
         match self {
@@ -305,13 +308,20 @@ impl Fader<'_> {
         let (cw, ch) = if wide { (68.0, 44.0) } else { (40.0, 40.0) };
         let cy = cap_y - ch / 2.0;
         let win_w = if wide { 52.0 } else { 34.0 };
-        let cap = Path::rounded_rectangle(Point::new(cx, cy), Size::new(cw, ch), 4.0.into());
+        let cap = Path::rounded_rectangle(Point::new(cx, cy), Size::new(cw, ch), CAP_RADIUS.into());
+        // The body sits 3 px in from the sides, so the accent shows as a rim
+        // that follows the rounded corners.
+        let inner = Path::rounded_rectangle(
+            Point::new(cx + 3.0, cy),
+            Size::new(cw - 6.0, ch),
+            CAP_RADIUS.into(),
+        );
         for (grow, alpha) in [(6.0, 0.10), (3.0, 0.18), (1.0, 0.30)] {
             f.fill(
                 &Path::rounded_rectangle(
                     Point::new(cx - grow, cy - grow + 3.0),
                     Size::new(cw + 2.0 * grow, ch + 2.0 * grow),
-                    (4.0 + grow).into(),
+                    (CAP_RADIUS + grow).into(),
                 ),
                 Fill::from(Color {
                     a: alpha * 0.5,
@@ -324,8 +334,10 @@ impl Fader<'_> {
             .add_stop(0.45, rgb(47, 51, 56))
             .add_stop(0.55, rgb(35, 38, 42))
             .add_stop(1.0, rgb(51, 55, 60));
+        let edge = if off { rgb(85, 90, 97) } else { accent() };
+        f.fill(&cap, Fill::from(edge));
         f.fill(
-            &cap,
+            &inner,
             Fill {
                 style: canvas::Style::Gradient(canvas::Gradient::Linear(body)),
                 ..Fill::default()
@@ -337,16 +349,9 @@ impl Fader<'_> {
                 .with_color(rgb(12, 13, 15))
                 .with_width(1.0),
         );
-        let edge = if off { rgb(85, 90, 97) } else { accent() };
-        f.fill_rectangle(Point::new(cx, cy + 1.0), Size::new(3.0, ch - 2.0), edge);
         f.fill_rectangle(
-            Point::new(cx + cw - 3.0, cy + 1.0),
-            Size::new(3.0, ch - 2.0),
-            edge,
-        );
-        f.fill_rectangle(
-            Point::new(cx, cap_y - 1.0),
-            Size::new(cw, 2.0),
+            Point::new(cx + 3.0, cap_y - 1.0),
+            Size::new(cw - 6.0, 2.0),
             if off {
                 rgb(133, 139, 147)
             } else {
@@ -356,7 +361,7 @@ impl Fader<'_> {
         let win = Path::rounded_rectangle(
             Point::new(cx + cw / 2.0 - win_w / 2.0, cap_y - 10.0),
             Size::new(win_w, 20.0),
-            2.0.into(),
+            6.0.into(),
         );
         f.fill(&win, Fill::from(rgb(11, 12, 14)));
         f.fill_text(Text {
