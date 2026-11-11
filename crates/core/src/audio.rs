@@ -870,11 +870,12 @@ impl LevelDelay {
             // The output that follows this input best is the one whose delay
             // counts: another output mixes in other sources, and an average
             // over outputs with different delays would fit none of them.
-            let own = self.lag[i]
+            let best = self.lag[i]
                 .iter()
-                .flatten()
-                .max_by(|a, b| a.1.total_cmp(&b.1))
-                .map(|&(lag, _)| lag);
+                .enumerate()
+                .filter_map(|(o, l)| l.map(|l| (o, l)))
+                .max_by(|a, b| a.1 .1.total_cmp(&b.1 .1));
+            let own = best.map(|(_, (lag, _))| lag);
             let ms = if let Some(lag) = own {
                 lag * tick
             } else if !all.is_empty() {
@@ -908,7 +909,25 @@ impl LevelDelay {
             let (lo, frac) = (at.floor() as usize, at.fract());
             let a = hist[lo];
             let b = hist.get(lo + 1).copied().unwrap_or(a);
-            input.level_db = a + (b - a) * frac;
+            // After the strip fader, like the output: the gain of the output
+            // that carries it counts (the loudest one while none is measured).
+            let gain = state.gains.get(i).map_or(0.0, |row| {
+                let cell = best.and_then(|(o, _)| row.get(o)).filter(|g| !g.muted);
+                match cell {
+                    Some(g) => g.db,
+                    None => row
+                        .iter()
+                        .filter(|g| !g.muted)
+                        .map(|g| g.db)
+                        .fold(-120.0, f32::max),
+                }
+            });
+            let level = a + (b - a) * frac;
+            input.level_db = if level <= -100.0 || state.gains.get(i).is_none() {
+                level
+            } else {
+                clamp_db(level + gain.max(-120.0))
+            };
         }
     }
 }
@@ -1288,6 +1307,29 @@ mod tests {
         for t in 200..220 {
             assert!((shown[t] - clean[t]).abs() < 1.5, "t={t}");
         }
+    }
+
+    #[test]
+    fn input_meter_shows_the_level_after_the_strip_fader() {
+        use super::UiLane;
+        let g = |db| Gain { db, muted: false };
+        let mut delay = LevelDelay::default();
+        let mut state = UiState {
+            inputs: vec![ui_device(true, -10.0, None)],
+            outputs: vec![
+                ui_device(true, -120.0, Some(0)),
+                ui_device(true, -120.0, Some(0)),
+            ],
+            gains: vec![vec![g(-6.0), g(0.0)]],
+            lanes: vec![vec![UiLane::default(); 2]],
+        };
+        delay.apply(&mut state);
+        // Nothing measured yet: the loudest output counts.
+        assert_eq!(state.inputs[0].level_db, -10.0);
+        state.gains = vec![vec![g(-6.0), g(-3.0)]];
+        state.inputs[0].level_db = -10.0;
+        delay.apply(&mut state);
+        assert_eq!(state.inputs[0].level_db, -13.0);
     }
 
     #[test]
