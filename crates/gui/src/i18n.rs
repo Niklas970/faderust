@@ -234,6 +234,7 @@ const TABLE: &[(&str, &str)] = &[
     ("Programme", "Programs"),
     ("Protokoll kopiert", "Log copied"),
     ("Ganzes Protokoll kopiert", "Whole log copied"),
+    ("Doppelte Programme entfernt", "Duplicate programs removed"),
     ("Protokoll", "Log"),
     ("Präsenz", "Presence"),
     ("Prüfe …", "Checking …"),

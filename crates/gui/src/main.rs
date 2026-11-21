@@ -1522,10 +1522,55 @@ impl App {
         self.refresh_dialog()
     }
 
+    /// Earlier versions could record a program twice. The first input keeps
+    /// its settings; later ones for the same program are removed.
+    fn drop_duplicate_programs(&mut self) {
+        if self.draft.is_some() {
+            return;
+        }
+        let mut next = self.config();
+        let mut seen: Vec<String> = Vec::new();
+        let mut extra: Vec<usize> = Vec::new();
+        for (i, input) in next.inputs.iter().enumerate() {
+            let device = input.device.to_lowercase();
+            if !device.starts_with("app:") {
+                continue;
+            }
+            if seen.contains(&device) {
+                extra.push(i);
+            } else {
+                seen.push(device);
+            }
+        }
+        if extra.is_empty() {
+            return;
+        }
+        for &i in extra.iter().rev() {
+            next.inputs.remove(i);
+            next.duck_after_remove(i);
+            if i < next.gains.len() {
+                next.gains.remove(i);
+            }
+            for p in &mut next.presets {
+                if i < p.gains.len() {
+                    p.gains.remove(i);
+                }
+            }
+        }
+        match faderust_core::save_config(next, &self.core) {
+            Ok(()) => {
+                self.input_devices = self.config().inputs.into_iter().map(|i| i.device).collect();
+                self.say("info", "Doppelte Programme entfernt".into());
+            }
+            Err(e) => self.dialog_error = e,
+        }
+    }
+
     /// A program Faderust has not seen yet is parked on the quiet cable and
     /// taken up as an input by itself, one per lookup. What was taken up (or
     /// removed again by hand) is remembered and not taken up twice.
     fn auto_adopt(&mut self) {
+        self.drop_duplicate_programs();
         if self.prefs.auto_programs_off || self.dialog == Some(Dialog::Apps) {
             return;
         }
